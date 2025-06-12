@@ -12,6 +12,7 @@ import { Notifications } from './components/Notifications';
 import { DataTableTab } from './components/DataTableTab';
 import { AiConfigTab } from './components/AiConfigTab';
 import { fetchSessions } from './api/fetchWhatsappSessions';
+import { fetchClientData } from './api/fetchClientData';
 import { ThemeProvider, CssBaseline, createTheme } from '@mui/material';
 
 const socket = io("http://localhost:3001");
@@ -20,6 +21,7 @@ const theme = createTheme();
 function App() {
   const [qr, setQr] = useState("");
   const [data, setData] = useState<any>(null);
+  const [clientData, setClientData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sessionName, setSessionName] = useState("");
@@ -80,6 +82,10 @@ function App() {
     fetchSessions()
       .then((sessions) => setSessions(sessions))
       .catch((err) => setError(err.message));
+
+    fetchClientData()
+      .then((clientData) => setClientData(clientData))
+      .catch((err) => setError(err.message));
     }, []);
 
   function handleShowMessages(messages: any[]) {
@@ -92,7 +98,7 @@ function App() {
       <CssBaseline />
       <div style={{ display: 'flex', minHeight: '100vh' }}>
         <aside style={{ width: 220, background: 'whitesmoke', color: 'black', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <h2 style={{ marginBottom: 32 }}>Menú</h2>
+          <h2 style={{ marginBottom: 32 }}>Menú de {clientData?.name}</h2>
           <button onClick={() => setActiveTab('data')} style={{ padding: '12px 16px', background: activeTab === 'data' ? '#007bff' : '#eee', color: activeTab === 'data' ? '#fff' : '#222', border: 'none', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer' }}>
             Mensajes
           </button>

@@ -2,6 +2,6 @@
 
 export async function fetchSessions() {
   const response = await fetch('http://localhost:3001/api/whatsapp/session/test_company');
-  if (!response.ok) throw new Error('Network response was not ok');
+  if (!response.ok) throw new Error('No se pudieron obtener las sesiones');
   return response.json();
 }
