@@ -1,155 +1,95 @@
-import { useState, useEffect } from 'react'
-import './App.css'
-import { fetchMessages } from './api/fetchMessages';
-import { requestNewQr } from './api/requestNewQr';
-import { fetchAiConfig } from './api/fetchAiConfig';
-import { saveAiConfig } from './api/saveAiConfig';
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import Login from "./pages/Login";
+import Layout from "./components/Layout";
 
-import io from "socket.io-client";
-import { ChatModal } from './components/ChatModal';
-import { WhatsappTab } from './components/WhatsappTab';
-import { Notifications } from './components/Notifications';
-import { DataTableTab } from './components/DataTableTab';
-import { AiConfigTab } from './components/AiConfigTab';
-import { fetchSessions } from './api/fetchWhatsappSessions';
-import { fetchClientData } from './api/fetchClientData';
-import { ThemeProvider, CssBaseline, createTheme } from '@mui/material';
+function ProtectedRoute({ children }: React.PropsWithChildren) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
 
-const socket = io("http://localhost:3001");
-const theme = createTheme();
-
-function App() {
-  const [qr, setQr] = useState("");
-  const [data, setData] = useState<any>(null);
-  const [clientData, setClientData] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [sessionName, setSessionName] = useState("");
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMessages, setModalMessages] = useState<any[]>([]);
-  const [activeTab, setActiveTab] = useState<'data' | 'ai' | 'whatsapp'>('data');
-  const [aiConfig, setAiConfig] = useState<any>(null);
-  const [aiSaveStatus, setAiSaveStatus] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState<string[]>([]);
-  const [sessions, setSessions] = useState<any>(null);
-
-  useEffect(() => {
-    socket.on(`whatsapp-message-test_company`, (message: any) => {
-      fetchMessages()
-        .then((json) => setData(json))
-        .catch((err) => setError(err.message))
-        .finally(() => setLoading(false));
-      const lastMsg = message.messages && message.messages.length > 0 ? message.messages[message.messages.length - 1] : null;
-      let notifText = 'Nuevo mensaje: ' + message.phone;
-      if (lastMsg) {
-        notifText += ': ';
-        if (lastMsg.body) notifText += lastMsg.body;
-        else notifText += '';
-      }
-      setNotifications(prev => {
-        const next = [notifText, ...prev].slice(0, 5);
-        return next;
-      });
-      setTimeout(() => {
-        setNotifications(prev => prev.slice(0, prev.length - 1));
-      }, 5000);
-    });
-    return () => {
-      socket.off("whatsapp-message-test_company");
-    };
-  }, []);
-
-  useEffect(() => {
-    socket.on("whatsapp-qr-test_company", setQr);
-    return () => {
-      socket.off("whatsapp-qr-test_company", setQr);
-    };
-  }, []);
-
-  useEffect(() => {
-    fetchMessages()
-      .then((json) => setData(json))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-    
-    // Obtener configuración AI
-    fetchAiConfig()
-      .then((config) => {
-        if (config) setAiConfig(config);
-      })
-      .catch(() => {/* Ignorar error si no hay config */});
-  
-    fetchSessions()
-      .then((sessions) => setSessions(sessions))
-      .catch((err) => setError(err.message));
-
-    fetchClientData()
-      .then((clientData) => setClientData(clientData))
-      .catch((err) => setError(err.message));
-    }, []);
-
-  function handleShowMessages(messages: any[]) {
-    setModalMessages(messages);
-    setModalOpen(true);
-  }
-
+function DashboardPage() {
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <div style={{ display: 'flex', minHeight: '100vh' }}>
-        <aside style={{ width: 220, background: 'whitesmoke', color: 'black', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <h2 style={{ marginBottom: 32 }}>Menú de {clientData?.name}</h2>
-          <button onClick={() => setActiveTab('data')} style={{ padding: '12px 16px', background: activeTab === 'data' ? '#007bff' : '#eee', color: activeTab === 'data' ? '#fff' : '#222', border: 'none', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer' }}>
-            Mensajes
-          </button>
-          <button onClick={() => setActiveTab('ai')} style={{ padding: '12px 16px', background: activeTab === 'ai' ? '#007bff' : '#eee', color: activeTab === 'ai' ? '#fff' : '#222', border: 'none', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer' }}>
-            AI Config
-          </button>
-          <button onClick={() => setActiveTab('whatsapp')} style={{ padding: '12px 16px', background: activeTab === 'whatsapp' ? '#007bff' : '#eee', color: activeTab === 'whatsapp' ? '#fff' : '#222', border: 'none', borderRadius: 6, fontWeight: 'bold', cursor: 'pointer' }}>
-            Whatsapp QR
-          </button>
-        </aside>
-        <main style={{ flex: 1, padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', width: '100vw', boxSizing: 'border-box' }}>
-          <div style={{ width: '100%', maxWidth: activeTab === 'ai' ? 500 : 1200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}>
-            {activeTab === 'data' && (
-              <DataTableTab
-                loading={loading}
-                error={error}
-                data={data}
-                onShowMessages={handleShowMessages}
-              />
-            )}
-            {activeTab === 'ai' && (
-              <AiConfigTab
-                aiConfig={aiConfig}
-                setAiConfig={setAiConfig}
-                aiSaveStatus={aiSaveStatus}
-                setAiSaveStatus={setAiSaveStatus}
-                saveAiConfig={saveAiConfig}
-              />
-            )}
-            {activeTab === 'whatsapp' && (
-              <WhatsappTab
-                qr={qr}
-                sessionName={sessionName}
-                setSessionName={setSessionName}
-                loading={loading}
-                setLoading={setLoading}
-                error={error}
-                setError={setError}
-                requestNewQr={requestNewQr}
-                setQr={setQr}
-                sessions={sessions}
-                setSessions={setSessions}
-              />
-            )}
-          </div>
-        </main>
-        <ChatModal open={modalOpen} onClose={() => setModalOpen(false)} messages={modalMessages} />
-        <Notifications notifications={notifications} />
-      </div>
-    </ThemeProvider>
+    <div style={{ padding: 40 }}>
+      <h2>Bienvenido al Dashboard</h2>
+      <p>Estadísticas rápidas:</p>
+      <ul>
+        <li>Usuarios activos: <b>12</b></li>
+        <li>IA disponibles: <b>3</b></li>
+        <li>Equipos registrados: <b>5</b></li>
+      </ul>
+    </div>
+  );
+}
+function UsuariosPage() {
+  return (
+    <div style={{ padding: 40 }}>
+      <h2>Usuarios</h2>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
+        <thead>
+          <tr style={{ background: '#F4F6FB' }}>
+            <th>Nombre</th>
+            <th>Email</th>
+            <th>Rol</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Orlando</td><td>orlando@virtualvoices.com</td><td>Admin</td></tr>
+          <tr><td>Ana</td><td>ana@virtualvoices.com</td><td>Usuario</td></tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+function IAPage() {
+  return (
+    <div style={{ padding: 40 }}>
+      <h2>IA</h2>
+      <ul>
+        <li>ChatBot Ventas</li>
+        <li>Asistente de Soporte</li>
+        <li>Analizador de Sentimientos</li>
+      </ul>
+    </div>
+  );
+}
+function EquiposPage() {
+  return (
+    <div style={{ padding: 40 }}>
+      <h2>Equipos</h2>
+      <ul>
+        <li>Equipo Alpha</li>
+        <li>Equipo Beta</li>
+        <li>Equipo Gamma</li>
+      </ul>
+    </div>
   );
 }
 
-export default App
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<DashboardPage />} />
+            <Route path="usuarios" element={<UsuariosPage />} />
+            <Route path="ia" element={<IAPage />} />
+            <Route path="equipos" element={<EquiposPage />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
