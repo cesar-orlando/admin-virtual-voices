@@ -18,7 +18,6 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
-import { Link as RouterLink } from "react-router-dom";
 
 // Fuente Montserrat desde Google Fonts (solo para el login)
 const fontLink = document.createElement("link");
@@ -35,21 +34,24 @@ declare module "@mui/material/styles" {
   }
 }
 
-type LoginFormsInputs = {
-  email: string;
-  password: string;
+type RegisterFormsInputs = {
+    name: string;
+    email: string;
+    password: string;
+    c_name: string;
 }
 
 const validation = yup.object().shape({
   email: yup.string().email("Correo inválido").required("El correo es obligatorio"),
+  name: yup.string().required("El nombre es obligatorio"),
+  c_name: yup.string().required("El nombre de la empresa es obligatorio"),
   password: yup.string().min(10, "Mínimo 10 caracteres").required("La contraseña es obligatoria"),
 });
 
-const Login = () => {
-  const { loginUser } = useAuth();
-  const navigate = useNavigate();
+const Register = () => {
+  const { registerUser } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [serverError, setServerError] = useState("");
+  const [serverError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const isMobile = useMediaQuery("(max-width:600px)");
   const [cardVisible, setCardVisible] = useState(false);
@@ -62,27 +64,13 @@ const Login = () => {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginFormsInputs>({
+  } = useForm<RegisterFormsInputs>({
     resolver: yupResolver(validation),
   });
 
-  const handleLogin = (form: LoginFormsInputs) => {
-    loginUser(form.email, form.password);
+  const handleRegister = (form: RegisterFormsInputs) => {
+    registerUser(form.name, form.email, form.password, form.c_name);
   }
-
-  /*const onSubmit = async (data: { email: string; password: string }) => {
-    setLoading(true);
-    setServerError("");
-    try {
-      const { token, user } = await login(data.email, data.password);
-      loginUser(token, user);
-      navigate("/");
-    } catch (error: any) {
-      setServerError(error.response?.data?.message || "Error al iniciar sesión");
-    } finally {
-      setLoading(false);
-    }
-  };*/
 
   return (
     <Box
@@ -180,7 +168,38 @@ const Login = () => {
               VIRTUAL VOICES
             </Typography>
           </Box>
-          <form onSubmit={handleSubmit(handleLogin)} noValidate autoComplete="off">
+          <form onSubmit={handleSubmit(handleRegister)} noValidate autoComplete="off">
+            <TextField
+              label="Usuario"
+              fullWidth
+              margin="normal"
+              autoFocus
+              autoComplete="name"
+              {...register("name")}
+              error={!!errors.name}
+              helperText={errors.name?.message}
+              inputProps={{ "aria-label": "Usuario", "aria-invalid": !!errors.name }}
+              sx={{
+                input: {
+                  color: "#fff",
+                  fontFamily: 'Montserrat, Arial, sans-serif',
+                },
+                label: { color: "#BDBDBD" },
+                fieldset: { borderColor: errors.name ? "#E05EFF" : "#8B5CF6" },
+                mb: 2,
+                transition: 'box-shadow 0.3s',
+                '& .Mui-focused fieldset': {
+                  borderColor: "#E05EFF",
+                  boxShadow: "0 0 8px 2px #E05EFF55",
+                },
+              }}
+              InputLabelProps={{ style: { color: "#BDBDBD" } }}
+              FormHelperTextProps={{
+                id: "name-error-text",
+                role: errors.name ? "alert" : undefined,
+                "aria-live": errors.name ? "assertive" : undefined,
+              }}
+            />
             <TextField
               label="Correo"
               fullWidth
@@ -257,6 +276,37 @@ const Login = () => {
                 "aria-live": errors.password ? "assertive" : undefined,
               }}
             />
+            <TextField
+              label="Compañia"
+              fullWidth
+              margin="normal"
+              autoFocus
+              autoComplete="c_name"
+              {...register("c_name")}
+              error={!!errors.c_name}
+              helperText={errors.c_name?.message}
+              inputProps={{ "aria-label": "Nombre de la compañia", "aria-invalid": !!errors.c_name }}
+              sx={{
+                input: {
+                  color: "#fff",
+                  fontFamily: 'Montserrat, Arial, sans-serif',
+                },
+                label: { color: "#BDBDBD" },
+                fieldset: { borderColor: errors.c_name ? "#E05EFF" : "#8B5CF6" },
+                mb: 2,
+                transition: 'box-shadow 0.3s',
+                '& .Mui-focused fieldset': {
+                  borderColor: "#E05EFF",
+                  boxShadow: "0 0 8px 2px #E05EFF55",
+                },
+              }}
+              InputLabelProps={{ style: { color: "#BDBDBD" } }}
+              FormHelperTextProps={{
+                id: "c_name-error-text",
+                role: errors.c_name ? "alert" : undefined,
+                "aria-live": errors.c_name ? "assertive" : undefined,
+              }}
+            />
             {serverError && (
               <Typography color="error" sx={{ mt: 1, mb: 1, textAlign: "center" }} role="alert" aria-live="assertive">
                 {serverError}
@@ -294,23 +344,6 @@ const Login = () => {
             </Button>
           </form>
         </Paper>
-        <Box sx={{ mt: 2, textAlign: "center" }}>
-          <Button
-            component={RouterLink}
-            to="/register"
-            variant="text"
-            sx={{
-              color: "#ffffff",
-              fontWeight: 600,
-              textTransform: "none",
-              fontFamily: 'Montserrat, Arial, sans-serif',
-              fontSize: 15,
-              "&:hover": { textDecoration: "underline", background: "none" },
-            }}
-          >
-            ¿No tienes cuenta? Regístrate aquí
-          </Button>
-        </Box>
         <Box sx={{ mt: 3, textAlign: "center", color: "#BDBDBD", fontSize: 13, fontFamily: 'Montserrat, Arial, sans-serif' }}>
           © {new Date().getFullYear()} Virtual Voices. Todos los derechos reservados.
         </Box>
@@ -319,4 +352,4 @@ const Login = () => {
   );
 } 
 
-export default Login;
+export default Register;

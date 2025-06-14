@@ -1,7 +1,8 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { UserProvider, useAuth } from "./context/useAuth";
 import Login from "./pages/Login";
+import Register from "./pages/Register"; // <-- Import your Register page
 import Layout from "./components/Layout";
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
@@ -70,10 +71,11 @@ function EquiposPage() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
+    <BrowserRouter>
+      <UserProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} /> {/* <-- Add this line */}
           <Route
             path="/"
             element={
@@ -89,7 +91,7 @@ export default function App() {
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+      </UserProvider>
+    </BrowserRouter>
   );
 }

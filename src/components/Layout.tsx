@@ -19,7 +19,7 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import Sidebar from "./Sidebar";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/useAuth";
 import { getVirtualVoicesTheme } from "../theme/virtualVoicesTheme";
 import { ThemeProvider } from "@mui/material/styles";
 import LightModeIcon from "@mui/icons-material/LightMode";
@@ -30,7 +30,7 @@ const drawerWidth = 240;
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const { logout } = useAuth();
+  const { logoutUser } = useAuth();
   const menuOpen = Boolean(anchorEl);
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const isMobile = useMediaQuery("(max-width:600px)");
@@ -195,7 +195,7 @@ export default function Layout() {
                 <MenuItem disabled>{user?.email}</MenuItem>
                 <MenuItem
                   onClick={() => {
-                    logout();
+                    logoutUser();
                     handleClose();
                   }}
                   sx={{ color: "#E05EFF", fontWeight: 700 }}
