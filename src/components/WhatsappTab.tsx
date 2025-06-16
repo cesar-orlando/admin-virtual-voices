@@ -20,6 +20,7 @@ import { fetchAllAiConfigs } from "../api/fetchAllAiConfigs";
 import { updateSession } from "../api/updateSession";
 
 export function WhatsappTab() {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [qr, setQr] = useState("");
   const [sessionName, setSessionName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,19 +40,17 @@ export function WhatsappTab() {
 
   useEffect(() => {
     const socket = io("http://localhost:3001");
-    const companyId="684f69a90358ee11c4a344b7"
-    const userId="684f69d00358ee11c4a344be"
 
-    socket.on(`whatsapp-qr-${companyId}-${userId}`, (newQr: string) => {
+    socket.on(`whatsapp-qr-${user.c_name}-${user.id}`, (newQr: string) => {
       setQr(newQr);
     });
 
-    fetchSessions().then((fetchedSessions) => {
+    fetchSessions(user).then((fetchedSessions) => {
       setSessions(fetchedSessions);
     });
 
     // Cargar todos los AI configs al montar
-    fetchAllAiConfigs().then((configs) => {
+    fetchAllAiConfigs(user).then((configs) => {
       setAiConfigs(configs);
       if (configs.length > 0) setSelectedAiId(configs[0]._id);
     });
@@ -64,8 +63,8 @@ export function WhatsappTab() {
   // Simulación de guardado de IA
   async function saveAiConfig(config: any, session: any) {
     // Aquí iría tu lógica real de guardado
-    await updateAiConfig(config);
-    await updateSession({ "IA.name": config.name, '_id': session._id });
+    await updateAiConfig(config, user);
+    await updateSession({ "IA.name": config.name, '_id': session._id }, user);
 
     // Actualiza localmente la sesión y el AI en el estado
     setSessions(prevSessions =>
@@ -113,7 +112,7 @@ export function WhatsappTab() {
                 setLoading(true);
                 setError(null);
                 try {
-                  await requestNewQr(sessionName);
+                  await requestNewQr(sessionName, user);
                   setSessions((prevSessions: any[]) => [...prevSessions, { name: sessionName }]);
                 } catch (err: any) {
                   setError(err.message);

@@ -23,6 +23,7 @@ export function AiConfigTab({
   saveAiConfig: (config: any, sessionData: any) => Promise<any>;
   sessionData: any;
 }) {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<{ from: 'user' | 'ai', text: string }[]>([]);
@@ -35,7 +36,7 @@ export function AiConfigTab({
     setChatInput('');
     // Construye el historial actualizado
     const updatedMessages = [...chatMessages, { from: 'user', text: userMessage }];
-    const response = await simulateAiResponse(updatedMessages, aiConfig);
+    const response = await simulateAiResponse(updatedMessages, aiConfig, user);
     setTimeout(() => {
       setChatMessages(msgs => [...msgs, { from: 'ai', text: response.message }]);
     }, 700);
