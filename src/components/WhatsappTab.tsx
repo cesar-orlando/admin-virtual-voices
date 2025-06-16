@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import Stack from '@mui/material/Stack';
@@ -8,24 +8,89 @@ import { QRCodeCanvas } from "qrcode.react";
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import IconButton from '@mui/material/IconButton';
+import Dialog from '@mui/material/Dialog';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import { requestNewQr } from "../api/requestNewQr";
+import { fetchSessions } from "../api/fetchWhatsappSessions";
+import io from "socket.io-client";
+import { AiConfigTab } from "./AiConfigTab";
+import { updateAiConfig } from "../api/updateAiConfig";
+import { fetchAllAiConfigs } from "../api/fetchAllAiConfigs";
+import { updateSession } from "../api/updateSession";
 
-interface Props {
-  qr: string;
-  sessionName: string;
-  setSessionName: (v: string) => void;
-  loading: boolean;
-  setLoading: (v: boolean) => void;
-  error: string | null;
-  setError: (v: string | null) => void;
-  requestNewQr: (sessionName: string) => Promise<void>;
-  setQr: (v: string) => void;
-  sessions:any;
-  setSessions: (v: any) => void;
-}
+export function WhatsappTab() {
+  const [qr, setQr] = useState("");
+  const [sessionName, setSessionName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiConfig, setAiConfig] = useState<any>({
+    name: "",
+    welcomeMessage: "",
+    objective: "",
+    customPrompt: ""
+  });
+  const [sessionData, setSessionData] = useState<any>(null);
+  const [aiSaveStatus, setAiSaveStatus] = useState<string | null>(null);
+  const [aiConfigs, setAiConfigs] = useState<any[]>([]);
+  const [selectedAiId, setSelectedAiId] = useState<string>("");
 
-export function WhatsappTab({
-  qr, sessionName, setSessionName, loading, setLoading, error, setError, requestNewQr, setQr, sessions, setSessions
-}: Props) {
+  useEffect(() => {
+    const socket = io("http://localhost:3001");
+    const companyId="684f69a90358ee11c4a344b7"
+    const userId="684f69d00358ee11c4a344be"
+
+    socket.on(`whatsapp-qr-${companyId}-${userId}`, (newQr: string) => {
+      setQr(newQr);
+    });
+
+    fetchSessions().then((fetchedSessions) => {
+      setSessions(fetchedSessions);
+    });
+
+    // Cargar todos los AI configs al montar
+    fetchAllAiConfigs().then((configs) => {
+      setAiConfigs(configs);
+      if (configs.length > 0) setSelectedAiId(configs[0]._id);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
+  // Simulación de guardado de IA
+  async function saveAiConfig(config: any, session: any) {
+    // Aquí iría tu lógica real de guardado
+    await updateAiConfig(config);
+    await updateSession({ "IA.name": config.name, '_id': session._id });
+
+    // Actualiza localmente la sesión y el AI en el estado
+    setSessions(prevSessions =>
+      prevSessions.map(s =>
+        s._id === session._id
+          ? { ...s, IA: { id: config._id, name: config.name } }
+          : s
+      )
+    );
+    setAiConfigs(prevConfigs => {
+      const exists = prevConfigs.some(cfg => cfg._id === config._id);
+      if (exists) {
+        // Actualiza el AI existente
+        return prevConfigs.map(cfg =>
+          cfg._id === config._id ? { ...cfg, ...config } : cfg
+        );
+      } else {
+        // Agrega el nuevo AI
+        return [...prevConfigs, config];
+      }
+    });
+
+    setAiSaveStatus("IA guardada correctamente.");
+  }
+
   return (
     <div>
       <Paper elevation={3} sx={{ p: 4, width: '100%', maxWidth: 500, mx: 'auto', mt: 4 }}>
@@ -49,11 +114,10 @@ export function WhatsappTab({
                 setError(null);
                 try {
                   await requestNewQr(sessionName);
+                  setSessions((prevSessions: any[]) => [...prevSessions, { name: sessionName }]);
                 } catch (err: any) {
                   setError(err.message);
                 } finally {
-                  setQr("");
-                  setSessions((prevSessions: any[]) => [...prevSessions, { name: sessionName }]);
                   setLoading(false);
                 }
               }}
@@ -72,9 +136,11 @@ export function WhatsappTab({
         </Stack>
       </Paper>
       <Paper elevation={3} sx={{ p: 4, width: '100%', maxWidth: 500, mx: 'auto', mt: 4 }}>
-        <Typography variant="h5" align="center" gutterBottom>
-          Whatsapps Registrados:
-        </Typography>
+        <Stack direction="row" alignItems="center" mb={2}>
+          <Typography variant="h5" align="center" gutterBottom>
+            Whatsapps Registrados:
+          </Typography>
+        </Stack>
         <Stack spacing={2} alignItems="center" width="100%">
           {sessions.map((session: any, idx: number) => (
             <Paper
@@ -88,13 +154,19 @@ export function WhatsappTab({
               }}
             >
               <Typography variant="body1">{session.name}</Typography>
+              <Typography variant="body1">{session.IA?.name}</Typography>
+              <Typography variant="body1">{session.user?.name}</Typography>
               <div>
                 <IconButton
                   color="primary"
                   size="small"
-                  onClick={() => {
-                    // Lógica para editar la sesión
-                    alert(`Editar sesión: ${session.name}`);
+                  onClick={async () => {
+                    const config = aiConfigs.find(cfg => cfg._id === session.IA?.id);
+                    const sessionData = sessions[idx];
+                    if (config) setAiConfig(config);
+                    if (sessionData) setSessionData(sessionData);
+                    setAiModalOpen(true);
+                    setAiSaveStatus(null);
                   }}
                 >
                   <EditIcon />
@@ -103,8 +175,7 @@ export function WhatsappTab({
                   color="error"
                   size="small"
                   onClick={() => {
-                    // Lógica para borrar la sesión
-                    alert(`Borrar sesión: ${session.name}`);
+                    setSessions(sessions.filter((_, i) => i !== idx));
                   }}
                 >
                   <DeleteIcon />
@@ -114,7 +185,21 @@ export function WhatsappTab({
           ))}
         </Stack>
       </Paper>
+      <Dialog open={aiModalOpen} onClose={() => setAiModalOpen(false)} maxWidth="sm" fullWidth>
+        <DialogContent>
+          <AiConfigTab
+            aiConfig={aiConfig}
+            setAiConfig={setAiConfig}
+            aiSaveStatus={aiSaveStatus}
+            setAiSaveStatus={setAiSaveStatus}
+            saveAiConfig={saveAiConfig}
+            sessionData={sessionData}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAiModalOpen(false)} color="secondary">Cancelar</Button>
+        </DialogActions>
+      </Dialog>
     </div>
-    
   );
 }

@@ -18,6 +18,7 @@ import SmartToyIcon from "@mui/icons-material/SmartToy";
 import GroupIcon from "@mui/icons-material/Group";
 import MenuOpenIcon from "@mui/icons-material/MenuOpen";
 import MenuIcon from "@mui/icons-material/Menu";
+import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import { useNavigate, useLocation } from "react-router-dom";
 import { useTheme, useMediaQuery } from "@mui/material";
 
@@ -42,6 +43,7 @@ export default function Sidebar({ mobileOpen, onClose, mode }: SidebarProps) {
     { label: "Usuarios", icon: <PeopleIcon />, path: "/usuarios" },
     { label: "IA", icon: <SmartToyIcon />, path: "/ia" },
     { label: "Equipos", icon: <GroupIcon />, path: "/equipos" },
+    { label: "Whatsapp", icon: <WhatsAppIcon />, path: "/whatsapp" },
   ];
 
   return (

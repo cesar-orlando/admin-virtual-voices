@@ -14,12 +14,14 @@ export function AiConfigTab({
   aiSaveStatus,
   setAiSaveStatus,
   saveAiConfig,
+  sessionData,
 }: {
   aiConfig: any;
   setAiConfig: React.Dispatch<React.SetStateAction<any>>;
   aiSaveStatus: string | null;
   setAiSaveStatus: (v: string | null) => void;
-  saveAiConfig: (config: any) => Promise<any>;
+  saveAiConfig: (config: any, sessionData: any) => Promise<any>;
+  sessionData: any;
 }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
@@ -33,7 +35,7 @@ export function AiConfigTab({
     setChatInput('');
     // Construye el historial actualizado
     const updatedMessages = [...chatMessages, { from: 'user', text: userMessage }];
-    const response = await simulateAiResponse(updatedMessages);
+    const response = await simulateAiResponse(updatedMessages, aiConfig);
     setTimeout(() => {
       setChatMessages(msgs => [...msgs, { from: 'ai', text: response.message }]);
     }, 700);
@@ -51,10 +53,10 @@ export function AiConfigTab({
               ...aiConfig,
               welcomeMessage: aiConfig.welcomeMessage,
               customPrompt: aiConfig.customPrompt,
-            });
+            }, sessionData);
             setAiSaveStatus('Configuración guardada correctamente.');
           } catch (err: any) {
-            setAiSaveStatus('Error al guardar la configuración.');
+            setAiSaveStatus(err.message || 'Error al guardar la configuración de AI.');
           }
         }}
         style={{ width: '100%' }}
