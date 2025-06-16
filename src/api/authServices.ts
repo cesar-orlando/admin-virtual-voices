@@ -2,22 +2,6 @@ import axios from "axios";
 import { handleError } from "../Helpers/ErrorHandler";
 import type { UserProfileToken } from "../Models/User";
 
-/*export async function login(email: string, password: string): Promise<{ token: string; user: any }> {
-  // Simulación de login exitoso para desarrollo
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        token: "fake-token",
-        user: {
-          name: "Orlando",
-          email,
-          role: "admin",
-        },
-      });
-    }, 500);
-  });
-} */
-
   const API_URL = "http://localhost:3001/api/";
 
   export const loginAPI = async (email: string, password: string) => {

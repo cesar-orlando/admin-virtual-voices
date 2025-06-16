@@ -6,6 +6,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register"; // <-- Import your Register page
 import Layout from "./components/Layout";
 import { WhatsappTab } from "./components/WhatsappTab";
+import { UsersTab } from "./components/UsersTab"
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth();
@@ -26,7 +27,8 @@ function DashboardPage() {
     </div>
   );
 }
-function UsuariosPage() {
+
+/*function UsuariosPage() {
   return (
     <div style={{ padding: 40 }}>
       <h2>Usuarios</h2>
@@ -45,7 +47,7 @@ function UsuariosPage() {
       </table>
     </div>
   );
-}
+}*/
 function IAPage() {
   return (
     <div style={{ padding: 40 }}>
@@ -87,7 +89,7 @@ export default function App() {
             }
           >
             <Route index element={<DashboardPage />} />
-            <Route path="usuarios" element={<UsuariosPage />} />
+            <Route path="usuarios" element={<UsersTab />} />
             <Route path="ia" element={<IAPage />} />
             <Route path="equipos" element={<EquiposPage />} />
             <Route path="whatsapp" element={<WhatsappTab />} />
