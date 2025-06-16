@@ -1,5 +1,11 @@
 // src/api/simulateAiResponse.ts
-export async function simulateAiResponse(chatMessages: any, aiConfig: any, user:any) {
+import type { UserProfile, AIConfig } from '../types';
+
+export async function simulateAiResponse(
+  chatMessages: { from: 'user' | 'ai', text: string }[],
+  aiConfig: AIConfig,
+  user: UserProfile
+) {
   const response = await fetch(`http://localhost:3001/api/ia-configs/testIA/${user.c_name}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

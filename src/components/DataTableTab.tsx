@@ -8,6 +8,17 @@ import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 import Button from '@mui/material/Button';
 
+type MessageChat = {
+  direction: 'inbound' | 'outbound' | 'outbound-api';
+  body: string;
+  respondedBy?: string;
+};
+
+type TableRowData = {
+  [key: string]: string | number | boolean | MessageChat[] | object | null | undefined;
+  messages?: MessageChat[];
+};
+
 export function DataTableTab({
   loading,
   error,
@@ -16,10 +27,10 @@ export function DataTableTab({
 }: {
   loading: boolean;
   error: string | null;
-  data: any;
-  onShowMessages: (messages: any[]) => void;
+  data: TableRowData[] | TableRowData | null;
+  onShowMessages: (messages: MessageChat[]) => void;
 }) {
-  function renderTable(obj: any) {
+  function renderTable(obj: TableRowData[] | TableRowData | null) {
     if (Array.isArray(obj)) {
       if (obj.length === 0) return <p>No data</p>;
       return (
@@ -35,7 +46,7 @@ export function DataTableTab({
               </TableRow>
             </TableHead>
             <TableBody>
-              {obj.map((row: any, idx: number) => {
+              {obj.map((row: TableRowData, idx: number) => {
                 let lastMsg = '';
                 if (Array.isArray(row.messages) && row.messages.length > 0) {
                   const last = row.messages[row.messages.length - 1];
@@ -55,7 +66,7 @@ export function DataTableTab({
                           <Button
                             variant="contained"
                             size="small"
-                            onClick={() => onShowMessages(row.messages)}
+                            onClick={() => onShowMessages(row.messages as MessageChat[])}
                           >
                             Ver mensajes ({row.messages.length})
                           </Button>
@@ -74,7 +85,7 @@ export function DataTableTab({
       return Object.entries(obj).map(([key, value]) => (
         <div key={key} style={{ marginBottom: 30 }}>
           <h3>{key}</h3>
-          {renderTable(value)}
+          {renderTable(value as TableRowData[] | TableRowData | null)}
         </div>
       ));
     } else {

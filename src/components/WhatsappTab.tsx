@@ -18,25 +18,25 @@ import { AiConfigTab } from "./AiConfigTab";
 import { updateAiConfig } from "../api/updateAiConfig";
 import { fetchAllAiConfigs } from "../api/fetchAllAiConfigs";
 import { updateSession } from "../api/updateSession";
+import type { UserProfile, WhatsAppSession, AIConfig } from '../types';
 
 export function WhatsappTab() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = JSON.parse(localStorage.getItem("user") || "{}") as UserProfile;
   const [qr, setQr] = useState("");
   const [sessionName, setSessionName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<WhatsAppSession[]>([]);
   const [aiModalOpen, setAiModalOpen] = useState(false);
-  const [aiConfig, setAiConfig] = useState<any>({
+  const [aiConfig, setAiConfig] = useState<Partial<AIConfig>>({
     name: "",
     welcomeMessage: "",
     objective: "",
     customPrompt: ""
   });
-  const [sessionData, setSessionData] = useState<any>(null);
+  const [sessionData, setSessionData] = useState<Partial<WhatsAppSession>>({});
   const [aiSaveStatus, setAiSaveStatus] = useState<string | null>(null);
-  const [aiConfigs, setAiConfigs] = useState<any[]>([]);
-  const [selectedAiId, setSelectedAiId] = useState<string>("");
+  const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([]);
 
   useEffect(() => {
     const socket = io("http://localhost:3001");
@@ -45,45 +45,48 @@ export function WhatsappTab() {
       setQr(newQr);
     });
 
-    fetchSessions(user).then((fetchedSessions) => {
+    const loadData = async () => {
+      const fetchedSessions = await fetchSessions(user);
       setSessions(fetchedSessions);
-    });
 
-    // Cargar todos los AI configs al montar
-    fetchAllAiConfigs(user).then((configs) => {
+      const configs = await fetchAllAiConfigs(user);
       setAiConfigs(configs);
-      if (configs.length > 0) setSelectedAiId(configs[0]._id);
-    });
+    };
+
+    loadData();
 
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [user]);
 
-  // Simulación de guardado de IA
-  async function saveAiConfig(config: any, session: any) {
-    // Aquí iría tu lógica real de guardado
-    await updateAiConfig(config, user);
-    await updateSession({ "IA.name": config.name, '_id': session._id }, user);
+  async function saveAiConfig(config: Partial<AIConfig>, session: Partial<WhatsAppSession>) {
+    if (!config._id || !session._id) return;
+    
+    await updateAiConfig(config as AIConfig, user);
+    await updateSession({ 
+      _id: session._id,
+      IA: { 
+        id: config._id,
+        name: config.name || "" 
+      }
+    }, user);
 
-    // Actualiza localmente la sesión y el AI en el estado
     setSessions(prevSessions =>
       prevSessions.map(s =>
         s._id === session._id
-          ? { ...s, IA: { id: config._id, name: config.name } }
+          ? { ...s, IA: { id: config._id!, name: config.name || "" } }
           : s
       )
     );
     setAiConfigs(prevConfigs => {
       const exists = prevConfigs.some(cfg => cfg._id === config._id);
       if (exists) {
-        // Actualiza el AI existente
         return prevConfigs.map(cfg =>
           cfg._id === config._id ? { ...cfg, ...config } : cfg
         );
       } else {
-        // Agrega el nuevo AI
-        return [...prevConfigs, config];
+        return [...prevConfigs, config as AIConfig];
       }
     });
 
@@ -113,9 +116,9 @@ export function WhatsappTab() {
                 setError(null);
                 try {
                   await requestNewQr(sessionName, user);
-                  setSessions((prevSessions: any[]) => [...prevSessions, { name: sessionName }]);
-                } catch (err: any) {
-                  setError(err.message);
+                  setSessions((prevSessions: WhatsAppSession[]) => [...prevSessions, { name: sessionName } as WhatsAppSession]);
+                } catch (err: unknown) {
+                  setError(err instanceof Error ? err.message : 'Error desconocido');
                 } finally {
                   setLoading(false);
                 }
@@ -141,7 +144,7 @@ export function WhatsappTab() {
           </Typography>
         </Stack>
         <Stack spacing={2} alignItems="center" width="100%">
-          {sessions.map((session: any, idx: number) => (
+          {sessions.map((session: WhatsAppSession, idx: number) => (
             <Paper
               key={idx}
               sx={{

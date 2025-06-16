@@ -19,7 +19,7 @@ import {
 import MenuIcon from "@mui/icons-material/Menu";
 import NotificationsIcon from "@mui/icons-material/Notifications";
 import Sidebar from "./Sidebar";
-import { useAuth } from "../context/useAuth";
+import { useAuth } from "../hooks/useAuth";
 import { getVirtualVoicesTheme } from "../theme/virtualVoicesTheme";
 import { ThemeProvider } from "@mui/material/styles";
 import LightModeIcon from "@mui/icons-material/LightMode";

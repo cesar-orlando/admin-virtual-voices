@@ -5,7 +5,13 @@ import DialogContent from '@mui/material/DialogContent';
 import Button from '@mui/material/Button';
 import Stack from '@mui/material/Stack';
 
-export function ChatModal({ open, onClose, messages }: { open: boolean, onClose: () => void, messages: any[] }) {
+type MessageChat = {
+  direction: 'inbound' | 'outbound' | 'outbound-api';
+  body: string;
+  respondedBy?: string;
+};
+
+export function ChatModal({ open, onClose, messages }: { open: boolean, onClose: () => void, messages: MessageChat[] }) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Mensajes del chat</DialogTitle>

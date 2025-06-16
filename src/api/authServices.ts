@@ -27,8 +27,8 @@ import type { UserProfileToken } from "../Models/User";
         password: password,
       });
       return data;
-    } catch (error){
-      handleError(error);
+    } catch (error) {
+      handleError(error as any);
     }
   };
 
@@ -41,7 +41,7 @@ import type { UserProfileToken } from "../Models/User";
         c_name: c_name,
       });
       return data;
-    } catch (error){
-      handleError(error);
+    } catch (error) {
+      handleError(error as any);
     }
   };

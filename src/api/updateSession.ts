@@ -1,5 +1,7 @@
+import type { UserProfile, WhatsAppSession } from '../types';
+
 // src/api/saveAiConfig.ts
-export async function updateSession(update: any, user: any) {
+export async function updateSession(update: Partial<WhatsAppSession>, user: UserProfile) {
     const response = await fetch(`http://localhost:3001/api/whatsapp/session/${user.c_name}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

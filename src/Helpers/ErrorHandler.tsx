@@ -1,24 +1,13 @@
-import axios from "axios";
-import { toast } from "react-toastify";
+import type { ApiError } from '../types/common';
 
-export const handleError = (error: any) => {
-  if (axios.isAxiosError(error)) {
-    var err = error.response;
-    if (Array.isArray(err?.data.errors)) {
-      for (let val of err?.data.errors) {
-        toast.warning(val.description);
-      }
-    } else if (typeof err?.data.errors === "object") {
-      for (let e in err?.data.errors) {
-        toast.warning(err.data.errors[e][0]);
-      }
-    } else if (err?.data) {
-      toast.warning(err.data);
-    } else if (err?.status == 401) {
-      toast.warning("please login");
-      window.history.pushState({}, "Login", "/login");
-    } else if (err) {
-      toast.warning(err?.data);
-    }
+export const handleError = (error: ApiError): string => {
+  const errorMessage = error.response?.data?.message || error.message || 'An error occurred';
+  return errorMessage;
+};
+
+export const handleApiError = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message;
   }
+  return 'An unexpected error occurred';
 };

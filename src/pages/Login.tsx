@@ -10,15 +10,14 @@ import {
   InputAdornment,
   useMediaQuery,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/useAuth";
-import { loginAPI } from "../api/authServices";
+import { useAuth } from "../hooks/useAuth";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import { Link as RouterLink } from "react-router-dom";
+import { toast } from "react-toastify";
 
 // Fuente Montserrat desde Google Fonts (solo para el login)
 const fontLink = document.createElement("link");
@@ -65,12 +64,16 @@ const Login = () => {
     resolver: yupResolver(validation),
   });
 
-  const handleLogin = (form: LoginFormsInputs) => {
-    try {
+  const handleLogin = async (form: LoginFormsInputs) => {
     setLoading(true);
-    loginUser(form.email, form.password);
-    } catch (error: any) {
-      setServerError("Error al iniciar sesión. Por favor, inténtalo de nuevo.");
+    setServerError("");
+    try {
+      await loginUser(form.email, form.password);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Credenciales incorrectas o error al iniciar sesión.";
+      setServerError(errorMessage);
+      toast.warning(errorMessage);
+    } finally {
       setLoading(false);
     }
   };

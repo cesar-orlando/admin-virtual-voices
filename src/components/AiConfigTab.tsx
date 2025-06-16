@@ -7,6 +7,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import { simulateAiResponse } from "../api/simulateAiResponse";
+import type { AIConfig, WhatsAppSession } from '../types';
 
 export function AiConfigTab({
   aiConfig,
@@ -16,12 +17,12 @@ export function AiConfigTab({
   saveAiConfig,
   sessionData,
 }: {
-  aiConfig: any;
-  setAiConfig: React.Dispatch<React.SetStateAction<any>>;
+  aiConfig: Partial<AIConfig>;
+  setAiConfig: React.Dispatch<React.SetStateAction<Partial<AIConfig>>>;
   aiSaveStatus: string | null;
   setAiSaveStatus: (v: string | null) => void;
-  saveAiConfig: (config: any, sessionData: any) => Promise<any>;
-  sessionData: any;
+  saveAiConfig: (config: Partial<AIConfig>, sessionData: Partial<WhatsAppSession>) => Promise<void>;
+  sessionData: Partial<WhatsAppSession>;
 }) {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const [chatOpen, setChatOpen] = useState(false);
@@ -32,13 +33,28 @@ export function AiConfigTab({
   async function handleSendMessage() {
     if (!chatInput.trim()) return;
     const userMessage = chatInput;
-    setChatMessages(msgs => [...msgs, { from: 'user', text: userMessage }]);
+    setChatMessages(msgs => [...msgs, { from: 'user' as const, text: userMessage }]);
     setChatInput('');
     // Construye el historial actualizado
-    const updatedMessages = [...chatMessages, { from: 'user', text: userMessage }];
-    const response = await simulateAiResponse(updatedMessages, aiConfig, user);
+    const updatedMessages = [...chatMessages, { from: 'user' as const, text: userMessage }];
+    const response = await simulateAiResponse(
+      updatedMessages,
+      {
+        _id: aiConfig._id ?? '',
+        name: aiConfig.name ?? '',
+        welcomeMessage: aiConfig.welcomeMessage ?? '',
+        objective: aiConfig.objective ?? '',
+        customPrompt: aiConfig.customPrompt ?? '',
+        // Opcionales:
+        isActive: aiConfig.isActive,
+        model: aiConfig.model,
+        temperature: aiConfig.temperature,
+        maxTokens: aiConfig.maxTokens,
+      },
+      user
+    );
     setTimeout(() => {
-      setChatMessages(msgs => [...msgs, { from: 'ai', text: response.message }]);
+      setChatMessages(msgs => [...msgs, { from: 'ai' as const, text: response.message }]);
     }, 700);
   }
 
@@ -56,8 +72,8 @@ export function AiConfigTab({
               customPrompt: aiConfig.customPrompt,
             }, sessionData);
             setAiSaveStatus('Configuración guardada correctamente.');
-          } catch (err: any) {
-            setAiSaveStatus(err.message || 'Error al guardar la configuración de AI.');
+          } catch (err: unknown) {
+            setAiSaveStatus(err instanceof Error ? err.message : 'Error al guardar la configuración de AI.');
           }
         }}
         style={{ width: '100%' }}
@@ -66,7 +82,7 @@ export function AiConfigTab({
           label="Nombre"
           value={aiConfig?.name || ''}
           onChange={e =>
-            setAiConfig((prev: any) => ({
+            setAiConfig((prev) => ({
               ...prev,
               name: e.target.value,
             }))
@@ -79,7 +95,7 @@ export function AiConfigTab({
           label="Saludo"
           value={aiConfig?.welcomeMessage || ''}
           onChange={e =>
-            setAiConfig((prev: any) => ({
+            setAiConfig((prev) => ({
               ...prev,
               welcomeMessage: e.target.value,
             }))
@@ -92,7 +108,7 @@ export function AiConfigTab({
           label="Objetivo"
           value={aiConfig?.objective || ''}
           onChange={e =>
-            setAiConfig((prev: any) => ({
+            setAiConfig((prev) => ({
               ...prev,
               objective: e.target.value,
             }))
@@ -105,7 +121,7 @@ export function AiConfigTab({
           label="Contexto"
           value={aiConfig?.customPrompt || ''}
           onChange={e =>
-            setAiConfig((prev: any) => ({
+            setAiConfig((prev) => ({
               ...prev,
               customPrompt: e.target.value,
             }))

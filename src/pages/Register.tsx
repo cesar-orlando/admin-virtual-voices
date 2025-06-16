@@ -10,16 +10,16 @@ import {
   InputAdornment,
   useMediaQuery,
 } from "@mui/material";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/useAuth";
-import { loginAPI } from "../api/authServices";
+import { useAuth } from "../hooks/useAuth";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
+import { Link as RouterLink } from "react-router-dom";
+import { toast } from "react-toastify";
 
-// Fuente Montserrat desde Google Fonts (solo para el login)
+// Fuente Montserrat desde Google Fonts (solo para el registro)
 const fontLink = document.createElement("link");
 fontLink.href = "https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap";
 fontLink.rel = "stylesheet";
@@ -35,23 +35,23 @@ declare module "@mui/material/styles" {
 }
 
 type RegisterFormsInputs = {
-    name: string;
-    email: string;
-    password: string;
-    c_name: string;
+  name: string;
+  email: string;
+  password: string;
+  c_name: string;
 }
 
 const validation = yup.object().shape({
-  email: yup.string().email("Correo inválido").required("El correo es obligatorio"),
   name: yup.string().required("El nombre es obligatorio"),
-  c_name: yup.string().required("El nombre de la empresa es obligatorio"),
+  email: yup.string().email("Correo inválido").required("El correo es obligatorio"),
   password: yup.string().min(10, "Mínimo 10 caracteres").required("La contraseña es obligatoria"),
+  c_name: yup.string().required("El nombre de la compañía es obligatorio"),
 });
 
 const Register = () => {
   const { registerUser } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [serverError] = useState("");
+  const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const isMobile = useMediaQuery("(max-width:600px)");
   const [cardVisible, setCardVisible] = useState(false);
@@ -68,9 +68,19 @@ const Register = () => {
     resolver: yupResolver(validation),
   });
 
-  const handleRegister = (form: RegisterFormsInputs) => {
-    registerUser(form.name, form.email, form.password, form.c_name);
-  }
+  const handleRegister = async (form: RegisterFormsInputs) => {
+    setLoading(true);
+    setServerError("");
+    try {
+      await registerUser(form.email, form.name, form.password, form.c_name);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Error al registrar usuario.";
+      setServerError(errorMessage);
+      toast.warning(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Box
@@ -170,15 +180,14 @@ const Register = () => {
           </Box>
           <form onSubmit={handleSubmit(handleRegister)} noValidate autoComplete="off">
             <TextField
-              label="Usuario"
+              label="Nombre"
               fullWidth
               margin="normal"
               autoFocus
-              autoComplete="name"
               {...register("name")}
               error={!!errors.name}
               helperText={errors.name?.message}
-              inputProps={{ "aria-label": "Usuario", "aria-invalid": !!errors.name }}
+              inputProps={{ "aria-label": "Nombre", "aria-invalid": !!errors.name }}
               sx={{
                 input: {
                   color: "#fff",
@@ -204,7 +213,6 @@ const Register = () => {
               label="Correo"
               fullWidth
               margin="normal"
-              autoFocus
               autoComplete="email"
               {...register("email")}
               error={!!errors.email}
@@ -236,7 +244,7 @@ const Register = () => {
               type={showPassword ? "text" : "password"}
               fullWidth
               margin="normal"
-              autoComplete="current-password"
+              autoComplete="new-password"
               {...register("password")}
               error={!!errors.password}
               helperText={errors.password?.message}
@@ -277,15 +285,13 @@ const Register = () => {
               }}
             />
             <TextField
-              label="Compañia"
+              label="Nombre de la compañía"
               fullWidth
               margin="normal"
-              autoFocus
-              autoComplete="c_name"
               {...register("c_name")}
               error={!!errors.c_name}
               helperText={errors.c_name?.message}
-              inputProps={{ "aria-label": "Nombre de la compañia", "aria-invalid": !!errors.c_name }}
+              inputProps={{ "aria-label": "Nombre de la compañía", "aria-invalid": !!errors.c_name }}
               sx={{
                 input: {
                   color: "#fff",
@@ -340,10 +346,27 @@ const Register = () => {
               disabled={loading}
               endIcon={!loading && <Visibility sx={{ opacity: 0 }} />} // para mantener altura
             >
-              {loading ? <CircularProgress size={24} color="inherit" /> : "Entrar"}
+              {loading ? <CircularProgress size={24} color="inherit" /> : "Registrarse"}
             </Button>
           </form>
         </Paper>
+        <Box sx={{ mt: 2, textAlign: "center" }}>
+          <Button
+            component={RouterLink}
+            to="/login"
+            variant="text"
+            sx={{
+              color: "#ffffff",
+              fontWeight: 600,
+              textTransform: "none",
+              fontFamily: 'Montserrat, Arial, sans-serif',
+              fontSize: 15,
+              "&:hover": { textDecoration: "underline", background: "none" },
+            }}
+          >
+            ¿Ya tienes cuenta? Inicia sesión aquí
+          </Button>
+        </Box>
         <Box sx={{ mt: 3, textAlign: "center", color: "#BDBDBD", fontSize: 13, fontFamily: 'Montserrat, Arial, sans-serif' }}>
           © {new Date().getFullYear()} Virtual Voices. Todos los derechos reservados.
         </Box>

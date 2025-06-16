@@ -1,6 +1,7 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { UserProvider, useAuth } from "./context/useAuth";
+import { UserProvider } from "./context/useAuth";
+import { useAuth } from "./hooks/useAuth";
 import Login from "./pages/Login";
 import Register from "./pages/Register"; // <-- Import your Register page
 import Layout from "./components/Layout";

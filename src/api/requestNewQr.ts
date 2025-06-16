@@ -1,6 +1,8 @@
 // src/api/requestNewQr.ts
 
-export async function requestNewQr(sessionName: string, user:any) {
+import type { UserProfile } from '../types';
+
+export async function requestNewQr(sessionName: string, user: UserProfile) {
     const response = await fetch('http://localhost:3001/api/whatsapp/session', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

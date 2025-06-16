@@ -1,5 +1,7 @@
+import type { UserProfile, AIConfig } from '../types';
+
 // src/api/saveAiConfig.ts
-export async function updateAiConfig(config: any, user:any) {
+export async function updateAiConfig(config: AIConfig, user: UserProfile) {
   const response = await fetch(`http://localhost:3001/api/ia-configs/${user.c_name}/${user.id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
