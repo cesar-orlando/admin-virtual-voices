@@ -72,7 +72,7 @@ const Register = () => {
     setLoading(true);
     setServerError("");
     try {
-      await registerUser(form.email, form.name, form.password, form.c_name);
+      await registerUser(form.name, form.email, form.password, form.c_name);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error al registrar usuario.";
       setServerError(errorMessage);
