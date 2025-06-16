@@ -1,4 +1,10 @@
-export type UserProfileToken = {
+// Este archivo se mantiene por compatibilidad, pero se recomienda usar src/types/index.ts
+// para nuevos desarrollos
+
+export type { UserProfile, UserProfileToken, UserRole } from '../types'
+
+// Mantener para retrocompatibilidad
+export type UserProfileToken_Legacy = {
     id: any;
     name: string;
     email: string;
@@ -7,7 +13,7 @@ export type UserProfileToken = {
     c_name: string;
 };
 
-export type UserProfile = {
+export type UserProfile_Legacy = {
     name: string;
     email: string;
 };
