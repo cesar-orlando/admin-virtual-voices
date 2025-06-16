@@ -47,7 +47,6 @@ const validation = yup.object().shape({
 
 const Login = () => {
   const { loginUser } = useAuth();
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -67,22 +66,14 @@ const Login = () => {
   });
 
   const handleLogin = (form: LoginFormsInputs) => {
-    loginUser(form.email, form.password);
-  }
-
-  /*const onSubmit = async (data: { email: string; password: string }) => {
-    setLoading(true);
-    setServerError("");
     try {
-      const { token, user } = await login(data.email, data.password);
-      loginUser(token, user);
-      navigate("/");
+    setLoading(true);
+    loginUser(form.email, form.password);
     } catch (error: any) {
-      setServerError(error.response?.data?.message || "Error al iniciar sesión");
-    } finally {
+      setServerError("Error al iniciar sesión. Por favor, inténtalo de nuevo.");
       setLoading(false);
     }
-  };*/
+  };
 
   return (
     <Box
