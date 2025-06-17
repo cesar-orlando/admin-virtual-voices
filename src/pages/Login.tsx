@@ -18,6 +18,7 @@ import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import { Link as RouterLink } from "react-router-dom";
 import { toast } from "react-toastify";
+import LogoVoice2 from '../assets/LogoVoice2.svg';
 
 // Fuente Montserrat desde Google Fonts (solo para el login)
 const fontLink = document.createElement("link");
@@ -133,46 +134,18 @@ const Login = () => {
             transition: 'opacity 0.7s cubic-bezier(.4,0,.2,1), transform 0.7s cubic-bezier(.4,0,.2,1)',
           }}
         >
-          {/* Logo temporal estilizado */}
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mb: 2 }}>
-            <Box
-              sx={{
-                width: 64,
-                height: 64,
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #E05EFF 0%, #8B5CF6 60%, #3B82F6 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                mb: 1,
-                boxShadow: "0 2px 16px 0 #8B5CF6AA",
+            <img
+              src={LogoVoice2}
+              alt="Logo Virtual Voices"
+              style={{
+                width: 180, // Ajusta el tamaño según lo que se vea mejor
+                height: 'auto',
+                marginBottom: 8,
+                display: 'block',
+                filter: 'drop-shadow(0 2px 8px #8B5CF6AA)'
               }}
-            >
-              <Typography
-                sx={{
-                  fontFamily: 'Montserrat, Arial, sans-serif',
-                  fontWeight: 700,
-                  fontSize: 36,
-                  color: "#fff",
-                  letterSpacing: 2,
-                  textShadow: "0 2px 8px #3B82F6AA",
-                }}
-              >
-                V
-              </Typography>
-            </Box>
-            <Typography
-              variant="h4"
-              fontWeight={700}
-              sx={{
-                color: "#fff",
-                fontFamily: 'Montserrat, Arial, sans-serif',
-                letterSpacing: 2,
-                textShadow: "0 2px 8px #3B82F6AA",
-              }}
-            >
-              VIRTUAL VOICES
-            </Typography>
+            />
           </Box>
           <form onSubmit={handleSubmit(handleLogin)} noValidate autoComplete="off">
             <TextField

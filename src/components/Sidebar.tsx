@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   Box,
   Drawer,
@@ -78,20 +78,6 @@ export default function Sidebar({ mobileOpen, onClose, mode }: SidebarProps) {
       <Box sx={{ overflow: "auto", px: 1, pt: 2, pb: 1, display: 'flex', flexDirection: 'column', height: '100%' }}>
         {/* Logo y botón de colapso */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 4, mt: 1, justifyContent: collapsed ? 'center' : 'space-between' }}>
-          <Box
-            sx={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #E05EFF 0%, #8B5CF6 60%, #3B82F6 100%)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "0 2px 8px #8B5CF6AA",
-            }}
-          >
-            <Typography sx={{ fontWeight: 700, fontSize: 20, color: "#fff", letterSpacing: 1 }}>V</Typography>
-          </Box>
           {!collapsed && (
             <Typography
               sx={{

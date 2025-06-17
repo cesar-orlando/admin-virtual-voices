@@ -6,7 +6,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register"; // <-- Import your Register page
 import Layout from "./components/Layout";
 import { WhatsappTab } from "./components/WhatsappTab";
-import { UsersTab } from "./components/UsersTab";
+import Users from "./pages/Users";
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth();
@@ -89,7 +89,7 @@ export default function App() {
             }
           >
             <Route index element={<DashboardPage />} />
-            <Route path="usuarios" element={<UsersTab />} />
+            <Route path="usuarios" element={<Users />} />
             <Route path="ia" element={<IAPage />} />
             <Route path="equipos" element={<EquiposPage />} />
             <Route path="whatsapp" element={<WhatsappTab />} />
