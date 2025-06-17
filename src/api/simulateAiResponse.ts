@@ -3,7 +3,7 @@ import type { UserProfile, AIConfig } from '../types';
 
 export async function simulateAiResponse(
   chatMessages: { from: 'user' | 'ai', text: string }[],
-  aiConfig: AIConfig,
+  aiConfig: Partial<AIConfig>,
   user: UserProfile
 ) {
   const response = await fetch(`http://localhost:3001/api/ia-configs/testIA/${user.c_name}`, {

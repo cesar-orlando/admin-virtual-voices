@@ -58,7 +58,7 @@ export function WhatsappTab() {
     return () => {
       socket.disconnect();
     };
-  }, [user]);
+  }, [user.c_name, user.id]);
 
   async function saveAiConfig(config: Partial<AIConfig>, session: Partial<WhatsAppSession>) {
     if (!config._id || !session._id) return;
