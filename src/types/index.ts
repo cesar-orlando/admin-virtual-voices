@@ -18,11 +18,13 @@ export interface UserProfileToken extends UserProfile {
   token: string
 }
 
-export enum UserRole {
-  ADMIN = 'admin',
-  USER = 'user',
-  MODERATOR = 'moderator'
-}
+export const UserRole = {
+  ADMIN: 'admin',
+  USER: 'user',
+  MODERATOR: 'moderator'
+} as const;
+
+export type UserRole = typeof UserRole[keyof typeof UserRole];
 
 // Auth types
 export interface LoginRequest {
@@ -59,12 +61,14 @@ export interface WhatsAppSession extends BaseEntity {
   isConnected?: boolean
 }
 
-export enum SessionStatus {
-  CONNECTED = 'connected',
-  DISCONNECTED = 'disconnected',
-  PENDING = 'pending',
-  ERROR = 'error'
-}
+export const SessionStatus = {
+  CONNECTED: 'connected',
+  DISCONNECTED: 'disconnected',
+  PENDING: 'pending',
+  ERROR: 'error'
+} as const;
+
+export type SessionStatus = typeof SessionStatus[keyof typeof SessionStatus];
 
 export interface QRRequest {
   sessionName: string
@@ -74,6 +78,7 @@ export interface QRRequest {
 // AI Configuration types
 export interface AIConfig extends BaseEntity {
   name: string
+  type: string
   welcomeMessage: string
   objective: string
   customPrompt: string
@@ -83,12 +88,14 @@ export interface AIConfig extends BaseEntity {
   maxTokens?: number
 }
 
-export enum AIModel {
-  GPT_3_5 = 'gpt-3.5-turbo',
-  GPT_4 = 'gpt-4',
-  CLAUDE = 'claude-3',
-  LOCAL = 'local-model'
-}
+export const AIModel = {
+  GPT_3_5: 'gpt-3.5-turbo',
+  GPT_4: 'gpt-4',
+  CLAUDE: 'claude-3',
+  LOCAL: 'local-model'
+} as const;
+
+export type AIModel = typeof AIModel[keyof typeof AIModel];
 
 export interface AIConfigRequest {
   config: Partial<AIConfig>
@@ -105,18 +112,22 @@ export interface Message extends BaseEntity {
   metadata?: MessageMetadata
 }
 
-export enum MessageSender {
-  USER = 'user',
-  AI = 'ai',
-  SYSTEM = 'system'
-}
+export const MessageSender = {
+  USER: 'user',
+  AI: 'ai',
+  SYSTEM: 'system'
+} as const;
 
-export enum MessageType {
-  TEXT = 'text',
-  IMAGE = 'image',
-  AUDIO = 'audio',
-  FILE = 'file'
-}
+export type MessageSender = typeof MessageSender[keyof typeof MessageSender];
+
+export const MessageType = {
+  TEXT: 'text',
+  IMAGE: 'image',
+  AUDIO: 'audio',
+  FILE: 'file'
+} as const;
+
+export type MessageType = typeof MessageType[keyof typeof MessageType];
 
 export interface MessageMetadata {
   phoneNumber?: string
@@ -165,12 +176,14 @@ export interface NotificationState {
   isRead?: boolean
 }
 
-export enum NotificationType {
-  SUCCESS = 'success',
-  ERROR = 'error',
-  WARNING = 'warning',
-  INFO = 'info'
-}
+export const NotificationType = {
+  SUCCESS: 'success',
+  ERROR: 'error',
+  WARNING: 'warning',
+  INFO: 'info'
+} as const;
+
+export type NotificationType = typeof NotificationType[keyof typeof NotificationType];
 
 // Form types
 export interface FormState<T = Record<string, unknown>> {

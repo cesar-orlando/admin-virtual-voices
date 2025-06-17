@@ -6,7 +6,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register"; // <-- Import your Register page
 import Layout from "./components/Layout";
 import { WhatsappTab } from "./components/WhatsappTab";
-import { UsersTab } from "./components/UsersTab"
+import { UsersTab } from "./components/UsersTab";
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth();
