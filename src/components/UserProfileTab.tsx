@@ -31,18 +31,26 @@ export function UserProfileTab() {
   const [edit, setEdit] = useState(false);
   const [profilePic, setProfilePic] = useState(existingUser.profilePic);
 
-  const handleChange = (e) => {
+  interface HandleChangeEvent {
+    target: {
+      name: string;
+      value: string;
+    };
+  }
+
+  const handleChange = (e: HandleChangeEvent) => {
     setUser({ ...user, [e.target.name]: e.target.value });
   };
 
-  const handlePicChange = (e) => {
-    const file = e.target.files[0];
+  const handlePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files && e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (ev.target && typeof ev.target.result === "string") {
-          setProfilePic(ev.target.result);
-          setUser({ ...user, profilePic: ev.target.result });
+      reader.onload = (ev: ProgressEvent<FileReader>) => {
+        const result = ev.target?.result;
+        if (typeof result === "string") {
+          setProfilePic(result);
+          setUser({ ...user, profilePic: result });
         }
       };
       reader.readAsDataURL(file);
@@ -63,7 +71,7 @@ export function UserProfileTab() {
     );
     setEdit(false);
     toast.success("Perfil actualizado correctamente");
-  } catch (_error) {
+  } catch {
     toast.error("Error al actualizar el perfil");
   }
 };
