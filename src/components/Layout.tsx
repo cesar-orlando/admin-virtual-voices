@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   AppBar,
   Avatar,
@@ -65,6 +65,8 @@ export default function Layout() {
     const timeout = setTimeout(() => setContentVisible(true), 80);
     return () => clearTimeout(timeout);
   }, [location.pathname]);
+
+  const navigate = useNavigate();
 
   return (
     <ThemeProvider theme={theme}>
@@ -192,6 +194,13 @@ export default function Layout() {
                   },
                 }}
               >
+                <MenuItem
+                    value="profile"
+                    onClick={() => navigate("/userProfile")}
+                    sx={{ fontWeight: 600, color: "#8B5CF6" }}
+                  >
+                    Ir a mi perfil
+                  </MenuItem>
                 <MenuItem disabled>{user?.email}</MenuItem>
                 <MenuItem
                   onClick={() => {

@@ -7,6 +7,8 @@ import Register from "./pages/Register"; // <-- Import your Register page
 import Layout from "./components/Layout";
 import Whatsapp from "./pages/Whatsapp";
 import Users from "./pages/Users";
+import { AiConfigTab } from "./components/AiConfigTab";
+import { UserProfileTab } from "./components/UserProfileTab"
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth();
@@ -23,39 +25,6 @@ function DashboardPage() {
         <li>Usuarios activos: <b>12</b></li>
         <li>IA disponibles: <b>3</b></li>
         <li>Equipos registrados: <b>5</b></li>
-      </ul>
-    </div>
-  );
-}
-
-/*function UsuariosPage() {
-  return (
-    <div style={{ padding: 40 }}>
-      <h2>Usuarios</h2>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 16 }}>
-        <thead>
-          <tr style={{ background: '#F4F6FB' }}>
-            <th>Nombre</th>
-            <th>Email</th>
-            <th>Rol</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>Orlando</td><td>orlando@virtualvoices.com</td><td>Admin</td></tr>
-          <tr><td>Ana</td><td>ana@virtualvoices.com</td><td>Usuario</td></tr>
-        </tbody>
-      </table>
-    </div>
-  );
-}*/
-function IAPage() {
-  return (
-    <div style={{ padding: 40 }}>
-      <h2>IA</h2>
-      <ul>
-        <li>ChatBot Ventas</li>
-        <li>Asistente de Soporte</li>
-        <li>Analizador de Sentimientos</li>
       </ul>
     </div>
   );
@@ -90,9 +59,10 @@ export default function App() {
           >
             <Route index element={<DashboardPage />} />
             <Route path="usuarios" element={<Users />} />
-            <Route path="ia" element={<IAPage />} />
+            <Route path="ia" element={<AiConfigTab />} />
             <Route path="equipos" element={<EquiposPage />} />
             <Route path="whatsapp" element={<Whatsapp />} />
+            <Route path="/userProfile" element={<UserProfileTab />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
