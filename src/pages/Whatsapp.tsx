@@ -235,22 +235,6 @@ export default function Whatsapp() {
           </Typography>
         </DialogContent>
       </Dialog>
-      {/* Modal para editar AI config */}
-      <Dialog open={aiModalOpen} onClose={() => setAiModalOpen(false)} maxWidth="sm" fullWidth>
-        <DialogContent>
-          <AiConfigTab
-            aiConfig={aiConfig}
-            setAiConfig={setAiConfig}
-            aiSaveStatus={aiSaveStatus}
-            setAiSaveStatus={setAiSaveStatus}
-            saveAiConfig={saveAiConfig}
-            sessionData={sessionData}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAiModalOpen(false)} color="secondary">Cancelar</Button>
-        </DialogActions>
-      </Dialog>
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert elevation={6} variant="filled" onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
           {snackbar.message}

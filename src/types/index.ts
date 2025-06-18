@@ -81,6 +81,7 @@ export interface AIConfig extends BaseEntity {
   type: string
   welcomeMessage: string
   objective: string
+  tone: string
   customPrompt: string
   isActive?: boolean
   model?: AIModel
