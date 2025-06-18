@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Box, Typography, Card, CardContent, Button, FormControl, InputLabel, Select, MenuItem,
   TextField, Snackbar, CircularProgress, useTheme, Paper
@@ -16,6 +16,8 @@ import type { AIConfig } from '../types';
 export function AiConfigTab(): React.ReactElement {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const theme = useTheme();
+
+  const chatButtonRef = useRef<HTMLButtonElement>(null);
 
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -111,23 +113,24 @@ export function AiConfigTab(): React.ReactElement {
             Configuración de AI
           </Typography>
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => setChatOpen(true)}
-              sx={{ borderRadius: 2, fontWeight: 600, boxShadow: '0 2px 8px #3B82F633' }}
-            >
-              Simular Llamada
-            </Button>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={() => setChatOpen(true)}
-              sx={{ borderRadius: 2, fontWeight: 600, boxShadow: '0 2px 8px #3B82F633' }}
-            >
-              Simular Chat
-            </Button>
-          </Box>
+          <Button
+            ref={chatButtonRef}
+            variant="contained"
+            color="primary"
+            onClick={() => setChatOpen(true)}
+            sx={{ borderRadius: 2, fontWeight: 600, boxShadow: '0 2px 8px #3B82F633' }}
+          >
+            Simular Llamada
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => setChatOpen(true)}
+            sx={{ borderRadius: 2, fontWeight: 600, boxShadow: '0 2px 8px #3B82F633' }}
+          >
+            Simular Chat
+          </Button>
+        </Box>
         </Box>
         <Card sx={{ borderRadius: 2, boxShadow: '0 8px 32px 0 rgba(59,130,246,0.10)', background: theme.palette.background.paper, mb: 2 }}>
             <Paper sx={{ p: 3 }}>
@@ -229,8 +232,18 @@ export function AiConfigTab(): React.ReactElement {
         </MuiAlert>
       </Snackbar>
       {/* Modal de chat AI */}
-      <Dialog open={chatOpen} onClose={() => setChatOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Simulador de Chat AI</DialogTitle>
+      <Dialog
+        open={chatOpen}
+        onClose={() => {
+          setChatOpen(false);
+          setTimeout(() => {
+            chatButtonRef.current?.focus();
+          }, 0);
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+      <DialogTitle>Simulador de Chat AI</DialogTitle>
         <DialogContent dividers sx={{ minHeight: 250 }}>
           <Box display="flex" flexDirection="column" gap={2}>
             {chatMessages.length === 0 && (
