@@ -41,7 +41,7 @@ export default function Whatsapp() {
     
     // Escuchar el evento de QR
     socket.on(`whatsapp-qr-${user.c_name}-${user.id}`, (data) => {
-      setQr(data.qr);
+      setQr(data);
       setQrLoading(false);
     });
 
@@ -141,6 +141,7 @@ export default function Whatsapp() {
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
       setQrLoading(false);
+      setQrModalOpen(false);
     }
   };
 
