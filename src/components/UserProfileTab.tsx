@@ -31,13 +31,14 @@ export function UserProfileTab() {
   const [edit, setEdit] = useState(false);
   const [profilePic, setProfilePic] = useState(existingUser.profilePic);
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setUser({ ...user, [e.target.name]: e.target.value });
   };
 
-  const handlePicChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
+  const handlePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files[0]) {
+      const file = files[0];
       const reader = new FileReader();
       reader.onload = (ev) => {
         if (ev.target && typeof ev.target.result === "string") {

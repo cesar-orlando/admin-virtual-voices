@@ -1,10 +1,8 @@
 import React, { useEffect, useState } from "react";
 import {
   Box, Typography, Card, CardContent, Button, FormControl, InputLabel, Select, MenuItem,
-  TextField, Snackbar, CircularProgress, useTheme, InputAdornment, Paper
+  TextField, Snackbar, CircularProgress, useTheme, Paper
 } from "@mui/material";
-import FilterListIcon from '@mui/icons-material/FilterList';
-import SearchIcon from '@mui/icons-material/Search';
 import MuiAlert from '@mui/material/Alert';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
@@ -22,13 +20,11 @@ export function AiConfigTab(): React.ReactElement {
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [aiConfig, setAiConfig] = useState<Partial<AIConfig>>({});
-  const [filter, setFilter] = useState("");
-  const [toneFilter, setToneFilter] = useState("Todos");
   const [isLoading, setIsLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
-  const [chatMessages, setChatMessages] = useState<{ from: 'user' | 'ai', text: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<Array<{ from: "user" | "ai"; text: string }>>([]);
 
   const toneOptions = ["Todos", "formal", "persuasivo", "amigable"];
   const objetivoOptions = ["agendar", "responder", "recomendar", "ventas", "soporte"];
@@ -47,13 +43,6 @@ export function AiConfigTab(): React.ReactElement {
     loadData();
   }, [user.c_name, user.id]);
 
-  // Filtro y búsqueda
-  const filteredConfigs = aiConfigs
-    .filter(cfg =>
-      cfg.name.toLowerCase().includes(filter.toLowerCase()) &&
-      (toneFilter === "Todos" || cfg.tone === toneFilter)
-    );
-
   const handleSelectChange = (event: any) => {
     const config = aiConfigs.find(cfg => cfg._id === event.target.value);
     if (config) {
@@ -70,7 +59,7 @@ export function AiConfigTab(): React.ReactElement {
       // Actualiza lista
       const data = await fetchAllAiConfigs(user);
       setAiConfigs(data);
-      const updated = data.find(cfg => cfg._id === config._id);
+      const updated = data.find((cfg: AIConfig) => cfg._id === config._id);
       if (updated) setAiConfig(updated);
     } catch (err: any) {
       setSnackbar({ open: true, message: err.message || "Error al guardar.", severity: "error" });
@@ -81,9 +70,12 @@ export function AiConfigTab(): React.ReactElement {
   async function handleSendMessage() {
     if (!chatInput.trim()) return;
     const userMessage = chatInput;
-    setChatMessages(msgs => [...msgs, { from: 'user', text: userMessage }]);
+    setChatMessages(msgs => [...msgs, { from: 'user' as const, text: userMessage }]);
     setChatInput('');
-    const updatedMessages = [...chatMessages, { from: 'user', text: userMessage }];
+    const updatedMessages: { from: "user" | "ai"; text: string }[] = [
+      ...chatMessages,
+      { from: 'user', text: userMessage }
+    ];
     const response = await simulateAiResponse(
       updatedMessages,
       aiConfig as AIConfig,
