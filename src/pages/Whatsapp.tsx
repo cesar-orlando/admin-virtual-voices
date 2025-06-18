@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
 import {
-  Box, Button, TextField, Stack, Card, CardContent, Typography, IconButton, Dialog, DialogContent, DialogActions, Snackbar, Alert, CircularProgress, useTheme, MenuItem, Select, FormControl, InputLabel
+  Box, Button, TextField, Stack, Card, Typography, IconButton, Dialog, DialogContent, Snackbar, Alert, CircularProgress, useTheme, MenuItem, Select, FormControl, InputLabel
 } from '@mui/material';
 import { QRCodeCanvas } from "qrcode.react";
-import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
+import SaveIcon from '@mui/icons-material/Save';
 import { requestNewQr } from "../api/requestNewQr";
 import { fetchSessions } from "../api/fetchWhatsappSessions";
 import io from "socket.io-client";
-import { AiConfigTab } from "../components/AiConfigTab";
-import { updateAiConfig } from "../api/updateAiConfig";
 import { fetchAllAiConfigs } from "../api/fetchAllAiConfigs";
 import { updateSession } from "../api/updateSession";
 import type { UserProfile, WhatsAppSession, AIConfig } from '../types';
+import { deleteSession } from "../api/deleteSession";
 
 export default function Whatsapp() {
   const theme = useTheme();
@@ -22,19 +21,9 @@ export default function Whatsapp() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<WhatsAppSession[]>([]);
-  const [aiModalOpen, setAiModalOpen] = useState(false);
-  const [aiConfig, setAiConfig] = useState<Partial<AIConfig>>({
-    name: "",
-    welcomeMessage: "",
-    objective: "",
-    customPrompt: ""
-  });
-  const [sessionData, setSessionData] = useState<Partial<WhatsAppSession>>({});
-  const [aiSaveStatus, setAiSaveStatus] = useState<string | null>(null);
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([]);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
-  const [selectedId, setSelectedId] = useState("");
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   useEffect(() => {
@@ -47,7 +36,7 @@ export default function Whatsapp() {
     });
 
     // Escuchar el estado de la conexión
-    socket.on(`whatsapp-status-${user.c_name}-${user.id}`, (data) => {
+    socket.on(`whatsapp-status-${user.c_name}-${user.id}`, async (data) => {
       switch(data.status) {
         case 'loading':
           setQrLoading(true);
@@ -65,7 +54,7 @@ export default function Whatsapp() {
           setQr("");
           setSnackbar({ 
             open: true, 
-            message: '¡WhatsApp conectado y listo!', 
+            message: `¡WhatsApp ${data.session} conectado y listo!`, 
             severity: 'success' 
           });
           break;
@@ -80,7 +69,7 @@ export default function Whatsapp() {
         case 'disconnected':
           setSnackbar({ 
             open: true, 
-            message: `WhatsApp desconectado: ${data.reason}`, 
+            message: `WhatsApp ${data.session} desconectado: ${data.message}`, 
             severity: 'error' 
           });
           break;
@@ -92,11 +81,8 @@ export default function Whatsapp() {
       setSessions(fetchedSessions);
       const data = await fetchAllAiConfigs(user);
       setAiConfigs(data);
-      if (data.length > 0) {
-              setSelectedId(data[0]._id);
-              setAiConfig(data[0]);
-            }
-            setLoading(false);
+
+      setLoading(false);
     };
     loadData();
 
@@ -105,13 +91,6 @@ export default function Whatsapp() {
     };
   }, [user.c_name, user.id]);
 
-  const handleSelectChange = (event: any) => {
-    const config = aiConfigs.find(cfg => cfg._id === event.target.value);
-    if (config) {
-      setSelectedId(config._id);
-      setAiConfig(config);
-    }
-  };
   // Modal QR: Solicitar y mostrar QR
   const handleRequestQr = async () => {
     setQrModalOpen(true);
@@ -119,8 +98,11 @@ export default function Whatsapp() {
     setQr("");
     setError(null);
     try {
-      await requestNewQr(sessionName, user);
-      setSessions((prevSessions: WhatsAppSession[]) => [...prevSessions, { name: sessionName } as WhatsAppSession]);
+      requestNewQr(sessionName, user)
+      .then(async () => {
+        const fetchedSessions = await fetchSessions(user);
+        setSessions(fetchedSessions)
+      });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error desconocido');
       setQrLoading(false);
@@ -174,14 +156,28 @@ export default function Whatsapp() {
                   background: theme.palette.background.default
                 }}
               >
-                <Typography variant="body1" sx={{ mr: 2 }}>{session.name}</Typography>
-                <FormControl fullWidth size="small" sx={{ minWidth: 180, mr: 2 }}>
+                <Typography variant="body1" sx={{ mr: 4 }}>{session.name}</Typography>
+                <FormControl fullWidth size="small" sx={{ minWidth: 180, mr: 4 }}>
                   <InputLabel id={`ai-config-label-${idx}`}>Selecciona configuración</InputLabel>
                   <Select
                     labelId={`ai-config-label-${idx}`}
-                    value={selectedId}
+                    value={session.IA?.id}
                     label="Selecciona configuración"
-                    onChange={handleSelectChange}
+                    onChange={e => {
+                      const aiConfigSelected = aiConfigs.find(cfg => cfg._id === e.target.value);
+                      setSessions(prev =>
+                        prev.map((s, i) =>
+                          i === idx
+                            ? {
+                                ...s,
+                                IA: aiConfigSelected
+                                  ? { id: aiConfigSelected._id, name: aiConfigSelected.name }
+                                  : undefined
+                              }
+                            : s
+                        )
+                      );
+                    }}
                   >
                     {aiConfigs.map(cfg => (
                       <MenuItem key={cfg._id} value={cfg._id}>
@@ -190,13 +186,33 @@ export default function Whatsapp() {
                     ))}
                   </Select>
                 </FormControl>
-                <Typography variant="body1" sx={{ mr: 2 }}>{session.user?.name}</Typography>
+                <Typography variant="body1" sx={{ mr: 4 }}>{session.user?.name}</Typography>
+                <Box>
+                  <IconButton
+                    color="primary"
+                    size="small"
+                    onClick={async () => {
+                      updateSession(session, user)
+                      .then(async () => {
+                        const fetchedSessions = await fetchSessions(user);
+                        setSessions(fetchedSessions);
+                      });
+                    }}
+                  >
+                  <SaveIcon />
+                  </IconButton>
+                </Box>
                 <Box>
                   <IconButton
                     color="error"
                     size="small"
-                    onClick={() => {
-                      setSessions(sessions.filter((_, i) => i !== idx));
+                    sx={{ mr: 2 }}
+                    onClick={async () => {
+                      deleteSession(session,user)
+                      .then(async () => {
+                        const fetchedSessions = await fetchSessions(user);
+                        setSessions(fetchedSessions);
+                      });
                     }}
                   >
                     <DeleteIcon />
