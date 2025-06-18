@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  Box, Button, TextField, Stack, Card, CardContent, Typography, IconButton, Dialog, DialogContent, DialogActions, Snackbar, Alert, CircularProgress, useTheme
+  Box, Button, TextField, Stack, Card, CardContent, Typography, IconButton, Dialog, DialogContent, DialogActions, Snackbar, Alert, CircularProgress, useTheme, MenuItem, Select, FormControl, InputLabel
 } from '@mui/material';
 import { QRCodeCanvas } from "qrcode.react";
 import EditIcon from '@mui/icons-material/Edit';
@@ -34,6 +34,7 @@ export default function Whatsapp() {
   const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([]);
   const [qrModalOpen, setQrModalOpen] = useState(false);
   const [qrLoading, setQrLoading] = useState(false);
+  const [selectedId, setSelectedId] = useState("");
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   useEffect(() => {
@@ -89,8 +90,13 @@ export default function Whatsapp() {
     const loadData = async () => {
       const fetchedSessions = await fetchSessions(user);
       setSessions(fetchedSessions);
-      const configs = await fetchAllAiConfigs(user);
-      setAiConfigs(configs);
+      const data = await fetchAllAiConfigs(user);
+      setAiConfigs(data);
+      if (data.length > 0) {
+              setSelectedId(data[0]._id);
+              setAiConfig(data[0]);
+            }
+            setLoading(false);
     };
     loadData();
 
@@ -99,36 +105,13 @@ export default function Whatsapp() {
     };
   }, [user.c_name, user.id]);
 
-  async function saveAiConfig(config: Partial<AIConfig>, session: Partial<WhatsAppSession>) {
-    if (!config._id || !session._id) return;
-    await updateAiConfig(config as AIConfig, user);
-    await updateSession({
-      _id: session._id,
-      IA: {
-        id: config._id,
-        name: config.name || ""
-      }
-    }, user);
-    setSessions(prevSessions =>
-      prevSessions.map(s =>
-        s._id === session._id
-          ? { ...s, IA: { id: config._id!, name: config.name || "" } }
-          : s
-      )
-    );
-    setAiConfigs(prevConfigs => {
-      const exists = prevConfigs.some(cfg => cfg._id === config._id);
-      if (exists) {
-        return prevConfigs.map(cfg =>
-          cfg._id === config._id ? { ...cfg, ...config } : cfg
-        );
-      } else {
-        return [...prevConfigs, config as AIConfig];
-      }
-    });
-    setAiSaveStatus("IA guardada correctamente.");
-  }
-
+  const handleSelectChange = (event: any) => {
+    const config = aiConfigs.find(cfg => cfg._id === event.target.value);
+    if (config) {
+      setSelectedId(config._id);
+      setAiConfig(config);
+    }
+  };
   // Modal QR: Solicitar y mostrar QR
   const handleRequestQr = async () => {
     setQrModalOpen(true);
@@ -191,24 +174,24 @@ export default function Whatsapp() {
                   background: theme.palette.background.default
                 }}
               >
-                <Typography variant="body1">{session.name}</Typography>
-                <Typography variant="body1">{session.IA?.name}</Typography>
-                <Typography variant="body1">{session.user?.name}</Typography>
-                <Box>
-                  <IconButton
-                    color="primary"
-                    size="small"
-                    onClick={async () => {
-                      const config = aiConfigs.find(cfg => cfg._id === session.IA?.id);
-                      const sessionData = sessions[idx];
-                      if (config) setAiConfig(config);
-                      if (sessionData) setSessionData(sessionData);
-                      setAiModalOpen(true);
-                      setAiSaveStatus(null);
-                    }}
+                <Typography variant="body1" sx={{ mr: 2 }}>{session.name}</Typography>
+                <FormControl fullWidth size="small" sx={{ minWidth: 180, mr: 2 }}>
+                  <InputLabel id={`ai-config-label-${idx}`}>Selecciona configuración</InputLabel>
+                  <Select
+                    labelId={`ai-config-label-${idx}`}
+                    value={selectedId}
+                    label="Selecciona configuración"
+                    onChange={handleSelectChange}
                   >
-                    <EditIcon />
-                  </IconButton>
+                    {aiConfigs.map(cfg => (
+                      <MenuItem key={cfg._id} value={cfg._id}>
+                        {cfg.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                <Typography variant="body1" sx={{ mr: 2 }}>{session.user?.name}</Typography>
+                <Box>
                   <IconButton
                     color="error"
                     size="small"
