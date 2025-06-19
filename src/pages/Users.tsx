@@ -196,13 +196,6 @@ const mockData: User[] = [
     email: 'test@testadmin.com',
     role: 'usuario',
     status: 'active',
-    lastLogin: '2024-03-18T13:58:00',
-  },
-  {
-    name: 'Test User',
-    email: 'test@testadmin.com',
-    role: 'usuario',
-    status: 'active',
     lastLogin: '2024-03-19T13:58:00',
   },
   {
@@ -297,8 +290,7 @@ export default function Users() {
         sortDirection={sortDirection}
         onSort={handleSort}
         filters={{
-          dateAfter: true,
-          dateBefore: true,
+          dateRange: true,
           evaluation: true,
         }}
         onFilterChange={handleFilterChange}
