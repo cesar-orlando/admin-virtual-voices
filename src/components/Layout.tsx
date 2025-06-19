@@ -25,10 +25,15 @@ import { ThemeProvider } from "@mui/material/styles";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
 
-const drawerWidth = 240;
+const collapsedWidth = 72;
+const expandedWidth = 240;
+
+// Objeto para mantener el estado de cada ruta
+const routeStates = new Map();
 
 export default function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarHover, setSidebarHover] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const { logoutUser } = useAuth();
   const menuOpen = Boolean(anchorEl);
@@ -36,16 +41,16 @@ export default function Layout() {
   const isMobile = useMediaQuery("(max-width:600px)");
   const location = useLocation();
 
-  // Dark/Light mode state
   const [mode, setMode] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('vv-theme') as 'light' | 'dark') || 'light';
   });
+
   useEffect(() => {
     localStorage.setItem('vv-theme', mode);
   }, [mode]);
+  
   const theme = useMemo(() => getVirtualVoicesTheme(mode), [mode]);
 
-  // Notificaciones de ejemplo
   const [notifications] = useState([
     { id: 1, text: "Nuevo usuario registrado" },
     { id: 2, text: "IA actualizada" },
@@ -58,187 +63,152 @@ export default function Layout() {
   const handleClose = () => setAnchorEl(null);
   const handleDrawerToggle = () => setMobileOpen(!mobileOpen);
 
-  // Animación de entrada para el contenido
+  // Estado para la transición del contenido
   const [contentVisible, setContentVisible] = useState(false);
+
+  // Efecto para manejar las transiciones de página
   useEffect(() => {
+    routeStates.set(location.pathname, {
+      scrollPosition: window.scrollY,
+      content: document.querySelector('main')?.innerHTML
+    });
+
     setContentVisible(false);
-    const timeout = setTimeout(() => setContentVisible(true), 80);
-    return () => clearTimeout(timeout);
+    const showTimeout = setTimeout(() => {
+      setContentVisible(true);
+      const savedState = routeStates.get(location.pathname);
+      if (savedState?.scrollPosition) {
+        window.scrollTo(0, savedState.scrollPosition);
+      }
+    }, 80);
+
+    return () => clearTimeout(showTimeout);
   }, [location.pathname]);
 
   const navigate = useNavigate();
 
   return (
     <ThemeProvider theme={theme}>
-      <CssBaseline />
       <Box sx={{ display: "flex", minHeight: "100vh", background: theme.palette.background.default }}>
-        {/* AppBar */}
+        <CssBaseline />
         <AppBar
           position="fixed"
           elevation={0}
           sx={{
-            zIndex: 1201,
-            background: theme.palette.mode === 'dark'
-              ? 'rgba(30,30,40,0.92)'
-              : 'rgba(255,255,255,0.92)',
-            color: theme.palette.text.primary,
-            borderBottom: "2px solid #8B5CF6",
-            backdropFilter: "blur(16px)",
-            boxShadow: '0 4px 24px #8B5CF655',
-            transition: 'background 0.5s',
+            width: { sm: `calc(100% - ${sidebarHover ? expandedWidth : collapsedWidth}px)` },
+            ml: { sm: `${sidebarHover ? expandedWidth : collapsedWidth}px` },
+            transition: 'all 0.2s ease-out',
+            zIndex: theme.zIndex.drawer - 1,
+            background: 'transparent',
+            borderBottom: 'none',
+            backdropFilter: "blur(8px)",
+            boxShadow: 'none',
           }}
         >
-          <Toolbar sx={{ justifyContent: "space-between" }}>
-            <Box sx={{ display: "flex", alignItems: "center" }}>
-              {/* Menú hamburguesa solo en móvil */}
-              <IconButton
-                color="inherit"
-                edge="start"
-                onClick={handleDrawerToggle}
-                sx={{ mr: 2, display: { sm: "none" } }}
-                aria-label="Abrir menú lateral"
-              >
-                <MenuIcon />
-              </IconButton>
-              {/* Logo y nombre */}
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                <Box
-                  sx={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "50%",
-                    background: "linear-gradient(135deg, #E05EFF 0%, #8B5CF6 60%, #3B82F6 100%)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow: "0 2px 8px #8B5CF6AA",
-                  }}
-                >
-                  <Typography sx={{ fontWeight: 700, fontSize: 20, color: "#fff", letterSpacing: 1 }}>V</Typography>
-                </Box>
-                <Typography
-                  variant="h6"
-                  sx={{
-                    fontWeight: 700,
-                    color: theme.palette.text.primary,
-                    letterSpacing: 2,
-                    fontFamily: 'Montserrat, Arial, sans-serif',
-                  }}
-                >
-                  VIRTUAL VOICES
-                </Typography>
-              </Box>
-            </Box>
-            {/* Header derecho: Notificaciones, Switch de tema, usuario, avatar */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              {/* Bell de notificaciones */}
+          <Toolbar sx={{ 
+            justifyContent: "flex-end",
+            minHeight: { xs: 64, sm: 72 },
+            px: { xs: 2, sm: 3 },
+          }}>
+            <Box sx={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: 2,
+              background: theme.palette.mode === 'dark' 
+                ? 'rgba(30,30,40,0.3)' 
+                : 'rgba(255,255,255,0.3)',
+              borderRadius: 3,
+              p: 1,
+              backdropFilter: "blur(8px)",
+              boxShadow: theme.palette.mode === 'dark'
+                ? '0 4px 24px rgba(139, 92, 246, 0.1)'
+                : '0 4px 24px rgba(139, 92, 246, 0.05)',
+            }}>
               <Tooltip title="Notificaciones">
-                <IconButton color="inherit" onClick={() => setShowNotif((s) => !s)} aria-label="Ver notificaciones">
+                <IconButton 
+                  color="inherit" 
+                  onClick={() => setShowNotif((s) => !s)} 
+                  aria-label="Ver notificaciones"
+                  sx={{
+                    background: theme.palette.mode === 'dark' 
+                      ? 'rgba(30,30,40,0.5)' 
+                      : 'rgba(255,255,255,0.5)',
+                    '&:hover': {
+                      background: theme.palette.mode === 'dark'
+                        ? 'rgba(139, 92, 246, 0.1)'
+                        : 'rgba(139, 92, 246, 0.05)',
+                    }
+                  }}
+                >
                   <Badge badgeContent={notifications.length} color="secondary" variant="dot" overlap="circular">
-                    <NotificationsIcon sx={{ fontSize: 26, color: theme.palette.mode === 'dark' ? '#E05EFF' : '#8B5CF6' }} />
+                    <NotificationsIcon sx={{ fontSize: 22, color: theme.palette.mode === 'dark' ? '#E05EFF' : '#8B5CF6' }} />
                   </Badge>
                 </IconButton>
               </Tooltip>
-              {/* Switch de tema */}
-              <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
-                <LightModeIcon sx={{ color: mode === 'light' ? '#E05EFF' : '#BDBDBD', fontSize: 22, transition: 'color 0.3s' }} />
+              <Box sx={{ 
+                display: "flex", 
+                alignItems: "center", 
+                gap: 0.5,
+                background: theme.palette.mode === 'dark' 
+                  ? 'rgba(30,30,40,0.5)' 
+                  : 'rgba(255,255,255,0.5)',
+                borderRadius: 2,
+                p: 0.5,
+              }}>
+                <LightModeIcon sx={{ color: mode === 'light' ? '#E05EFF' : '#BDBDBD', fontSize: 20 }} />
                 <MuiSwitch
                   checked={mode === 'dark'}
                   onChange={() => setMode(mode === 'dark' ? 'light' : 'dark')}
                   color="secondary"
-                  inputProps={{ 'aria-label': 'Cambiar modo de tema' }}
+                  size="small"
                   sx={{
                     '& .MuiSwitch-thumb': {
                       background: mode === 'dark'
                         ? 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)'
                         : 'linear-gradient(135deg, #8B5CF6 0%, #E05EFF 100%)',
-                      transition: 'background 0.3s',
                     },
                   }}
                 />
-                <DarkModeIcon sx={{ color: mode === 'dark' ? '#8B5CF6' : '#BDBDBD', fontSize: 22, transition: 'color 0.3s' }} />
+                <DarkModeIcon sx={{ color: mode === 'dark' ? '#8B5CF6' : '#BDBDBD', fontSize: 20 }} />
               </Box>
-              {/* Usuario y avatar */}
-              <Box
-                sx={{ display: "flex", alignItems: "center", gap: 1, cursor: "pointer" }}
-                onClick={handleProfileClick}
-                aria-label="Abrir menú de usuario"
-              >
-                <Typography variant="body1" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
-                  {user?.name || "Usuario"}
-                </Typography>
-                <Avatar sx={{
-                  bgcolor: "#8B5CF6",
-                  width: 36,
-                  height: 36,
-                  fontWeight: 700,
-                  background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                  color: '#fff',
-                  boxShadow: '0 2px 8px #8B5CF6AA',
-                }}>
-                  {user?.name?.[0]?.toUpperCase() || "U"}
-                </Avatar>
-              </Box>
-              <Menu
-                anchorEl={anchorEl}
-                open={menuOpen}
-                onClose={handleClose}
-                TransitionComponent={Fade}
-                PaperProps={{
-                  sx: {
-                    borderRadius: 1,
-                    minWidth: 180,
-                    bgcolor: theme.palette.background.paper,
-                    color: theme.palette.text.primary,
-                    boxShadow: "0 4px 24px #8B5CF633",
-                  },
-                }}
-              >
-                <MenuItem
-                    value="profile"
-                    onClick={() => navigate("/userProfile")}
-                    sx={{ fontWeight: 600, color: "#8B5CF6" }}
-                  >
-                    Ir a mi perfil
-                  </MenuItem>
-                <MenuItem disabled>{user?.email}</MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    logoutUser();
-                    handleClose();
-                  }}
-                  sx={{ color: "#E05EFF", fontWeight: 700 }}
-                >
-                  Cerrar sesión
-                </MenuItem>
-              </Menu>
             </Box>
           </Toolbar>
         </AppBar>
-        {/* Sidebar */}
-        <Sidebar mobileOpen={mobileOpen} onClose={handleDrawerToggle} mode={mode} />
-        {/* Contenido principal con animación */}
+        <Sidebar 
+          mobileOpen={mobileOpen} 
+          onClose={handleDrawerToggle} 
+          mode={mode}
+          onHoverChange={setSidebarHover}
+        />
         <Box
           component="main"
           sx={{
             flexGrow: 1,
             p: isMobile ? 1 : 3,
-            width: isMobile ? "100%" : `calc(100% - ${drawerWidth}px)`,
-            minHeight: "100vh",
-            background: theme.palette.background.default,
-            transition: 'background 0.5s',
+            pt: { xs: 9, sm: 10 },
+            width: { sm: `calc(100% - ${sidebarHover ? expandedWidth : collapsedWidth}px)` },
+            minHeight: '100vh',
+            background: theme.palette.mode === 'dark' 
+              ? 'linear-gradient(to right, rgba(30,30,40,0.95), rgba(30,30,40,0.92))'
+              : 'linear-gradient(to right, rgba(255,255,255,0.96), rgba(255,255,255,0.92))',
+            backdropFilter: 'blur(16px)',
+            transition: 'all 0.2s ease-out',
             display: 'flex',
             flexDirection: 'column',
             position: 'relative',
+            ml: { xs: 0, sm: `${sidebarHover ? expandedWidth : collapsedWidth}px` },
+            borderLeft: 'none',
           }}
         >
-          <Toolbar />
           <Fade in={contentVisible} timeout={600}>
-            <Box sx={{ flex: 1, width: '100%' }}>
+            <Box sx={{ 
+              flex: 1, 
+              width: '100%',
+              position: 'relative',
+            }}>
               <Outlet />
             </Box>
           </Fade>
-          {/* Footer sticky */}
           <Box
             component="footer"
             sx={{
@@ -250,15 +220,12 @@ export default function Layout() {
               py: 2,
               mt: 'auto',
               background: 'transparent',
-              position: 'sticky',
-              bottom: 0,
-              zIndex: 1100,
+              position: 'relative',
             }}
           >
             © {new Date().getFullYear()} Virtual Voices. Todos los derechos reservados.
           </Box>
         </Box>
-        {/* Notificaciones visuales (simulado) */}
         {showNotif && (
           <Box
             sx={{
@@ -286,4 +253,4 @@ export default function Layout() {
       </Box>
     </ThemeProvider>
   );
-} 
+}

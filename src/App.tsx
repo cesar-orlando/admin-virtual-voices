@@ -3,12 +3,12 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { UserProvider } from "./context/useAuth";
 import { useAuth } from "./hooks/useAuth";
 import Login from "./pages/Login";
-import Register from "./pages/Register"; // <-- Import your Register page
+import Register from "./pages/Register";
 import Layout from "./components/Layout";
 import Whatsapp from "./pages/Whatsapp";
 import Users from "./pages/Users";
-import { AiConfigTab } from "./components/AiConfigTab";
-import { UserProfileTab } from "./components/UserProfileTab"
+import AiConfig from "./pages/AiConfig";
+import { UserProfileTab } from "./components/UserProfileTab";
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth();
@@ -29,6 +29,7 @@ function DashboardPage() {
     </div>
   );
 }
+
 function EquiposPage() {
   return (
     <div style={{ padding: 40 }}>
@@ -48,7 +49,7 @@ export default function App() {
       <UserProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} /> {/* <-- Add this line */}
+          <Route path="/register" element={<Register />} />
           <Route
             path="/"
             element={
@@ -59,10 +60,10 @@ export default function App() {
           >
             <Route index element={<DashboardPage />} />
             <Route path="usuarios" element={<Users />} />
-            <Route path="ia" element={<AiConfigTab />} />
+            <Route path="ia" element={<AiConfig />} />
             <Route path="equipos" element={<EquiposPage />} />
             <Route path="whatsapp" element={<Whatsapp />} />
-            <Route path="/userProfile" element={<UserProfileTab />} />
+            <Route path="userProfile" element={<UserProfileTab />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
