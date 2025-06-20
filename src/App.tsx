@@ -45,6 +45,7 @@ function EquiposPage() {
 }
 
 export default function App() {
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
   return (
     <BrowserRouter>
       <UserProvider>
@@ -65,7 +66,9 @@ export default function App() {
             <Route path="equipos" element={<EquiposPage />} />
             <Route path="whatsapp" element={<Whatsapp />} />
             <Route path="userProfile" element={<UserProfileTab />} />
-            <Route path="chats" element={<ChatsTab />} />
+            {user.role === "Admin" && (
+              <Route path="chats" element={<ChatsTab />} />
+            )}
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

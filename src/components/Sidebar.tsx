@@ -90,6 +90,14 @@ interface SidebarProps {
   onHoverChange: (hover: boolean) => void;
 }
 
+const getFilteredNavItems = (user: any) => {
+  return mainNavItems.filter(item => {
+    // Hide "Chats" if user is not Admin
+    if (item.label === "Chats" && user.role !== "Admin") return false;
+    return true;
+  });
+};
+
 export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: SidebarProps) {
   const [hover, setHover] = useState(false);
   const theme = useTheme();
@@ -99,6 +107,7 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
   const isExpanded = hover || isMobile;
   const { logoutUser } = useAuth();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const filteredNavItems = getFilteredNavItems(user);
 
   const handleHover = (hovering: boolean) => {
     setHover(hovering);
@@ -202,7 +211,7 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
 
           {/* Main Navigation */}
           <List sx={{ px: 1 }}>
-            {mainNavItems.map((item) => {
+            {filteredNavItems.map((item) => {
               const active = location.pathname === item.path;
               return (
                 <ListItem
