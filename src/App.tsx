@@ -9,6 +9,7 @@ import Whatsapp from "./pages/Whatsapp";
 import Users from "./pages/Users";
 import AiConfig from "./pages/AiConfig";
 import { UserProfileTab } from "./components/UserProfileTab";
+import { ChatsTab } from "./pages/Chat";
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth();
@@ -64,6 +65,7 @@ export default function App() {
             <Route path="equipos" element={<EquiposPage />} />
             <Route path="whatsapp" element={<Whatsapp />} />
             <Route path="userProfile" element={<UserProfileTab />} />
+            <Route path="chats" element={<ChatsTab />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

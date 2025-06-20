@@ -73,6 +73,14 @@ const mainNavItems: NavItem[] = [
     }} />, 
     path: "/whatsapp" 
   },
+  { 
+    label: "Chats", 
+    icon: <WhatsAppIcon sx={{ 
+      fontSize: 24,
+      transition: 'all 0.2s ease-out',
+    }} />, 
+    path: "/chats" 
+  },
 ];
 
 interface SidebarProps {
