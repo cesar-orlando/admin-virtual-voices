@@ -25,8 +25,11 @@ import { updateAiConfig } from "../api/updateAiConfig";
 import { fetchAllAiConfigs } from "../api/fetchAllAiConfigs";
 import type { AIConfig } from '../types';
 import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
 import ChatIcon from '@mui/icons-material/Chat';
 import PhoneIcon from '@mui/icons-material/Phone';
+import { createAiConfig } from "../api/createAiConfig";
+import { deleteAiConfig } from "../api/deleteAiConfig";
 
 export default function AiConfig() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -42,6 +45,7 @@ export default function AiConfig() {
   const [chatMessages, setChatMessages] = useState<Array<{ from: "user" | "ai"; text: string }>>([]);
   const toneOptions = ["Todos", "formal", "persuasivo", "amigable"];
   const objetivoOptions = ["agendar", "responder", "recomendar", "ventas", "soporte"];
+  const [isNew, setIsNew] = useState(false);
 
   useEffect(() => {
     setIsLoading(true);
@@ -58,6 +62,7 @@ export default function AiConfig() {
   }, [user.c_name, user.id]);
 
   const handleSelectChange = (event: any) => {
+    setIsNew(false);
     const config = aiConfigs.find(cfg => cfg._id === event.target.value);
     if (config) {
       setSelectedId(config._id);
@@ -65,20 +70,65 @@ export default function AiConfig() {
     }
   };
 
-  async function saveAiConfig(config: Partial<AIConfig>) {
-    if (!config._id) return;
+  async function handleDeleteAiConfig(cfg: Partial<AIConfig>) {
+    if (!window.confirm(`¿Seguro que deseas borrar la IA "${cfg.name}"?`)) return;
     try {
-      await updateAiConfig(config as AIConfig, user);
-      setSnackbar({ open: true, message: "Configuración guardada correctamente.", severity: "success" });
-      // Actualiza lista
+      await deleteAiConfig(cfg, user);
+      setSnackbar({ open: true, message: "Configuración eliminada.", severity: "success" });
       const data = await fetchAllAiConfigs(user);
       setAiConfigs(data);
-      const updated = data.find((cfg: AIConfig) => cfg._id === config._id);
-      if (updated) setAiConfig(updated);
+      if (data.length > 0) {
+        setSelectedId(data[0]._id);
+        setAiConfig(data[0]);
+      }
     } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || "Error al guardar.", severity: "error" });
+      setSnackbar({ open: true, message: err.message || "Error al borrar.", severity: "error" });
     }
   }
+
+  const handleNewAI = () => {
+    setIsNew(true);
+    setAiConfig({
+        name: "",
+        welcomeMessage: "",
+        tone: "",
+        objective: "",
+        customPrompt: "",
+        user: {
+            id: user.id,
+            name: user.name
+        }
+    });
+    setSelectedId(""); // Deselecciona el actual
+    };
+
+async function saveAiConfig(config: Partial<AIConfig>) {
+  try {
+    if (isNew) {
+      // Crear nuevo
+      await createAiConfig(config as AIConfig, user);
+      setSnackbar({ open: true, message: "Nuevo AI creado correctamente.", severity: "success" });
+      setIsNew(false);
+    } else {
+      // Actualizar existente
+      if (!config._id) return;
+      await updateAiConfig(config as AIConfig, user);
+      setSnackbar({ open: true, message: "Configuración guardada correctamente.", severity: "success" });
+    }
+    // Actualiza lista
+    const data = await fetchAllAiConfigs(user);
+    setAiConfigs(data);
+    const updated = data.find((cfg: AIConfig) =>
+      isNew ? cfg.name === config.name : cfg._id === config._id
+    );
+    if (updated) {
+      setAiConfig(updated);
+      setSelectedId(updated._id);
+    }
+  } catch (err: any) {
+    setSnackbar({ open: true, message: err.message || "Error al guardar.", severity: "error" });
+  }
+}
 
   // Simulación simple de respuesta AI
   async function handleSendMessage() {
@@ -159,6 +209,60 @@ export default function AiConfig() {
               flexWrap: 'wrap',
             }}
           >
+            {!isNew && (
+            <Button
+                ref={chatButtonRef}
+                variant="contained"
+                startIcon={<DeleteIcon />}
+                onClick={() => handleDeleteAiConfig(aiConfig)} 
+                sx={{
+                borderRadius: 2,
+                px: 3,
+                py: 1,
+                backgroundColor: theme.palette.mode === 'dark' ? '#8B5CF6' : '#3B82F6',
+                backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+                boxShadow: theme.palette.mode === 'dark'
+                  ? '0 4px 24px rgba(139, 92, 246, 0.3)'
+                  : '0 4px 24px rgba(59, 130, 246, 0.3)',
+                '&:hover': {
+                  backgroundImage: 'linear-gradient(135deg, #8B5CF6 0%, #E05EFF 100%)',
+                  transform: 'translateY(-1px)',
+                  boxShadow: theme.palette.mode === 'dark'
+                    ? '0 4px 32px rgba(139, 92, 246, 0.4)'
+                    : '0 4px 32px rgba(59, 130, 246, 0.4)',
+                },
+                transition: 'all 0.2s ease-out',
+              }}
+            >
+              Borrar AI
+            </Button>
+            )}
+            <Button
+                ref={chatButtonRef}
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={handleNewAI} 
+                sx={{
+                borderRadius: 2,
+                px: 3,
+                py: 1,
+                backgroundColor: theme.palette.mode === 'dark' ? '#8B5CF6' : '#3B82F6',
+                backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+                boxShadow: theme.palette.mode === 'dark'
+                  ? '0 4px 24px rgba(139, 92, 246, 0.3)'
+                  : '0 4px 24px rgba(59, 130, 246, 0.3)',
+                '&:hover': {
+                  backgroundImage: 'linear-gradient(135deg, #8B5CF6 0%, #E05EFF 100%)',
+                  transform: 'translateY(-1px)',
+                  boxShadow: theme.palette.mode === 'dark'
+                    ? '0 4px 32px rgba(139, 92, 246, 0.4)'
+                    : '0 4px 32px rgba(59, 130, 246, 0.4)',
+                },
+                transition: 'all 0.2s ease-out',
+              }}
+            >
+              Agregar Nuevo AI
+            </Button>
             <Button
               ref={chatButtonRef}
               variant="contained"
@@ -570,7 +674,7 @@ export default function AiConfig() {
             chatButtonRef.current?.focus();
           }, 0);
         }}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
         PaperProps={{
           sx: {
@@ -579,6 +683,8 @@ export default function AiConfig() {
               theme.palette.mode === 'dark' ? 'rgba(30, 30, 40, 0.95)' : 'rgba(255, 255, 255, 0.95)',
             backdropFilter: 'blur(16px)',
             boxShadow: '0 4px 24px rgba(139, 92, 246, 0.15)',
+            minHeight: '40vh',
+            maxHeight: '80vh',
           },
         }}
       >
@@ -594,7 +700,8 @@ export default function AiConfig() {
         <DialogContent
           dividers
           sx={{
-            minHeight: 250,
+            minHeight: '40vh',
+            maxHeight: '80vh',
             borderColor: 'rgba(139, 92, 246, 0.2)',
             '&::-webkit-scrollbar': {
               width: '8px',

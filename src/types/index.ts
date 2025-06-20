@@ -7,10 +7,10 @@ export interface BaseEntity {
 
 // User types
 export interface UserProfile {
-  id?: string
+  id: string
   name: string
   email: string
-  c_name?: string
+  c_name: string
   role?: UserRole
 }
 
@@ -87,6 +87,10 @@ export interface AIConfig extends BaseEntity {
   model?: AIModel
   temperature?: number
   maxTokens?: number
+  user: {
+    id: string,
+    name: string
+  }
 }
 
 export const AIModel = {
