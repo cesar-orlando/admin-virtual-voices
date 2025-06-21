@@ -36,8 +36,6 @@ import { fetchMessages, sendMessages, fetchSessions } from '../api/servicios'
 import type { UserProfile, WhatsAppSession } from '../types'
 import io from 'socket.io-client'
 
-const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
-
 type Message = {
   id: string
   phone: string
@@ -47,6 +45,7 @@ type Message = {
 }
 
 export function ChatsTab() {
+  const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
   const theme = useTheme()
   const [conversations, setConversations] = useState<Message[]>([])
   const [activeConversation, setActiveConversation] = useState<Message | null>(null)
