@@ -20,7 +20,7 @@ export const updateUser = async (name: string, email: string, password: string, 
 export const fetchCompanyUsers = async (user: UserProfile) => {
   try {
     const response = await api.get(`/users/company/${user.c_name}`);
-    return response;
+    return response.data;
   } catch (error) {
     handleError(error as any);
   }

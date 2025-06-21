@@ -70,7 +70,7 @@ export default function AiConfig() {
   async function handleDeleteAiConfig(cfg: Partial<AIConfig>) {
     if (!window.confirm(`¿Seguro que deseas borrar la IA "${cfg.name}"?`)) return;
     try {
-      await deleteAiConfig(cfg, user);
+      await deleteAiConfig(cfg._id as string, user);
       setSnackbar({ open: true, message: "Configuración eliminada.", severity: "success" });
       const data = await fetchAllAiConfigs(user);
       setAiConfigs(data);
@@ -133,14 +133,10 @@ async function saveAiConfig(config: Partial<AIConfig>) {
     const userMessage = chatInput;
     setChatMessages(msgs => [...msgs, { from: 'user' as const, text: userMessage }]);
     setChatInput('');
-    const updatedMessages: { from: "user" | "ai"; text: string }[] = [
-      ...chatMessages,
-      { from: 'user', text: userMessage }
-    ];
     const response = await simulateAiResponse(
-      updatedMessages,
-      aiConfig as AIConfig,
-      user
+      user,
+      userMessage,
+      (aiConfig as AIConfig)._id as string
     );
     setTimeout(() => {
       setChatMessages(msgs => [...msgs, { from: 'ai', text: response.message }]);

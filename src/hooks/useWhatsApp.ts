@@ -87,6 +87,7 @@ export function useWhatsApp(user: UserProfile): UseWhatsAppReturn {
       // Agregar sesión temporal mientras se conecta
       const tempSession: WhatsAppSession = {
         _id: `temp-${Date.now()}`,
+        id: `temp-${Date.now()}`,
         name: sessionName,
         user: { name: user.name, id: user.id },
         status: SessionStatus.PENDING,
