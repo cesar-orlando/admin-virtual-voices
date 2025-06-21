@@ -15,21 +15,19 @@ import { toast } from "react-toastify";
 import type { UserProfile } from "../types";
 import { updateUser } from "../api/userServices";
 
-const user = JSON.parse(localStorage.getItem("user") || "{}") as UserProfile;
-
+export function UserProfileTab() {
+const userFromStorage = JSON.parse(localStorage.getItem("user") || "{}") as UserProfile;
 const existingUser = {
-  name: user.name,
-  email: user.email,
+  name: userFromStorage.name,
+  email: userFromStorage.email,
   password: "",
-  role: user.role,
-  company: user.c_name,
+  role: userFromStorage.role,
+  company: userFromStorage.c_name,
   profilePic: "https://i.pravatar.cc/150?img=3"
 };
-
-export function UserProfileTab() {
-  const [user, setUser] = useState(existingUser);
-  const [edit, setEdit] = useState(false);
-  const [profilePic, setProfilePic] = useState(existingUser.profilePic);
+const [user, setUser] = useState(existingUser);
+const [edit, setEdit] = useState(false);
+const [profilePic, setProfilePic] = useState(existingUser.profilePic);
 
   interface HandleChangeEvent {
     target: {

@@ -18,38 +18,44 @@ import {
   Stack,
   TextField,
   CircularProgress,
+  MenuItem,
+  Select,
+  InputLabel,
+  FormControl,
 } from '@mui/material'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import MessageIcon from '@mui/icons-material/Message'
-import type { UserProfile } from '../types'
+import type { UserProfile, WhatsAppSession } from '../types'
 import io from 'socket.io-client'
 import { sendMessages } from '../api/sendMessages'
-import type { AIConfig } from '../types'
-import { fetchAllAiConfigs } from '../api/fetchAllAiConfigs'
-
-const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
+import AddIcon from '@mui/icons-material/Add'
+import { fetchSessions } from '../api/fetchWhatsappSessions'
 
 type Message = {
   id: string
   phone: string
   messages: { body: string; direction: string }[]
-  session: {id: string}
+  session: { id: string }
   // add other properties if needed
 }
 
 export function ChatsTab() {
+  const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
   const [companyData, setCompany] = useState<Message[]>([])
   const chatEndRef = useRef<HTMLDivElement | null>(null)
   const [openChatDialog, setOpenChatDialog] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [openDialog, setOpenDialog] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
-  const [aiConfig, setAiConfig] = useState<Partial<AIConfig>>({})
-  const [selectedId, setSelectedId] = useState('')
-  const [chatMessages, setChatMessages] = useState<Array<{ from: 'user' | 'ai'; text: string }>>([])
+  const [openSendModal, setOpenSendModal] = useState(false)
+  const [sendPhone, setSendPhone] = useState('')
+  const [sendMessage, setSendMessage] = useState('')
+  const [sessions, setSessions] = useState<WhatsAppSession[]>([])
+  const [sendLoading, setSendLoading] = useState(false)
+  const [chatMessages, setChatMessages] = useState<Array<object>>([])
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('')
   const [selectedMessages, setSelectedMessages] = useState<{
-    session: {id: string}
+    session: { id: string }
     phone: string
     messages: { body: string; direction: string }[]
   } | null>(null)
@@ -57,12 +63,11 @@ export function ChatsTab() {
   useEffect(() => {
     setIsLoading(true)
     const loadData = async () => {
-      const data = await fetchAllAiConfigs(user)
-      setAiConfigs(data)
-      if (data.length > 0) {
-        setSelectedId(data[0]._id)
-        setAiConfig(data[0])
-      }
+      const fetchedSessions = await fetchSessions(user)
+      setSessions(fetchedSessions)
+      const messagesData = await fetchMessages(user)
+      setCompany(messagesData)
+      setChatMessages(messagesData)
     }
     setIsLoading(false)
     loadData()
@@ -103,31 +108,44 @@ export function ChatsTab() {
   }, [openChatDialog, selectedMessages?.messages?.length])
 
   async function handleSendMessage() {
-      if (!chatInput.trim()) return;
-    const userMessage = chatInput;
-    setChatMessages(msgs => [...msgs, { from: 'user' as const, text: userMessage }]);
-    setChatInput('');
-    if (!selectedMessages) return;
+    if (!chatInput.trim()) return
+    const userMessage = chatInput
+    setChatMessages(msgs => [...msgs, { from: 'user' as const, text: userMessage }])
+    setChatInput('')
+    if (!selectedMessages) return
     const updatedMessages = [
       ...selectedMessages.messages,
-      { body: userMessage, direction: 'outbound' }
-    ];
+      { body: userMessage, direction: 'outbound' },
+    ]
 
-    setChatInput('');
-    setSelectedMessages(prev =>
-      prev
-        ? { ...prev, messages: updatedMessages }
-        : prev
-    );
-    sendMessages(
-    selectedMessages.session.id,
-    user,
-    selectedMessages.phone,
-    userMessage
-  ).catch(() => {
-    // Optionally show error feedback
-  });
-}
+    setChatInput('')
+    setSelectedMessages(prev => (prev ? { ...prev, messages: updatedMessages } : prev))
+    sendMessages(selectedMessages.session.id, user, selectedMessages.phone, userMessage).catch(
+      () => {
+        // Optionally show error feedback
+      }
+    )
+  }
+
+  async function handleSendFromModal() {
+    if (!sendPhone.trim() || !sendMessage.trim() || !selectedSessionId) return
+    setSendLoading(true)
+    try {
+      console.log(selectedSessionId)
+      await sendMessages(
+        selectedSessionId,
+        user,
+        '521' + sendPhone + '@c.us',
+        sendMessage
+      )
+      setSendPhone('')
+      setSendMessage('')
+      setOpenSendModal(false)
+    } catch (err) {
+      // Optionally show error feedback
+    }
+    setSendLoading(false)
+  }
 
   const handleShowAllMessages = (
     phone: string,
@@ -140,11 +158,22 @@ export function ChatsTab() {
 
   return (
     <>
+      {/* Botón arriba a la derecha */}
+      <Box display="flex" justifyContent="flex-end" mb={2}>
+        <Button
+          variant="contained"
+          color="primary"
+          startIcon={<AddIcon />}
+          onClick={() => setOpenSendModal(true)}
+        >
+          Nuevo mensaje
+        </Button>
+      </Box>
       <TableContainer component={Paper}>
         <Table>
           <TableHead>
             <TableRow>
-              <TableCell>{selectedMessages?.phone}</TableCell>
+              <TableCell>Numero de telefono</TableCell>
               <TableCell>Ultimo mensaje</TableCell>
               <TableCell>Compañia</TableCell>
               <TableCell align="center">Ver todos</TableCell>
@@ -166,7 +195,11 @@ export function ChatsTab() {
                       variant="outlined"
                       size="small"
                       onClick={() =>
-                        handleShowAllMessages(messages.phone.split('@')[0], messages.messages, messages.session)
+                        handleShowAllMessages(
+                          messages.phone.split('@')[0],
+                          messages.messages,
+                          messages.session
+                        )
                       }
                       disabled={messages.messages.length === 0}
                       sx={{ mr: 1 }}
@@ -177,7 +210,11 @@ export function ChatsTab() {
                       variant="outlined"
                       size="small"
                       onClick={() => {
-                        setSelectedMessages({ phone: messages.phone, messages: messages.messages, session: messages.session })
+                        setSelectedMessages({
+                          phone: messages.phone,
+                          messages: messages.messages,
+                          session: messages.session,
+                        })
                         setOpenChatDialog(true)
                       }}
                     >
@@ -230,6 +267,57 @@ export function ChatsTab() {
           <Button onClick={() => setOpenDialog(false)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
+      {/* Modal para enviar mensaje manual */}
+      <Dialog open={openSendModal} onClose={() => setOpenSendModal(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Enviar mensaje manual</DialogTitle>
+        <DialogContent dividers>
+          <Box display="flex" flexDirection="column" gap={2}>
+            <FormControl fullWidth size="small">
+              <InputLabel id="session-select-label">Selecciona sesión</InputLabel>
+              <Select
+                labelId="session-select-label"
+                value={selectedSessionId}
+                label="Selecciona sesión"
+                onChange={e => setSelectedSessionId(e.target.value)}
+              >
+                {sessions.map(session => (
+                  <MenuItem key={session._id} value={session._id}>
+                    {session.name || session._id}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Número de teléfono"
+              value={sendPhone}
+              onChange={e => setSendPhone(e.target.value)}
+              fullWidth
+              placeholder="Ej: 5215555555555"
+            />
+            <TextField
+              label="Mensaje"
+              value={sendMessage}
+              onChange={e => setSendMessage(e.target.value)}
+              fullWidth
+              multiline
+              minRows={2}
+              placeholder="Escribe el mensaje..."
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenSendModal(false)} color="secondary">
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSendFromModal}
+            disabled={!sendPhone.trim() || !sendMessage.trim() || !selectedSessionId || sendLoading}
+          >
+            {sendLoading ? 'Enviando...' : 'Enviar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
       <Dialog
         open={openChatDialog}
         onClose={() => setOpenChatDialog(false)}
@@ -245,10 +333,22 @@ export function ChatsTab() {
             )}
             {selectedMessages?.messages?.map((msg, idx) => (
               <Box
-                key={idx}
-                alignSelf={msg.direction === 'outbound-api' || msg.direction === 'outbound' ? 'flex-end' : 'flex-start'}
-                bgcolor={msg.direction === 'outbound-api' || msg.direction === 'outbound' ? 'primary.main' : 'grey.200'}
-                color={msg.direction === 'outbound-api' || msg.direction === 'outbound' ? 'primary.contrastText' : 'text.primary'}
+                key={msg.body + idx}
+                alignSelf={
+                  msg.direction === 'outbound-api' || msg.direction === 'outbound'
+                    ? 'flex-end'
+                    : 'flex-start'
+                }
+                bgcolor={
+                  msg.direction === 'outbound-api' || msg.direction === 'outbound'
+                    ? 'primary.main'
+                    : 'grey.200'
+                }
+                color={
+                  msg.direction === 'outbound-api' || msg.direction === 'outbound'
+                    ? 'primary.contrastText'
+                    : 'text.primary'
+                }
                 px={2}
                 py={1}
                 borderRadius={2}
