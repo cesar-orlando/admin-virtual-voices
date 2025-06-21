@@ -1,31 +1,29 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { fetchMessages } from '../api/fetchMessages'
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Box,
-  Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Typography,
+  Paper,
   Stack,
   TextField,
   CircularProgress,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Avatar,
+  Divider,
+  InputAdornment,
+  IconButton,
+  useTheme,
 } from '@mui/material'
-import VisibilityIcon from '@mui/icons-material/Visibility'
-import MessageIcon from '@mui/icons-material/Message'
+import SendIcon from '@mui/icons-material/Send'
+import SearchIcon from '@mui/icons-material/Search'
+import ForumIcon from '@mui/icons-material/Forum'
+
+import { fetchMessages } from '../api/fetchMessages'
+import { sendMessages } from '../api/sendMessages'
 import type { UserProfile } from '../types'
 import io from 'socket.io-client'
-import { sendMessages } from '../api/sendMessages'
-import type { AIConfig } from '../types'
-import { fetchAllAiConfigs } from '../api/fetchAllAiConfigs'
 
 const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
 
@@ -33,254 +31,252 @@ type Message = {
   id: string
   phone: string
   messages: { body: string; direction: string }[]
-  session: {id: string}
+  session: { id: string }
   // add other properties if needed
 }
 
 export function ChatsTab() {
-  const [companyData, setCompany] = useState<Message[]>([])
-  const chatEndRef = useRef<HTMLDivElement | null>(null)
-  const [openChatDialog, setOpenChatDialog] = useState(false)
+  const theme = useTheme()
+  const [conversations, setConversations] = useState<Message[]>([])
+  const [activeConversation, setActiveConversation] = useState<Message | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [chatInput, setChatInput] = useState('')
-  const [openDialog, setOpenDialog] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
-  const [aiConfig, setAiConfig] = useState<Partial<AIConfig>>({})
-  const [selectedId, setSelectedId] = useState('')
-  const [chatMessages, setChatMessages] = useState<Array<{ from: 'user' | 'ai'; text: string }>>([])
-  const [selectedMessages, setSelectedMessages] = useState<{
-    session: {id: string}
-    phone: string
-    messages: { body: string; direction: string }[]
-  } | null>(null)
+  const [searchTerm, setSearchTerm] = useState('')
+  const chatEndRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    setIsLoading(true)
-    const loadData = async () => {
-      const data = await fetchAllAiConfigs(user)
-      setAiConfigs(data)
-      if (data.length > 0) {
-        setSelectedId(data[0]._id)
-        setAiConfig(data[0])
-      }
-    }
-    setIsLoading(false)
-    loadData()
     const socket = io('http://localhost:3001') // Use your backend URL
 
     // Listen for new whatsapp-message events
-    socket.on(`whatsapp-message-${user.c_name}`, newMessageData => {
-      setCompany(prev => {
-        const idx = prev.findIndex(m => m.id === newMessageData.id)
-        if (idx !== -1) {
+    socket.on(`whatsapp-message-${user.c_name}`, (newMessageData: Message) => {
+      setConversations(prev => {
+        const existingConvoIndex = prev.findIndex(m => m.id === newMessageData.id)
+        let updatedConversations
+
+        if (existingConvoIndex !== -1) {
           // Update existing conversation
-          const updated = [...prev]
-          updated[idx] = {
-            ...updated[idx],
-            messages: [...updated[idx].messages, ...newMessageData.messages],
+          updatedConversations = [...prev]
+          const existingConvo = updatedConversations[existingConvoIndex]
+          updatedConversations[existingConvoIndex] = {
+            ...existingConvo,
+            messages: [...existingConvo.messages, ...newMessageData.messages],
           }
-          return updated
         } else {
           // Add new conversation
-          return [...prev, newMessageData]
+          updatedConversations = [newMessageData, ...prev]
         }
+        return updatedConversations
       })
+      
+      // Update active conversation if it's the one receiving a message
+      if(activeConversation && activeConversation.id === newMessageData.id) {
+        setActiveConversation(prev => prev ? ({ ...prev, messages: [...prev.messages, ...newMessageData.messages]}) : null)
+      }
     })
 
-    // Optionally, fetch initial messages
-    fetchMessages(user).then(setCompany)
+    // Fetch initial messages
+    fetchMessages(user).then(initialData => {
+      setConversations(initialData)
+      setIsLoading(false)
+    })
 
     // Cleanup socket connection on unmount
     return () => {
       socket.disconnect()
     }
-  }, [user.c_name, user.id])
+  }, [user.c_name, user.id, activeConversation])
 
   useEffect(() => {
-    if (openChatDialog && chatEndRef.current) {
+    if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [openChatDialog, selectedMessages?.messages?.length])
+  }, [activeConversation?.messages])
 
   async function handleSendMessage() {
-      if (!chatInput.trim()) return;
-    const userMessage = chatInput;
-    setChatMessages(msgs => [...msgs, { from: 'user' as const, text: userMessage }]);
-    setChatInput('');
-    if (!selectedMessages) return;
-    const updatedMessages = [
-      ...selectedMessages.messages,
-      { body: userMessage, direction: 'outbound' }
-    ];
+    if (!chatInput.trim() || !activeConversation) return
+    const userMessage = chatInput
+    setChatInput('')
+    
+    const newMessage = { body: userMessage, direction: 'outbound' }
 
-    setChatInput('');
-    setSelectedMessages(prev =>
-      prev
-        ? { ...prev, messages: updatedMessages }
-        : prev
-    );
-    sendMessages(
-    selectedMessages.session.id,
-    user,
-    selectedMessages.phone,
-    userMessage
-  ).catch(() => {
-    // Optionally show error feedback
-  });
-}
+    // Optimistically update the UI
+    const updatedMessages = [...activeConversation.messages, newMessage]
+    setActiveConversation({ ...activeConversation, messages: updatedMessages })
 
-  const handleShowAllMessages = (
-    phone: string,
-    messages: { body: string; direction: string }[],
-    session: { id: string }
-  ) => {
-    setSelectedMessages({ phone, messages, session })
-    setOpenDialog(true)
+    sendMessages(activeConversation.session.id, user, activeConversation.phone, userMessage)
+      .catch(() => {
+        // Handle error - maybe show a 'failed to send' indicator
+        console.error("Failed to send message")
+        // Revert optimistic update if needed
+      })
+  }
+
+  const filteredConversations = conversations.filter(convo =>
+    convo.phone.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress sx={{ color: '#8B5CF6' }} />
+      </Box>
+    )
   }
 
   return (
-    <>
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>{selectedMessages?.phone}</TableCell>
-              <TableCell>Ultimo mensaje</TableCell>
-              <TableCell>Compañia</TableCell>
-              <TableCell align="center">Ver todos</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {companyData.length > 0 ? (
-              companyData.map((messages, idx) => (
-                <TableRow key={idx}>
-                  <TableCell>{messages.phone.split('@')[0]}</TableCell>
-                  <TableCell>
-                    {messages.messages.length > 0
-                      ? messages.messages[messages.messages.length - 1].body
-                      : 'Sin mensajes'}
-                  </TableCell>
-                  <TableCell>{user.c_name}</TableCell>
-                  <TableCell align="center">
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() =>
-                        handleShowAllMessages(messages.phone.split('@')[0], messages.messages, messages.session)
-                      }
-                      disabled={messages.messages.length === 0}
-                      sx={{ mr: 1 }}
-                    >
-                      <VisibilityIcon />
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => {
-                        setSelectedMessages({ phone: messages.phone, messages: messages.messages, session: messages.session })
-                        setOpenChatDialog(true)
-                      }}
-                    >
-                      <MessageIcon />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={4}>No users found.</TableCell>
-              </TableRow>
+    <Box 
+      component="main"
+      sx={{
+        width: '90vw',
+        height: '80vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        backgroundColor: theme.palette.mode === 'dark' 
+          ? 'rgba(30,30,40,0.95)'
+          : 'rgba(255,255,255,0.96)',
+      }}
+    >
+       <Box sx={{ p: 3, flexShrink: 0, borderBottom: `1px solid ${theme.palette.divider}` }}>
+        <Typography 
+          variant="h4" 
+          sx={{ 
+            fontWeight: 700,
+            color: theme.palette.mode === 'dark' ? '#fff' : '#1E1E28',
+            fontFamily: 'Montserrat, Arial, sans-serif',
+          }}
+        >
+          Bandeja de Entrada
+        </Typography>
+        <Typography 
+          variant="body1" 
+          color="text.secondary"
+        >
+          Gestiona todas tus conversaciones de WhatsApp en un solo lugar.
+        </Typography>
+      </Box>
+      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* Conversation List */}
+        <Paper 
+          elevation={0}
+          sx={{ 
+            width: { xs: '100%', md: 360 },
+            borderRight: `1px solid ${theme.palette.divider}`,
+            display: 'flex',
+            flexDirection: 'column',
+            backgroundColor: 'transparent',
+          }}
+        >
+          <Box sx={{ p: 2 }}>
+            <TextField
+              fullWidth
+              placeholder="Buscar conversación..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
+          <Divider />
+          <List sx={{ flex: 1, overflowY: 'auto', p: 1 }}>
+            {filteredConversations.length > 0 ? filteredConversations.map(convo => (
+              <ListItem 
+                key={convo.id}
+                button
+                selected={activeConversation?.id === convo.id}
+                onClick={() => setActiveConversation(convo)}
+                sx={{ borderRadius: 2, mb: 0.5 }}
+              >
+                <ListItemAvatar>
+                  <Avatar sx={{ backgroundColor: '#8B5CF6' }}>
+                    {convo.phone.substring(0, 2)}
+                  </Avatar>
+                </ListItemAvatar>
+                <ListItemText
+                  primary={convo.phone.split('@')[0]}
+                  secondary={convo.messages.length > 0 ? convo.messages[convo.messages.length - 1].body : 'Sin mensajes'}
+                  primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
+                  secondaryTypographyProps={{ noWrap: true, fontStyle: 'italic' }}
+                />
+              </ListItem>
+            )) : (
+              <Box sx={{ textAlign: 'center', p: 4 }}>
+                <Typography color="text.secondary">No hay conversaciones</Typography>
+              </Box>
             )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      {/* Dialog to show all messages */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Mensajes de {selectedMessages?.phone.split('@')[0]}</DialogTitle>
-        <DialogContent dividers>
-          <Stack spacing={2}>
-            {selectedMessages?.messages.length ? (
-              selectedMessages.messages.map((msg, idx) => (
-                <Box
-                  key={idx}
-                  display="flex"
-                  justifyContent={msg.direction === 'inbound' ? 'flex-start' : 'flex-end'}
-                >
+          </List>
+        </Paper>
+
+        {/* Chat View */}
+        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {activeConversation ? (
+            <>
+              <Box sx={{ p: 2, display: 'flex', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}` }}>
+                <Avatar sx={{ backgroundColor: '#8B5CF6', mr: 2 }}>{activeConversation.phone.substring(0, 2)}</Avatar>
+                <Typography variant="h6" fontWeight={600}>{activeConversation.phone.split('@')[0]}</Typography>
+              </Box>
+              <Box sx={{ flex: 1, p: 3, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {activeConversation.messages.map((msg, idx) => (
                   <Box
+                    key={idx}
                     sx={{
-                      bgcolor: msg.direction === 'inbound' ? 'grey.200' : 'primary.main',
-                      color: msg.direction === 'inbound' ? 'text.primary' : 'primary.contrastText',
-                      px: 2,
-                      py: 1,
-                      borderRadius: 2,
+                      alignSelf: msg.direction === 'inbound' ? 'flex-start' : 'flex-end',
                       maxWidth: '70%',
-                      wordBreak: 'break-word',
                     }}
                   >
-                    <Typography variant="body2">{msg.body}</Typography>
+                    <Paper 
+                      elevation={1}
+                      sx={{
+                        p: '10px 14px',
+                        borderRadius: msg.direction === 'inbound' ? '20px 20px 20px 5px' : '20px 20px 5px 20px',
+                        backgroundColor: msg.direction === 'inbound'
+                          ? (theme.palette.mode === 'dark' ? 'grey.800' : 'grey.200')
+                          : 'primary.main',
+                        color: msg.direction === 'inbound' ? 'text.primary' : 'primary.contrastText',
+                      }}
+                    >
+                      <Typography variant="body1">{msg.body}</Typography>
+                    </Paper>
                   </Box>
-                </Box>
-              ))
-            ) : (
-              <Typography color="text.secondary">Sin mensajes</Typography>
-            )}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)}>Cerrar</Button>
-        </DialogActions>
-      </Dialog>
-      <Dialog
-        open={openChatDialog}
-        onClose={() => setOpenChatDialog(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Chat con {selectedMessages?.phone.split('@')[0]}</DialogTitle>
-        <DialogContent dividers>
-          <Box display="flex" flexDirection="column" gap={2}>
-            {/* Optionally, you can show a message when there are no chat messages */}
-            {selectedMessages?.messages?.length === 0 && (
-              <Typography color="text.secondary">Sin mensajes</Typography>
-            )}
-            {selectedMessages?.messages?.map((msg, idx) => (
-              <Box
-                key={idx}
-                alignSelf={msg.direction === 'outbound-api' || msg.direction === 'outbound' ? 'flex-end' : 'flex-start'}
-                bgcolor={msg.direction === 'outbound-api' || msg.direction === 'outbound' ? 'primary.main' : 'grey.200'}
-                color={msg.direction === 'outbound-api' || msg.direction === 'outbound' ? 'primary.contrastText' : 'text.primary'}
-                px={2}
-                py={1}
-                borderRadius={2}
-                maxWidth="80%"
-              >
-                {msg.body}
+                ))}
+                <div ref={chatEndRef} />
               </Box>
-            ))}
-            <div ref={chatEndRef} />
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ flexDirection: 'column', alignItems: 'stretch', gap: 1 }}>
-          <Box display="flex" width="100%" gap={1}>
-            <TextField
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleSendMessage()
-                }
-              }}
-              placeholder="Escribe tu mensaje..."
-              fullWidth
-              size="small"
-            />
-            <Button variant="contained" onClick={handleSendMessage} disabled={!chatInput.trim()}>
-              Enviar
-            </Button>
-          </Box>
-        </DialogActions>
-      </Dialog>
-    </>
+              <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}`, backgroundColor: 'background.default' }}>
+                <Stack direction="row" spacing={2}>
+                  <TextField
+                    fullWidth
+                    multiline
+                    maxRows={3}
+                    placeholder="Escribe un mensaje..."
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        handleSendMessage()
+                      }
+                    }}
+                  />
+                  <IconButton color="primary" onClick={handleSendMessage} disabled={!chatInput.trim()}>
+                    <SendIcon />
+                  </IconButton>
+                </Stack>
+              </Box>
+            </>
+          ) : (
+            <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', color: 'text.secondary' }}>
+              <ForumIcon sx={{ fontSize: 80, mb: 2, opacity: 0.3 }}/>
+              <Typography variant="h5">Selecciona una conversación</Typography>
+              <Typography>Elige un chat de la lista para ver los mensajes.</Typography>
+            </Box>
+          )}
+        </Box>
+      </Box>
+    </Box>
   )
 }
