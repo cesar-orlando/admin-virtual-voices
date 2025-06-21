@@ -22,7 +22,12 @@ import {
   Select,
   InputLabel,
   FormControl,
+  useTheme,
+  Snackbar,
+  Card,
+  CardContent
 } from '@mui/material'
+import MuiAlert from '@mui/material/Alert'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import MessageIcon from '@mui/icons-material/Message'
 import type { UserProfile, WhatsAppSession } from '../types'
@@ -40,6 +45,7 @@ type Message = {
 }
 
 export function ChatsTab() {
+  const theme = useTheme();
   const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
   const [companyData, setCompany] = useState<Message[]>([])
   const chatEndRef = useRef<HTMLDivElement | null>(null)
@@ -59,6 +65,7 @@ export function ChatsTab() {
     phone: string
     messages: { body: string; direction: string }[]
   } | null>(null)
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   useEffect(() => {
     setIsLoading(true)
@@ -131,7 +138,6 @@ export function ChatsTab() {
     if (!sendPhone.trim() || !sendMessage.trim() || !selectedSessionId) return
     setSendLoading(true)
     try {
-      console.log(selectedSessionId)
       await sendMessages(
         selectedSessionId,
         user,
@@ -156,90 +162,119 @@ export function ChatsTab() {
     setOpenDialog(true)
   }
 
-  return (
-    <>
-      {/* Botón arriba a la derecha */}
-      <Box display="flex" justifyContent="flex-end" mb={2}>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenSendModal(true)}
-        >
-          Nuevo mensaje
-        </Button>
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+        <CircularProgress />
       </Box>
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Numero de telefono</TableCell>
-              <TableCell>Ultimo mensaje</TableCell>
-              <TableCell>Compañia</TableCell>
-              <TableCell align="center">Ver todos</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {companyData.length > 0 ? (
-              companyData.map((messages, idx) => (
-                <TableRow key={idx}>
-                  <TableCell>{messages.phone.split('@')[0]}</TableCell>
-                  <TableCell>
-                    {messages.messages.length > 0
-                      ? messages.messages[messages.messages.length - 1].body
-                      : 'Sin mensajes'}
-                  </TableCell>
-                  <TableCell>{user.c_name}</TableCell>
-                  <TableCell align="center">
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() =>
-                        handleShowAllMessages(
-                          messages.phone.split('@')[0],
-                          messages.messages,
-                          messages.session
-                        )
-                      }
-                      disabled={messages.messages.length === 0}
-                      sx={{ mr: 1 }}
-                    >
-                      <VisibilityIcon />
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      size="small"
-                      onClick={() => {
-                        setSelectedMessages({
-                          phone: messages.phone,
-                          messages: messages.messages,
-                          session: messages.session,
-                        })
-                        setOpenChatDialog(true)
-                      }}
-                    >
-                      <MessageIcon />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={4}>No users found.</TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+    );
+  }
+
+  return (
+    <Box
+      sx={{
+        width: '90vw',
+        height: '90vh',
+        display: 'flex',
+        flexDirection: 'column',
+        background: theme.palette.background.default,
+        overflow: 'auto'
+      }}
+    >
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: theme.palette.text.primary, letterSpacing: 1 }}>
+                      Chats registrados
+                    </Typography>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenSendModal(true)}
+            sx={{ borderRadius: 2, fontWeight: 600, boxShadow: '0 2px 8px #3B82F633' }}
+          >
+            Nuevo mensaje
+          </Button>
+        </Box>
+        <Card sx={{ borderRadius: 2, boxShadow: '0 8px 32px 0 rgba(59,130,246,0.10)', background: theme.palette.background.paper, mb: 2 }}>
+          <CardContent>
+            <TableContainer component={Paper} sx={{ boxShadow: 'none', background: 'transparent' }}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Numero de telefono</TableCell>
+                    <TableCell>Ultimo mensaje</TableCell>
+                    <TableCell>Compañia</TableCell>
+                    <TableCell align="center">Ver todos</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {companyData.length > 0 ? (
+                    companyData.map((messages, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>{messages.phone.slice(3).split('@')[0]}</TableCell>
+                        <TableCell>
+                          {messages.messages.length > 0
+                            ? messages.messages[messages.messages.length - 1].body
+                            : 'Sin mensajes'}
+                        </TableCell>
+                        <TableCell>{user.c_name}</TableCell>
+                        <TableCell align="center">
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() =>
+                              handleShowAllMessages(
+                                messages.phone,
+                                messages.messages,
+                                messages.session
+                              )
+                            }
+                            disabled={messages.messages.length === 0}
+                            sx={{ mr: 1 }}
+                          >
+                            <VisibilityIcon />
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => {
+                              setSelectedMessages({
+                                phone: messages.phone,
+                                messages: messages.messages,
+                                session: messages.session,
+                              })
+                              setOpenChatDialog(true)
+                            }}
+                          >
+                            <MessageIcon />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={4}>No users found.</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </CardContent>
+        </Card>
+      </Box>
+
       {/* Dialog to show all messages */}
       <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Mensajes de {selectedMessages?.phone.split('@')[0]}</DialogTitle>
+        <DialogTitle>
+          Mensajes de {selectedMessages?.phone.slice(3).split('@')[0]}
+        </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
             {selectedMessages?.messages.length ? (
               selectedMessages.messages.map((msg, idx) => (
                 <Box
-                  key={idx}
+                  key={msg.body + idx}
                   display="flex"
                   justifyContent={msg.direction === 'inbound' ? 'flex-start' : 'flex-end'}
                 >
@@ -267,6 +302,7 @@ export function ChatsTab() {
           <Button onClick={() => setOpenDialog(false)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
+
       {/* Modal para enviar mensaje manual */}
       <Dialog open={openSendModal} onClose={() => setOpenSendModal(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Enviar mensaje manual</DialogTitle>
@@ -318,16 +354,19 @@ export function ChatsTab() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Modal de chat */}
       <Dialog
         open={openChatDialog}
         onClose={() => setOpenChatDialog(false)}
         maxWidth="sm"
         fullWidth
       >
-        <DialogTitle>Chat con {selectedMessages?.phone.split('@')[0]}</DialogTitle>
-        <DialogContent dividers>
+        <DialogTitle>
+          Chat con {selectedMessages?.phone.slice(3).split('@')[0]}
+        </DialogTitle>
+        <DialogContent dividers sx={{ minHeight: 250 }}>
           <Box display="flex" flexDirection="column" gap={2}>
-            {/* Optionally, you can show a message when there are no chat messages */}
             {selectedMessages?.messages?.length === 0 && (
               <Typography color="text.secondary">Sin mensajes</Typography>
             )}
@@ -381,6 +420,11 @@ export function ChatsTab() {
           </Box>
         </DialogActions>
       </Dialog>
-    </>
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <MuiAlert elevation={6} variant="filled" onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
+          {snackbar.message}
+        </MuiAlert>
+      </Snackbar>
+    </Box>
   )
 }
