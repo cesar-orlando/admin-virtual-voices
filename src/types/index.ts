@@ -59,6 +59,7 @@ export interface WhatsAppSession extends BaseEntity {
   status?: SessionStatus
   qrCode?: string
   isConnected?: boolean
+  id: string
 }
 
 export const SessionStatus = {

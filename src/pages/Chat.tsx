@@ -15,15 +15,28 @@ import {
   InputAdornment,
   IconButton,
   useTheme,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Snackbar,
+  Alert,
 } from '@mui/material'
 import SendIcon from '@mui/icons-material/Send'
 import SearchIcon from '@mui/icons-material/Search'
 import ForumIcon from '@mui/icons-material/Forum'
+import AddIcon from '@mui/icons-material/Add'
 
 import { fetchMessages } from '../api/fetchMessages'
 import { sendMessages } from '../api/sendMessages'
-import type { UserProfile } from '../types'
+import type { UserProfile, WhatsAppSession } from '../types'
 import io from 'socket.io-client'
+import { fetchSessions } from '../api/fetchWhatsappSessions'
 
 const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
 
@@ -43,6 +56,15 @@ export function ChatsTab() {
   const [chatInput, setChatInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const chatEndRef = useRef<HTMLDivElement | null>(null)
+
+  // State for the new message modal
+  const [openSendModal, setOpenSendModal] = useState(false)
+  const [sendPhone, setSendPhone] = useState('')
+  const [sendMessage, setSendMessage] = useState('')
+  const [sessions, setSessions] = useState<WhatsAppSession[]>([])
+  const [sendLoading, setSendLoading] = useState(false)
+  const [selectedSessionId, setSelectedSessionId] = useState<string>('')
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' })
 
   useEffect(() => {
     const socket = io('http://localhost:3001') // Use your backend URL
@@ -74,11 +96,24 @@ export function ChatsTab() {
       }
     })
 
-    // Fetch initial messages
-    fetchMessages(user).then(initialData => {
-      setConversations(initialData)
-      setIsLoading(false)
-    })
+    // Fetch initial messages and sessions
+    const loadData = async () => {
+      try {
+        const [messagesData, sessionsData] = await Promise.all([
+          fetchMessages(user),
+          fetchSessions(user),
+        ])
+        setConversations(messagesData)
+        setSessions(sessionsData)
+      } catch (error) {
+        console.error("Failed to load initial data", error)
+        setSnackbar({ open: true, message: 'Error al cargar datos iniciales', severity: 'error' })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadData()
 
     // Cleanup socket connection on unmount
     return () => {
@@ -105,10 +140,30 @@ export function ChatsTab() {
 
     sendMessages(activeConversation.session.id, user, activeConversation.phone, userMessage)
       .catch(() => {
-        // Handle error - maybe show a 'failed to send' indicator
-        console.error("Failed to send message")
+        setSnackbar({ open: true, message: 'Error al enviar mensaje', severity: 'error' })
         // Revert optimistic update if needed
       })
+  }
+
+  async function handleSendFromModal() {
+    if (!sendPhone.trim() || !sendMessage.trim() || !selectedSessionId) return
+    setSendLoading(true)
+    try {
+      await sendMessages(
+        selectedSessionId,
+        user,
+        `521${sendPhone}@c.us`,
+        sendMessage
+      )
+      setSnackbar({ open: true, message: 'Mensaje enviado correctamente', severity: 'success' })
+      setSendPhone('')
+      setSendMessage('')
+      setOpenSendModal(false)
+    } catch (err) {
+      setSnackbar({ open: true, message: 'Error al enviar mensaje', severity: 'error' })
+    } finally {
+      setSendLoading(false)
+    }
   }
 
   const filteredConversations = conversations.filter(convo =>
@@ -137,23 +192,40 @@ export function ChatsTab() {
           : 'rgba(255,255,255,0.96)',
       }}
     >
-       <Box sx={{ p: 3, flexShrink: 0, borderBottom: `1px solid ${theme.palette.divider}` }}>
-        <Typography 
-          variant="h4" 
-          sx={{ 
-            fontWeight: 700,
-            color: theme.palette.mode === 'dark' ? '#fff' : '#1E1E28',
-            fontFamily: 'Montserrat, Arial, sans-serif',
+       <Box sx={{ p: 3, flexShrink: 0, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <Typography 
+            variant="h4" 
+            sx={{ 
+              fontWeight: 700,
+              color: theme.palette.mode === 'dark' ? '#fff' : '#1E1E28',
+              fontFamily: 'Montserrat, Arial, sans-serif',
+            }}
+          >
+            Bandeja de Entrada
+          </Typography>
+          <Typography 
+            variant="body1" 
+            color="text.secondary"
+          >
+            Gestiona todas tus conversaciones de WhatsApp en un solo lugar.
+          </Typography>
+        </div>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => setOpenSendModal(true)}
+          sx={{
+            borderRadius: 2,
+            px: 3,
+            py: 1,
+            fontWeight: 600,
+            backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+            boxShadow: '0 4px 24px rgba(139, 92, 246, 0.3)',
           }}
         >
-          Bandeja de Entrada
-        </Typography>
-        <Typography 
-          variant="body1" 
-          color="text.secondary"
-        >
-          Gestiona todas tus conversaciones de WhatsApp en un solo lugar.
-        </Typography>
+          Nuevo Mensaje
+        </Button>
       </Box>
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Conversation List */}
@@ -194,11 +266,11 @@ export function ChatsTab() {
               >
                 <ListItemAvatar>
                   <Avatar sx={{ backgroundColor: '#8B5CF6' }}>
-                    {convo.phone.substring(0, 2)}
+                    {convo.phone.substring(3, 5)}
                   </Avatar>
                 </ListItemAvatar>
                 <ListItemText
-                  primary={convo.phone.split('@')[0]}
+                  primary={convo.phone.split('@')[0].slice(3)}
                   secondary={convo.messages.length > 0 ? convo.messages[convo.messages.length - 1].body : 'Sin mensajes'}
                   primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
                   secondaryTypographyProps={{ noWrap: true, fontStyle: 'italic' }}
@@ -217,8 +289,8 @@ export function ChatsTab() {
           {activeConversation ? (
             <>
               <Box sx={{ p: 2, display: 'flex', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}` }}>
-                <Avatar sx={{ backgroundColor: '#8B5CF6', mr: 2 }}>{activeConversation.phone.substring(0, 2)}</Avatar>
-                <Typography variant="h6" fontWeight={600}>{activeConversation.phone.split('@')[0]}</Typography>
+                <Avatar sx={{ backgroundColor: '#8B5CF6', mr: 2 }}>{activeConversation.phone.substring(3, 5)}</Avatar>
+                <Typography variant="h6" fontWeight={600}>{activeConversation.phone.split('@')[0].slice(3)}</Typography>
               </Box>
               <Box sx={{ flex: 1, p: 3, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {activeConversation.messages.map((msg, idx) => (
@@ -277,6 +349,68 @@ export function ChatsTab() {
           )}
         </Box>
       </Box>
+
+      {/* Modal para enviar mensaje manual */}
+      <Dialog open={openSendModal} onClose={() => setOpenSendModal(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Enviar Nuevo Mensaje</DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={3} sx={{ pt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel id="session-select-label">Sesión de Envío</InputLabel>
+              <Select
+                labelId="session-select-label"
+                value={selectedSessionId}
+                label="Sesión de Envío"
+                onChange={e => setSelectedSessionId(e.target.value)}
+              >
+                {sessions.map(session => (
+                  <MenuItem key={session._id} value={session._id}>
+                    {session.name || session._id}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Número de Teléfono (10 dígitos)"
+              value={sendPhone}
+              onChange={e => setSendPhone(e.target.value)}
+              fullWidth
+              placeholder="Ej: 5512345678"
+            />
+            <TextField
+              label="Mensaje"
+              value={sendMessage}
+              onChange={e => setSendMessage(e.target.value)}
+              fullWidth
+              multiline
+              rows={4}
+              placeholder="Escribe el mensaje..."
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: '16px 24px' }}>
+          <Button onClick={() => setOpenSendModal(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSendFromModal}
+            disabled={!sendPhone.trim() || !sendMessage.trim() || !selectedSessionId || sendLoading}
+            sx={{
+              backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+              boxShadow: '0 4px 24px rgba(139, 92, 246, 0.3)',
+            }}
+          >
+            {sendLoading ? <CircularProgress size={24} color="inherit" /> : 'Enviar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
+        <Alert elevation={6} variant="filled" onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   )
 }

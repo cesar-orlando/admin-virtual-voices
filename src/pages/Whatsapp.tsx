@@ -100,17 +100,18 @@ export default function Whatsapp() {
     setQr("");
     setError(null);
     try {
-      requestNewQr(sessionName, user)
+    const sanitizedSessionName = sessionName.replace(/\s+/g, "_");
+    requestNewQr(sanitizedSessionName, user)
       .then(async () => {
         const fetchedSessions = await fetchSessions(user);
         setSessions(fetchedSessions)
       });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
-      setQrLoading(false);
-      setQrModalOpen(false);
-    }
-  };
+  } catch (err: unknown) {
+    setError(err instanceof Error ? err.message : 'Error desconocido');
+    setQrLoading(false);
+    setQrModalOpen(false);
+  }
+};
 
   const getStatusColor = (status: string) => {
     switch (status) {
