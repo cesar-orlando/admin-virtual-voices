@@ -14,12 +14,12 @@ import {
   Avatar,
   Divider,
 } from "@mui/material";
+import ChatIcon from '@mui/icons-material/Chat';
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import PeopleIcon from "@mui/icons-material/People";
 import SmartToyIcon from "@mui/icons-material/SmartToy";
 import GroupIcon from "@mui/icons-material/Group";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
-import AccountCircleIcon from "@mui/icons-material/AccountCircle";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { useAuth } from "../hooks/useAuth";
 
@@ -75,11 +75,11 @@ const mainNavItems: NavItem[] = [
   },
   { 
     label: "Chats", 
-    icon: <WhatsAppIcon sx={{ 
+    icon: <ChatIcon sx={{ 
       fontSize: 24,
       transition: 'all 0.2s ease-out',
     }} />, 
-    path: "/chats" 
+    path: "/chats"
   },
 ];
 
