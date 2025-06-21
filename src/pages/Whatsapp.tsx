@@ -35,6 +35,8 @@ export default function Whatsapp() {
 
     // Escuchar el estado de la conexión
     socket.on(`whatsapp-status-${user.c_name}-${user.id}`, async (data) => {
+      const fetchedSessions = await fetchSessions(user);
+      setSessions(fetchedSessions);
       switch(data.status) {
         case 'loading':
           setQrLoading(true);
