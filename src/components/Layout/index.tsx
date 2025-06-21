@@ -87,7 +87,7 @@ export default function Layout() {
         />
 
         {/* Sidebar */}
-        <Sidebar mobileOpen={mobileOpen} onClose={handleDrawerToggle} mode={mode} />
+        <Sidebar mobileOpen={mobileOpen} onClose={handleDrawerToggle} mode={mode} onHoverChange={() => {}} />
 
         {/* Contenido principal con animación */}
         <Box

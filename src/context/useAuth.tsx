@@ -36,6 +36,7 @@ export const UserProvider = ({ children }: Props) => {
       if(res) {
         const token = res.data.token;
         const userObj = {
+          id: res.data.id,
           name: res.data.name,
           email: res.data.email,
           c_name: res.data.c_name,

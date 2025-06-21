@@ -1,4 +1,5 @@
 import { createTheme } from "@mui/material/styles";
+import type { PaletteMode } from "@mui/material";
 
 const common = {
   typography: {
@@ -14,7 +15,7 @@ const common = {
 };
 
 const paletteLight = {
-  mode: 'light',
+  mode: 'light' as const,
   primary: { main: '#8B5CF6' },
   secondary: { main: '#E05EFF' },
   background: {
@@ -28,7 +29,7 @@ const paletteLight = {
 };
 
 const paletteDark = {
-  mode: 'dark',
+  mode: 'dark' as const,
   primary: { main: '#8B5CF6' },
   secondary: { main: '#E05EFF' },
   background: {
@@ -41,7 +42,7 @@ const paletteDark = {
   },
 };
 
-export function getVirtualVoicesTheme(mode: 'light' | 'dark') {
+export function getVirtualVoicesTheme(mode: PaletteMode) {
   return createTheme({
     ...common,
     palette: mode === 'light' ? paletteLight : paletteDark,
