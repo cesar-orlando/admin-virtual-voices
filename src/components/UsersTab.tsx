@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { fetchCompanyUsers } from "../api/fetchCompanyUsers";
+import { fetchCompanyUsers } from "../api/servicios";
 import type { UserProfile } from '../types';
 import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,

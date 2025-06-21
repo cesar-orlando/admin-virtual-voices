@@ -20,16 +20,13 @@ import {
   DialogActions,
 } from "@mui/material";
 import MuiAlert from '@mui/material/Alert';
-import { simulateAiResponse } from "../api/simulateAiResponse";
-import { updateAiConfig } from "../api/updateAiConfig";
-import { fetchAllAiConfigs } from "../api/fetchAllAiConfigs";
+import { simulateAiResponse, updateAiConfig, fetchAllAiConfigs, createAiConfig, deleteAiConfig } from "../api/servicios";
 import type { AIConfig } from '../types';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ChatIcon from '@mui/icons-material/Chat';
 import PhoneIcon from '@mui/icons-material/Phone';
-import { createAiConfig } from "../api/createAiConfig";
-import { deleteAiConfig } from "../api/deleteAiConfig";
+
 
 export default function AiConfig() {
   const user = JSON.parse(localStorage.getItem("user") || "{}");

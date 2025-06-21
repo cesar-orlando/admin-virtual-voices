@@ -13,7 +13,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
 import { toast } from "react-toastify";
 import type { UserProfile } from "../types";
-import { updateUser } from "../api/userServices";
+import { updateUser } from "../api/servicios";
 
 export function UserProfileTab() {
 const userFromStorage = JSON.parse(localStorage.getItem("user") || "{}") as UserProfile;
