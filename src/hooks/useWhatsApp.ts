@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { io } from 'socket.io-client'
 import type { WhatsAppSession, WhatsAppSocketData, UserProfile } from '../types'
 import { SessionStatus } from '../types'
-import { fetchSessions } from '../api/fetchWhatsappSessions'
-import { requestNewQr } from '../api/requestNewQr'
+import { fetchSessions, requestNewQr } from '../api/servicios'
 import { toast } from 'react-toastify'
 
 interface UseWhatsAppReturn {

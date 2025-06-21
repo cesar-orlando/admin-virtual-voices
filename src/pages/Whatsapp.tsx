@@ -7,13 +7,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
 import WhatsAppIcon from '@mui/icons-material/WhatsApp';
 import QrCodeIcon from '@mui/icons-material/QrCode';
-import { requestNewQr } from "../api/requestNewQr";
-import { fetchSessions } from "../api/fetchWhatsappSessions";
+import { requestNewQr, fetchSessions, fetchAllAiConfigs, updateSession, deleteSession } from "../api/servicios";
 import io from "socket.io-client";
-import { fetchAllAiConfigs } from "../api/fetchAllAiConfigs";
-import { updateSession } from "../api/updateSession";
 import type { UserProfile, WhatsAppSession, AIConfig } from '../types';
-import { deleteSession } from "../api/deleteSession";
 
 export default function Whatsapp() {
   const theme = useTheme();
@@ -413,7 +409,7 @@ export default function Whatsapp() {
                             color="error"
                             onClick={() => {
                               if (window.confirm(`Eliminar sesión "${session.name}"?`)) {
-                                deleteSession(session, user).then(async () => {
+                                deleteSession(session._id, user).then(async () => {
                                   setSnackbar({ open: true, message: 'Sesión eliminada', severity: 'success' });
                                   const fetchedSessions = await fetchSessions(user);
                                   setSessions(fetchedSessions);

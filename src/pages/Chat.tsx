@@ -32,11 +32,9 @@ import SearchIcon from '@mui/icons-material/Search'
 import ForumIcon from '@mui/icons-material/Forum'
 import AddIcon from '@mui/icons-material/Add'
 
-import { fetchMessages } from '../api/fetchMessages'
-import { sendMessages } from '../api/sendMessages'
+import { fetchMessages, sendMessages, fetchSessions } from '../api/servicios'
 import type { UserProfile, WhatsAppSession } from '../types'
 import io from 'socket.io-client'
-import { fetchSessions } from '../api/fetchWhatsappSessions'
 
 const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
 
