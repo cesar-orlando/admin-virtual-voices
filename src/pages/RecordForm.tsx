@@ -17,6 +17,7 @@ import {
   Alert,
   IconButton,
 } from '@mui/material';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Save as SaveIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
@@ -126,22 +127,13 @@ export default function RecordForm() {
           />
         );
       case 'date': {
-        let formattedDate = '';
-        if (value) {
-          const date = new Date(value);
-          if (!isNaN(date.getTime())) {
-            formattedDate = date.toISOString().split('T')[0];
-          }
-        }
+        const dateValue = value ? new Date(value) : null;
         return (
-          <TextField
-            fullWidth
+          <DateTimePicker
             label={field.label}
-            type="date"
-            value={formattedDate}
-            onChange={(e) => handleInputChange(field.name, e.target.value)}
-            required={field.required}
-            InputLabelProps={{ shrink: true }}
+            value={dateValue}
+            onChange={(newValue) => handleInputChange(field.name, newValue)}
+            sx={{ width: '100%' }}
           />
         );
       }

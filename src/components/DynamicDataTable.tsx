@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -27,6 +27,9 @@ import {
   Skeleton,
   useTheme,
   CircularProgress,
+  FormControl,
+  InputLabel,
+  Select,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -38,6 +41,7 @@ import {
   Upload as ImportIcon,
   MoreVert as MoreVertIcon,
   Visibility as ViewIcon,
+  CalendarToday as CalendarIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
 import { useDebounce } from '../hooks/useDebounce';
@@ -75,15 +79,34 @@ export default function DynamicDataTable({
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
   const [stats, setStats] = useState<TableStats | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedRecord, setSelectedRecord] = useState<DynamicRecord | null>(null);
+  
+  // State for date filters
+  const [dateFields, setDateFields] = useState<{name: string, label: string}[]>([]);
+  const [selectedDateField, setSelectedDateField] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
+  const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
 
   const theme = useTheme();
   const { user } = useAuth();
 
   useEffect(() => {
+    // Identificar los campos de fecha disponibles para filtrar
+    const availableDateFields = table.fields
+      .filter(field => field.type === 'date')
+      .map(field => ({ name: field.name, label: field.label }));
+    setDateFields(availableDateFields);
+  }, [table.fields]);
+
+  useEffect(() => {
+    // Carga de datos
     loadRecords();
-    loadStats();
-  }, [table.slug, page, rowsPerPage, refreshTrigger]);
+    if (!searchQuery) { // Solo cargar stats si no es una búsqueda para evitar llamadas extra
+        loadStats();
+    }
+  }, [table.slug, page, rowsPerPage, refreshTrigger, activeFilters]); // Recargar si los filtros cambian
 
   useEffect(() => {
     if (debouncedSearchQuery) {
@@ -106,7 +129,8 @@ export default function DynamicDataTable({
         page + 1, 
         rowsPerPage,
         'createdAt',
-        'desc'
+        'desc',
+        activeFilters
       );
       
       setRecords(response.records);
@@ -136,7 +160,7 @@ export default function DynamicDataTable({
     setError(null);
     setPage(0);
     try {
-      const response = await searchRecords(table.slug, user, query, {}, 1, rowsPerPage);
+      const response = await searchRecords(table.slug, user, query, activeFilters, 1, rowsPerPage);
       setRecords(response.records);
       setTotalRecords(response.pagination.total);
     } catch (err) {
@@ -187,6 +211,38 @@ export default function DynamicDataTable({
     setSelectedRecord(null);
   };
 
+  const handleFilterOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setFilterAnchorEl(event.currentTarget);
+  };
+
+  const handleFilterClose = () => {
+    setFilterAnchorEl(null);
+  };
+
+  const handleApplyDateFilter = () => {
+    if (selectedDateField && startDate && endDate) {
+      const newFilters = {
+        ...activeFilters,
+        [selectedDateField]: {
+          $gte: new Date(startDate).toISOString(),
+          $lte: new Date(endDate).toISOString(),
+        }
+      };
+      setActiveFilters(newFilters);
+      setPage(0); // Reset page to 1 on new filter
+    }
+    handleFilterClose();
+  };
+
+  const handleClearFilters = () => {
+    setActiveFilters({});
+    setSelectedDateField('');
+    setStartDate('');
+    setEndDate('');
+    setPage(0);
+    handleFilterClose();
+  };
+
   const formatFieldValue = (value: any, field: TableField): string => {
     if (value === null || value === undefined) return '-';
 
@@ -196,10 +252,13 @@ export default function DynamicDataTable({
         if (isNaN(date.getTime())) {
           return '-';
         }
-        return date.toLocaleDateString('es-ES', {
+        return date.toLocaleString('es-ES', {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
         });
       }
       case 'boolean':
@@ -312,6 +371,7 @@ export default function DynamicDataTable({
             variant="outlined"
             startIcon={<FilterIcon />}
             sx={{ borderRadius: 2 }}
+            onClick={handleFilterOpen}
           >
             Filtros
           </Button>
@@ -426,6 +486,56 @@ export default function DynamicDataTable({
           labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count !== -1 ? count : `más de ${to}`}`}
         />
       </Paper>
+
+      {/* Filter Menu */}
+      <Menu
+        anchorEl={filterAnchorEl}
+        open={Boolean(filterAnchorEl)}
+        onClose={handleFilterClose}
+        PaperProps={{ sx: { width: 320, p: 2, borderRadius: 2 } }}
+      >
+        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>Filtrar por Fecha</Typography>
+        
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+          <InputLabel>Campo de Fecha</InputLabel>
+          <Select
+            value={selectedDateField}
+            label="Campo de Fecha"
+            onChange={(e) => setSelectedDateField(e.target.value)}
+          >
+            {dateFields.map(field => (
+              <MenuItem key={field.name} value={field.name}>{field.label}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <TextField
+          label="Fecha de Inicio"
+          type="date"
+          fullWidth
+          size="small"
+          value={startDate}
+          onChange={(e) => setStartDate(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          sx={{ mb: 2 }}
+        />
+
+        <TextField
+          label="Fecha de Fin"
+          type="date"
+          fullWidth
+          size="small"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+          InputLabelProps={{ shrink: true }}
+          sx={{ mb: 2 }}
+        />
+
+        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+          <Button onClick={handleClearFilters} size="small">Limpiar</Button>
+          <Button onClick={handleApplyDateFilter} variant="contained" size="small">Aplicar</Button>
+        </Box>
+      </Menu>
 
       {/* Action Menu */}
       <Menu
