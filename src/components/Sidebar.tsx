@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Box,
@@ -13,6 +13,8 @@ import {
   useMediaQuery,
   Avatar,
   Divider,
+  Collapse,
+  IconButton,
 } from "@mui/material";
 import ChatIcon from '@mui/icons-material/Chat';
 import DashboardIcon from "@mui/icons-material/Dashboard";
@@ -21,7 +23,13 @@ import SmartToyIcon from "@mui/icons-material/SmartToy";
 import GroupIcon from "@mui/icons-material/Group";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import LogoutIcon from "@mui/icons-material/Logout";
+import TableChartIcon from '@mui/icons-material/TableChart';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import AddIcon from '@mui/icons-material/Add';
 import { useAuth } from "../hooks/useAuth";
+import { getTables } from "../api/servicios";
+import type { DynamicTable } from "../types";
 
 const collapsedWidth = 72;
 const expandedWidth = 240;
@@ -30,6 +38,7 @@ interface NavItem {
   label: string;
   icon: JSX.Element;
   path: string;
+  children?: NavItem[];
 }
 
 const mainNavItems: NavItem[] = [
@@ -100,6 +109,9 @@ const getFilteredNavItems = (user: any) => {
 
 export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: SidebarProps) {
   const [hover, setHover] = useState(false);
+  const [tables, setTables] = useState<DynamicTable[]>([]);
+  const [tablesOpen, setTablesOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const theme = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
@@ -108,6 +120,25 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
   const { logoutUser } = useAuth();
   const user = JSON.parse(localStorage.getItem("user") || "{}");
   const filteredNavItems = getFilteredNavItems(user);
+
+  // Cargar tablas dinámicas
+  useEffect(() => {
+    if (user.c_name) {
+      loadTables();
+    }
+  }, [user.c_name]);
+
+  const loadTables = async () => {
+    try {
+      setLoading(true);
+      const response = await getTables(user);
+      setTables(response.tables || []);
+    } catch (error) {
+      console.error('Error loading tables:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleHover = (hovering: boolean) => {
     setHover(hovering);
@@ -118,6 +149,44 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
     logoutUser();
     onClose();
   };
+
+  const handleTablesToggle = () => {
+    setTablesOpen(!tablesOpen);
+  };
+
+  const handleTableClick = (tableSlug: string) => {
+    navigate(`/tablas/${tableSlug}`);
+    if (isMobile) onClose();
+  };
+
+  const handleCreateTable = () => {
+    navigate('/tablas/nueva');
+    if (isMobile) onClose();
+  };
+
+  // Crear el item de Tablas con submenú
+  const tablesNavItem: NavItem = {
+    label: "Tablas",
+    icon: <TableChartIcon sx={{ 
+      fontSize: 24,
+      transition: 'all 0.2s ease-out',
+    }} />,
+    path: "/tablas",
+    children: [
+      {
+        label: "Crear Nueva Tabla",
+        icon: <AddIcon sx={{ fontSize: 20 }} />,
+        path: "/tablas/nueva"
+      },
+      ...tables.map(table => ({
+        label: table.name,
+        icon: <span style={{ fontSize: 20 }}>{table.icon || "📋"}</span>,
+        path: `/tablas/${table.slug}`
+      }))
+    ]
+  };
+
+  const allNavItems = [...filteredNavItems, tablesNavItem];
 
   return (
     <Drawer
@@ -211,84 +280,179 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
 
           {/* Main Navigation */}
           <List sx={{ px: 1 }}>
-            {filteredNavItems.map((item) => {
-              const active = location.pathname === item.path;
+            {allNavItems.map((item) => {
+              const active = location.pathname === item.path || 
+                           (item.children && item.children.some(child => location.pathname === child.path));
+              
               return (
-                <ListItem
-                  key={item.label}
-                  disablePadding
-                  sx={{ mb: 0.5 }}
-                >
-                  <ListItemButton
-                    onClick={() => {
-                      navigate(item.path);
-                      if (isMobile) onClose();
-                    }}
-                    sx={{
-                      borderRadius: 3,
-                      minHeight: 44,
-                      pl: isExpanded ? 2.5 : 2,
-                      pr: isExpanded ? 2 : 2,
-                      justifyContent: isExpanded ? 'initial' : 'center',
-                      alignItems: 'center',
-                      transition: 'all 0.2s ease-out',
-                      background: active
-                        ? mode === 'dark'
-                          ? 'rgba(139, 92, 246, 0.15)'
-                          : 'rgba(139, 92, 246, 0.1)'
-                        : 'transparent',
-                      color: active ? '#E05EFF' : undefined,
-                      boxShadow: active 
-                        ? mode === 'dark'
-                          ? '0 4px 12px rgba(224, 94, 255, 0.15)'
-                          : '0 4px 12px rgba(224, 94, 255, 0.1)'
-                        : 'none',
-                      '&:hover': {
-                        background: mode === 'dark'
-                          ? 'rgba(139, 92, 246, 0.1)'
-                          : 'rgba(139, 92, 246, 0.05)',
-                        color: '#E05EFF',
-                        boxShadow: '0 4px 12px rgba(224, 94, 255, 0.1)',
-                        '& .MuiListItemIcon-root': {
-                          color: '#E05EFF',
-                          transform: 'scale(1.1)',
+                <Box key={item.label}>
+                  <ListItem disablePadding sx={{ mb: 0.5 }}>
+                    <ListItemButton
+                      onClick={() => {
+                        if (item.children) {
+                          navigate(item.path);
+                          if (isExpanded) {
+                            handleTablesToggle();
+                          }
+                        } else {
+                          navigate(item.path);
+                          if (isMobile) onClose();
                         }
-                      },
-                    }}
-                  >
-                    <ListItemIcon
+                      }}
                       sx={{
-                        color: active 
-                          ? '#E05EFF' 
-                          : mode === 'dark' 
-                            ? 'rgba(139, 92, 246, 0.8)' 
-                            : 'rgba(139, 92, 246, 0.7)',
-                        minWidth: isExpanded ? 36 : 'auto',
-                        mr: isExpanded ? 2 : 0,
+                        borderRadius: 3,
+                        minHeight: 44,
+                        pl: isExpanded ? 2.5 : 2,
+                        pr: isExpanded ? 2 : 2,
+                        justifyContent: isExpanded ? 'initial' : 'center',
+                        alignItems: 'center',
                         transition: 'all 0.2s ease-out',
-                        display: 'flex',
-                        justifyContent: 'center',
+                        background: active
+                          ? mode === 'dark'
+                            ? 'rgba(139, 92, 246, 0.15)'
+                            : 'rgba(139, 92, 246, 0.1)'
+                          : 'transparent',
+                        color: active ? '#E05EFF' : undefined,
+                        boxShadow: active 
+                          ? mode === 'dark'
+                            ? '0 4px 12px rgba(224, 94, 255, 0.15)'
+                            : '0 4px 12px rgba(224, 94, 255, 0.1)'
+                          : 'none',
+                        '&:hover': {
+                          background: mode === 'dark'
+                            ? 'rgba(139, 92, 246, 0.1)'
+                            : 'rgba(139, 92, 246, 0.05)',
+                          color: '#E05EFF',
+                          boxShadow: '0 4px 12px rgba(224, 94, 255, 0.1)',
+                          '& .MuiListItemIcon-root': {
+                            color: '#E05EFF',
+                            transform: 'scale(1.1)',
+                          }
+                        },
                       }}
                     >
-                      {item.icon}
-                    </ListItemIcon>
-                    {isExpanded && (
-                      <ListItemText
-                        primary={item.label}
-                        primaryTypographyProps={{
-                          fontWeight: 600,
-                          fontFamily: 'Montserrat, Arial, sans-serif',
-                          fontSize: 14,
+                      <ListItemIcon
+                        sx={{
                           color: active 
                             ? '#E05EFF' 
                             : mode === 'dark' 
-                              ? 'rgba(255, 255, 255, 0.9)' 
-                              : 'rgba(30, 30, 40, 0.9)',
+                              ? 'rgba(139, 92, 246, 0.8)' 
+                              : 'rgba(139, 92, 246, 0.7)',
+                          minWidth: isExpanded ? 36 : 'auto',
+                          mr: isExpanded ? 2 : 0,
+                          transition: 'all 0.2s ease-out',
+                          display: 'flex',
+                          justifyContent: 'center',
                         }}
-                      />
-                    )}
-                  </ListItemButton>
-                </ListItem>
+                      >
+                        {item.icon}
+                      </ListItemIcon>
+                      {isExpanded && (
+                        <>
+                          <ListItemText
+                            primary={item.label}
+                            primaryTypographyProps={{
+                              fontWeight: 600,
+                              fontFamily: 'Montserrat, Arial, sans-serif',
+                              fontSize: 14,
+                              color: active 
+                                ? '#E05EFF' 
+                                : mode === 'dark' 
+                                  ? 'rgba(255, 255, 255, 0.9)' 
+                                  : 'rgba(30, 30, 40, 0.9)',
+                            }}
+                          />
+                          {item.children && (
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleTablesToggle();
+                              }}
+                              sx={{
+                                color: active ? '#E05EFF' : 'inherit',
+                                transform: tablesOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transition: 'transform 0.2s ease-out',
+                              }}
+                            >
+                              {tablesOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                            </IconButton>
+                          )}
+                        </>
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+
+                  {/* Submenú para Tablas */}
+                  {item.children && isExpanded && (
+                    <Collapse in={tablesOpen} timeout="auto" unmountOnExit>
+                      <List component="div" disablePadding>
+                        {item.children.map((child) => {
+                          const childActive = location.pathname === child.path;
+                          return (
+                            <ListItem key={child.label} disablePadding sx={{ pl: 4, mb: 0.5 }}>
+                              <ListItemButton
+                                onClick={() => {
+                                  if (child.path === "/tablas/nueva") {
+                                    handleCreateTable();
+                                  } else {
+                                    handleTableClick(child.path.split('/')[2]);
+                                  }
+                                }}
+                                sx={{
+                                  borderRadius: 3,
+                                  minHeight: 40,
+                                  pl: 2,
+                                  pr: 2,
+                                  transition: 'all 0.2s ease-out',
+                                  background: childActive
+                                    ? mode === 'dark'
+                                      ? 'rgba(139, 92, 246, 0.1)'
+                                      : 'rgba(139, 92, 246, 0.05)'
+                                    : 'transparent',
+                                  color: childActive ? '#E05EFF' : undefined,
+                                  '&:hover': {
+                                    background: mode === 'dark'
+                                      ? 'rgba(139, 92, 246, 0.05)'
+                                      : 'rgba(139, 92, 246, 0.02)',
+                                    color: '#E05EFF',
+                                  },
+                                }}
+                              >
+                                <ListItemIcon
+                                  sx={{
+                                    color: childActive 
+                                      ? '#E05EFF' 
+                                      : mode === 'dark' 
+                                        ? 'rgba(139, 92, 246, 0.6)' 
+                                        : 'rgba(139, 92, 246, 0.5)',
+                                    minWidth: 32,
+                                    mr: 1.5,
+                                    fontSize: 18,
+                                  }}
+                                >
+                                  {child.icon}
+                                </ListItemIcon>
+                                <ListItemText
+                                  primary={child.label}
+                                  primaryTypographyProps={{
+                                    fontWeight: 500,
+                                    fontSize: 13,
+                                    color: childActive 
+                                      ? '#E05EFF' 
+                                      : mode === 'dark' 
+                                        ? 'rgba(255, 255, 255, 0.8)' 
+                                        : 'rgba(30, 30, 40, 0.8)',
+                                  }}
+                                />
+                              </ListItemButton>
+                            </ListItem>
+                          );
+                        })}
+                      </List>
+                    </Collapse>
+                  )}
+                </Box>
               );
             })}
           </List>

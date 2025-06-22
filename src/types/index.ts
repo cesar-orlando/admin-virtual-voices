@@ -213,3 +213,102 @@ export interface WhatsAppSocketData {
   status: SessionStatus
   message?: string
 }
+
+// Dynamic Tables types
+export interface DynamicTable extends BaseEntity {
+  name: string
+  slug: string
+  icon: string
+  c_name: string
+  description?: string;
+  createdBy: string
+  isActive: boolean
+  fields: TableField[]
+  totalRecords?: number
+  recordsCount?: number
+}
+
+export interface TableField {
+  name: string
+  label: string
+  type: FieldType
+  required?: boolean
+  defaultValue?: any
+  options?: string[]
+  order: number
+  width?: number
+}
+
+export const FieldType = {
+  TEXT: 'text',
+  EMAIL: 'email',
+  NUMBER: 'number',
+  DATE: 'date',
+  BOOLEAN: 'boolean',
+  SELECT: 'select',
+  FILE: 'file',
+  CURRENCY: 'currency'
+} as const;
+
+export type FieldType = typeof FieldType[keyof typeof FieldType];
+
+export interface DynamicRecord extends BaseEntity {
+  tableSlug: string
+  c_name: string
+  data: Record<string, any>
+  createdBy: string
+  updatedBy?: string
+}
+
+// Request/Response types
+export interface CreateTableRequest {
+  name: string
+  slug: string
+  icon: string
+  fields: TableField[]
+  isActive?: boolean
+}
+
+export interface UpdateTableRequest {
+  name?: string
+  slug?: string
+  icon?: string
+  description?: string;
+  fields?: TableField[]
+  isActive?: boolean
+}
+
+export interface CreateRecordRequest {
+  tableSlug: string
+  data: Record<string, any>
+}
+
+export interface UpdateRecordRequest {
+  data: Record<string, any>
+}
+
+export interface TableStats {
+  totalRecords: number
+  recentRecords: number
+  dailyStats: Array<{ _id: string; count: number }>
+  table: {
+    name: string
+    slug: string
+    fieldCount: number
+  }
+}
+
+export interface PaginatedRecordsResponse {
+  records: DynamicRecord[]
+  pagination: {
+    page: number
+    limit: number
+    total: number
+    pages: number
+  }
+  table: {
+    name: string
+    slug: string
+    fields: TableField[]
+  }
+}

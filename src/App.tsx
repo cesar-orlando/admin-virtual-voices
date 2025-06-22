@@ -10,6 +10,11 @@ import Users from "./pages/Users";
 import AiConfig from "./pages/AiConfig";
 import { UserProfileTab } from "./components/UserProfileTab";
 import { ChatsTab } from "./pages/Chat";
+import Tables from "./pages/Tables";
+import CreateTable from "./pages/CreateTable";
+import TableRecords from "./pages/TableRecords";
+import RecordForm from "./pages/RecordForm";
+import EditTable from './pages/EditTable';
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth();
@@ -19,27 +24,18 @@ function ProtectedRoute({ children }: React.PropsWithChildren) {
 
 function DashboardPage() {
   return (
-    <div style={{ padding: 40 }}>
-      <h2>Bienvenido al Dashboard</h2>
-      <p>Estadísticas rápidas:</p>
-      <ul>
-        <li>Usuarios activos: <b>12</b></li>
-        <li>IA disponibles: <b>3</b></li>
-        <li>Equipos registrados: <b>5</b></li>
-      </ul>
+    <div>
+      <h1>Dashboard</h1>
+      <p>Bienvenido al dashboard de Virtual Voices</p>
     </div>
   );
 }
 
 function EquiposPage() {
   return (
-    <div style={{ padding: 40 }}>
-      <h2>Equipos</h2>
-      <ul>
-        <li>Equipo Alpha</li>
-        <li>Equipo Beta</li>
-        <li>Equipo Gamma</li>
-      </ul>
+    <div>
+      <h1>Equipos</h1>
+      <p>Gestión de equipos</p>
     </div>
   );
 }
@@ -66,6 +62,12 @@ export default function App() {
             <Route path="equipos" element={<EquiposPage />} />
             <Route path="whatsapp" element={<Whatsapp />} />
             <Route path="userProfile" element={<UserProfileTab />} />
+            <Route path="tablas" element={<Tables />} />
+            <Route path="tablas/nueva" element={<CreateTable />} />
+            <Route path="tablas/:tableSlug" element={<TableRecords />} />
+            <Route path="tablas/:tableSlug/editar" element={<EditTable />} />
+            <Route path="tablas/:tableSlug/nuevo" element={<RecordForm />} />
+            <Route path="tablas/:tableSlug/editar/:recordId" element={<RecordForm />} />
             {user.role === "Admin" && (
               <Route path="chats" element={<ChatsTab />} />
             )}
