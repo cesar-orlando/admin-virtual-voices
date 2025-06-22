@@ -101,7 +101,7 @@ export default function TableRecords() {
       component="main"
       sx={{
         p: 3,
-        width: '90vw',
+        width: '92vw',
         height: '85vh',
         display: 'flex',
         flexDirection: 'column',

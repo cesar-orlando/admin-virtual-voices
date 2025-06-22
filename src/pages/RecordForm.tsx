@@ -55,13 +55,16 @@ export default function RecordForm() {
       setTable(tableData);
 
       if (isEditMode && recordId) {
-        const recordData = await getRecordById(recordId, user);
-        setFormData(recordData.data);
+        const response = await getRecordById(recordId, user);
+        if (response && response.record) {
+            setFormData(response.record.data);
+        } else {
+            throw new Error("El formato de la respuesta del registro es inesperado.");
+        }
       } else {
-        // Set default values for new record
         const defaultData: Record<string, any> = {};
         tableData.fields.forEach((field: TableField) => {
-          defaultData[field.name] = field.defaultValue ?? '';
+          defaultData[field.name] = field.defaultValue ?? (field.type === 'boolean' ? false : '');
         });
         setFormData(defaultData);
       }
@@ -122,18 +125,26 @@ export default function RecordForm() {
             required={field.required}
           />
         );
-      case 'date':
+      case 'date': {
+        let formattedDate = '';
+        if (value) {
+          const date = new Date(value);
+          if (!isNaN(date.getTime())) {
+            formattedDate = date.toISOString().split('T')[0];
+          }
+        }
         return (
           <TextField
             fullWidth
             label={field.label}
             type="date"
-            value={value ? new Date(value).toISOString().split('T')[0] : ''}
+            value={formattedDate}
             onChange={(e) => handleInputChange(field.name, e.target.value)}
             required={field.required}
             InputLabelProps={{ shrink: true }}
           />
         );
+      }
       case 'boolean':
         return (
           <FormControlLabel

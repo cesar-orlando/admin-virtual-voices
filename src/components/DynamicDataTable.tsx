@@ -40,11 +40,13 @@ import {
   Visibility as ViewIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
+import { useDebounce } from '../hooks/useDebounce';
 import { 
   getRecords, 
   deleteRecord, 
   exportRecords,
-  getTableStats 
+  getTableStats,
+  searchRecords,
 } from '../api/servicios';
 import type { DynamicTable, DynamicRecord, TableField, TableStats } from '../types';
 
@@ -70,6 +72,7 @@ export default function DynamicDataTable({
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalRecords, setTotalRecords] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 500);
   const [stats, setStats] = useState<TableStats | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedRecord, setSelectedRecord] = useState<DynamicRecord | null>(null);
@@ -81,6 +84,14 @@ export default function DynamicDataTable({
     loadRecords();
     loadStats();
   }, [table.slug, page, rowsPerPage, refreshTrigger]);
+
+  useEffect(() => {
+    if (debouncedSearchQuery) {
+      handleSearch(debouncedSearchQuery);
+    } else {
+      loadRecords();
+    }
+  }, [debouncedSearchQuery]);
 
   const loadRecords = async () => {
     if (!user) return;
@@ -116,6 +127,23 @@ export default function DynamicDataTable({
       setStats(statsData);
     } catch (err) {
       console.error('Error loading stats:', err);
+    }
+  };
+
+  const handleSearch = async (query: string) => {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    setPage(0);
+    try {
+      const response = await searchRecords(table.slug, user, query, {}, 1, rowsPerPage);
+      setRecords(response.records);
+      setTotalRecords(response.pagination.total);
+    } catch (err) {
+      setError('Error al buscar registros');
+      console.error('Error searching records:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -163,8 +191,17 @@ export default function DynamicDataTable({
     if (value === null || value === undefined) return '-';
 
     switch (field.type) {
-      case 'date':
-        return new Date(value).toLocaleDateString('es-ES');
+      case 'date': {
+        const date = new Date(value);
+        if (isNaN(date.getTime())) {
+          return '-';
+        }
+        return date.toLocaleDateString('es-ES', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        });
+      }
       case 'boolean':
         return value ? 'Sí' : 'No';
       case 'currency':
@@ -234,15 +271,50 @@ export default function DynamicDataTable({
             placeholder="Buscar..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            sx={{
+              minWidth: 200,
+              
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                backgroundColor:
+                  theme.palette.mode === 'dark'
+                    ? 'rgba(139, 92, 246, 0.1)'
+                    : 'rgba(59, 130, 246, 0.05)',
+                '&:hover': {
+                  backgroundColor:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(139, 92, 246, 0.15)'
+                      : 'rgba(59, 130, 246, 0.1)',
+                },
+                '& fieldset': {
+                  borderColor: 'transparent',
+                },
+                '&:hover fieldset': {
+                  borderColor: '#8B5CF6',
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: '#8B5CF6',
+                },
+              },
+            }}
             InputProps={{
               startAdornment: (
                 <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
+                  <SearchIcon 
+                    fontSize="small" 
+                    sx={{ color:'#8B5CF6', }}
+                  />
                 </InputAdornment>
               ),
-              sx: { borderRadius: 2 }
             }}
           />
+          <Button
+            variant="outlined"
+            startIcon={<FilterIcon />}
+            sx={{ borderRadius: 2 }}
+          >
+            Filtros
+          </Button>
           <Button
             variant="outlined"
             startIcon={<ExportIcon />}
@@ -279,7 +351,7 @@ export default function DynamicDataTable({
       )}
 
       {/* Table & Pagination Container */}
-      <Paper sx={{ flexGrow: 1, mx: 2, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 2 }}>
+      <Paper sx={{ flexGrow: 1, m: 3, mt: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 2 }}>
         <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
           <Table stickyHeader>
             <TableHead>
