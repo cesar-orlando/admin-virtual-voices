@@ -177,7 +177,7 @@ export default function Tables() {
 
   if (loading) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: 3, width: '90vw', height: '80vh'  }}>
         <Typography variant="h4" gutterBottom>
           Tablas Dinámicas
         </Typography>

@@ -16,6 +16,7 @@ import { useAuth } from '../hooks/useAuth'
 import { getTableBySlug } from '../api/servicios'
 import DynamicDataTable from '../components/DynamicDataTable'
 import type { DynamicTable, DynamicRecord } from '../types'
+import AddIcon from '@mui/icons-material/Add'
 
 export default function TableRecords() {
   const [table, setTable] = useState<DynamicTable | null>(null)
@@ -32,7 +33,7 @@ export default function TableRecords() {
     if (tableSlug && user) {
       loadTable()
     }
-  }, [tableSlug, user])
+  }, [tableSlug, user, refreshTrigger])
 
   const loadTable = async () => {
     if (!tableSlug || !user) return
@@ -66,47 +67,30 @@ export default function TableRecords() {
     setRefreshTrigger(prev => prev + 1)
   }
 
-  if (loading) {
+  if (loading && !table) {
     return (
       <Box
         component="main"
         sx={{
+          flexGrow: 1,
           p: 3,
-          width: '90vw',
-          height: '80vh',
+          width: '100%',
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden',
           backgroundColor: theme.palette.mode === 'dark'
             ? 'rgba(30,30,40,0.95)'
             : 'rgba(255,255,255,0.96)',
         }}
       >
-        <Skeleton variant="text" width="40%" height={48} />
-        <Skeleton variant="text" width="60%" height={32} />
-        <Box sx={{ mt: 3 }}>
-          <Skeleton variant="rectangular" height={400} />
-        </Box>
+        <Skeleton variant="text" width="40%" height={48} sx={{ mb: 2 }} />
+        <Skeleton variant="rectangular" height={'calc(80vh - 100px)'} />
       </Box>
     )
   }
 
   if (error || !table) {
     return (
-      <Box
-        component="main"
-        sx={{
-          p: 3,
-          width: '90vw',
-          height: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          backgroundColor: theme.palette.mode === 'dark'
-            ? 'rgba(30,30,40,0.95)'
-            : 'rgba(255,255,255,0.96)',
-        }}
-      >
+      <Box sx={{ p: 3 }}>
         <Alert severity="error">{error || 'No se pudo cargar la tabla'}</Alert>
       </Box>
     )
@@ -118,7 +102,7 @@ export default function TableRecords() {
       sx={{
         p: 3,
         width: '90vw',
-        height: '80vh',
+        height: '85vh',
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -129,11 +113,34 @@ export default function TableRecords() {
     >
       <DynamicDataTable
         table={table}
-        onRecordCreate={handleRecordCreate}
         onRecordEdit={handleRecordEdit}
         onRecordView={handleRecordView}
         refreshTrigger={refreshTrigger}
       />
+      
+      <Button
+        variant="contained"
+        startIcon={<AddIcon />}
+        onClick={handleRecordCreate}
+        sx={{
+          position: 'fixed',
+          bottom: 32,
+          right: 32,
+          borderRadius: 3,
+          px: 3,
+          py: 1.5,
+          background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+          boxShadow: theme.shadows[6],
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: theme.shadows[10],
+          },
+          transition: 'all 0.2s ease-out',
+          zIndex: 1200,
+        }}
+      >
+        Nuevo Registro
+      </Button>
     </Box>
   )
 }

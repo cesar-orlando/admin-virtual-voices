@@ -204,7 +204,7 @@ export default function DynamicDataTable({
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       {/* Header Bar */}
       <Box
         sx={{
@@ -217,28 +217,18 @@ export default function DynamicDataTable({
         }}
       >
         <Box>
-          <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 700 }}>
-            <span>{table.icon}</span>
+          <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontWeight: 700 }}>
+            <span style={{ fontSize: '1.5rem' }}>{table.icon}</span>
             {table.name}
           </Typography>
-          {stats && (
-            <Box sx={{ display: 'flex', gap: 2, mt: 0.5 }}>
-              <Chip 
-                label={`${stats.totalRecords} registros total`} 
-                color="primary" 
-                variant="outlined" 
-                size="small" 
-              />
-              <Chip 
-                label={`${stats.recentRecords} nuevos (30 días)`} 
-                color="secondary" 
-                variant="outlined" 
-                size="small" 
-              />
+          {stats ? (
+            <Box sx={{ display: 'flex', gap: 1.5, mt: 1 }}>
+              <Chip label={`${stats.totalRecords} registros total`} color="primary" variant="outlined" size="small" />
+              <Chip label={`${stats.recentRecords} nuevos (30 días)`} color="secondary" variant="outlined" size="small" />
             </Box>
-          )}
+          ) : <Skeleton variant="text" width={200} height={20} />}
         </Box>
-        <Box sx={{ display: 'flex', gap: 1 }}>
+        <Box sx={{ display: 'flex', gap: 1.5 }}>
           <TextField
             size="small"
             placeholder="Buscar..."
@@ -250,29 +240,34 @@ export default function DynamicDataTable({
                   <SearchIcon fontSize="small" />
                 </InputAdornment>
               ),
-              sx: { borderRadius: 3 }
+              sx: { borderRadius: 2 }
             }}
           />
           <Button
             variant="outlined"
             startIcon={<ExportIcon />}
             onClick={handleExportData}
+            sx={{ borderRadius: 2 }}
           >
             Exportar
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={onRecordCreate}
-            sx={{
-              background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #D04EFF 0%, #7A4CF6 100%)',
-              }
-            }}
-          >
-            Nuevo Registro
-          </Button>
+          {onRecordCreate && (
+             <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={onRecordCreate}
+              sx={{
+                borderRadius: 2,
+                background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+                boxShadow: 'none',
+                '&:hover': {
+                  boxShadow: '0 2px 8px rgba(139, 92, 246, 0.4)',
+                }
+              }}
+            >
+              Nuevo Registro
+            </Button>
+          )}
         </Box>
       </Box>
 
@@ -283,129 +278,99 @@ export default function DynamicDataTable({
         </Alert>
       )}
 
-      {/* Table */}
-      <TableContainer component={Paper} sx={{ flexGrow: 1, mx: 0, borderRadius: 2, boxShadow: 'none', border: '1px solid', borderColor: 'divider' }}>
-        <Table stickyHeader>
-          <TableHead>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 600, backgroundColor: theme.palette.action.hover }}>ID</TableCell>
-              {table.fields?.map((field) => (
-                <TableCell
-                  key={field.name}
-                  sx={{
-                    fontWeight: 600,
-                    backgroundColor: theme.palette.action.hover,
-                    minWidth: field.width || 150
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <span>{field.label}</span>
-                    <Chip 
-                      label={field.type} 
-                      size="small" 
-                      color={getFieldColor(field)}
-                      variant="outlined"
-                    />
-                    {field.required && (
-                      <Chip 
-                        label="*" 
-                        size="small" 
-                        color="error"
-                        sx={{ minWidth: 20, height: 20 }}
-                      />
-                    )}
-                  </Box>
-                </TableCell>
-              ))}
-              <TableCell sx={{ fontWeight: 600, backgroundColor: theme.palette.action.hover, width: 100 }}>Acciones</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {loading ? (
+      {/* Table & Pagination Container */}
+      <Paper sx={{ flexGrow: 1, mx: 2, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRadius: 2 }}>
+        <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
+          <Table stickyHeader>
+            <TableHead>
               <TableRow>
-                <TableCell colSpan={table.fields.length + 2} align="center">
-                  <CircularProgress />
-                </TableCell>
+                <TableCell sx={{ width: '80px', fontWeight: 'bold' }}>ID</TableCell>
+                {table.fields.map((field) => (
+                  <TableCell key={field.name} sx={{ minWidth: field.width || 150, fontWeight: 'bold' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      {field.label}
+                      <Chip label={field.type} size="small" color={getFieldColor(field)} variant="outlined" />
+                    </Box>
+                  </TableCell>
+                ))}
+                <TableCell sx={{ width: '50px' }} />
               </TableRow>
-            ) : (
-              records.map((record) => (
-                <TableRow key={record._id} hover>
-                  <TableCell>
-                    <Typography variant="caption" color="text.secondary">{record._id.slice(-8)}</Typography>
-                  </TableCell>
-                  {table.fields?.map((field) => (
-                    <TableCell key={field.name}>{formatFieldValue(record.data[field.name], field)}</TableCell>
-                  ))}
-                  <TableCell>
-                    <IconButton size="small" onClick={(e) => handleMenuOpen(e, record)}>
-                      <MoreVertIcon />
-                    </IconButton>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                Array.from(new Array(rowsPerPage)).map((_, index) => (
+                  <TableRow key={index}>
+                    <TableCell colSpan={table.fields.length + 2}>
+                      <Skeleton variant="text" height={40} />
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                records.map((record) => (
+                  <TableRow hover role="checkbox" tabIndex={-1} key={record._id}>
+                    <TableCell>
+                      <Chip 
+                        label={record._id.slice(-6).toUpperCase()} 
+                        size="small"
+                        sx={{ 
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          color: theme.palette.mode === 'dark' ? '#E05EFF' : '#8B5CF6',
+                          backgroundColor: theme.palette.mode === 'dark' ? 'rgba(224, 94, 255, 0.1)' : 'rgba(139, 92, 246, 0.1)',
+                        }}
+                        onClick={() => onRecordView?.(record)}
+                      />
+                    </TableCell>
+                    {table.fields.map((field) => (
+                      <TableCell key={field.name}>
+                        {formatFieldValue(record.data[field.name], field)}
+                      </TableCell>
+                    ))}
+                    <TableCell align="right">
+                      <IconButton onClick={(e) => handleMenuOpen(e, record)}>
+                        <MoreVertIcon />
+                      </IconButton>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
 
-      {/* Pagination */}
-      <TablePagination
-        rowsPerPageOptions={[5, 10, 25, 50]}
-        component="div"
-        count={totalRecords}
-        rowsPerPage={rowsPerPage}
-        page={page}
-        onPageChange={(_, newPage) => setPage(newPage)}
-        onRowsPerPageChange={(e) => {
-          setRowsPerPage(parseInt(e.target.value, 10));
-          setPage(0);
-        }}
-        labelRowsPerPage="Filas por página:"
-        labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count !== -1 ? count : `más de ${to}`}`}
-        sx={{ mr: 2 }}
-      />
+        {/* Pagination */}
+        <TablePagination
+          rowsPerPageOptions={[5, 10, 25, 50, 100]}
+          component="div"
+          count={totalRecords}
+          rowsPerPage={rowsPerPage}
+          page={page}
+          onPageChange={(e, newPage) => setPage(newPage)}
+          onRowsPerPageChange={(e) => {
+            setRowsPerPage(parseInt(e.target.value, 10));
+            setPage(0);
+          }}
+          labelRowsPerPage="Filas por página:"
+          labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count !== -1 ? count : `más de ${to}`}`}
+        />
+      </Paper>
 
       {/* Action Menu */}
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={handleMenuClose}
-        PaperProps={{ sx: { minWidth: 150, boxShadow: theme.shadows[8] } }}
       >
-        <MenuItem onClick={() => {
-          if (selectedRecord && onRecordView) {
-            onRecordView(selectedRecord);
-          }
-          handleMenuClose();
-        }}>
-          <ListItemIcon>
-            <ViewIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Ver</ListItemText>
+        <MenuItem onClick={() => { onRecordView?.(selectedRecord!); handleMenuClose(); }}>
+          <ListItemIcon><ViewIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Ver Detalle</ListItemText>
         </MenuItem>
-        <MenuItem onClick={() => {
-          if (selectedRecord && onRecordEdit) {
-            onRecordEdit(selectedRecord);
-          }
-          handleMenuClose();
-        }}>
-          <ListItemIcon>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
+        <MenuItem onClick={() => { onRecordEdit?.(selectedRecord!); handleMenuClose(); }}>
+          <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Editar</ListItemText>
         </MenuItem>
-        <MenuItem 
-          onClick={() => {
-            if (selectedRecord) {
-              handleDeleteRecord(selectedRecord);
-            }
-            handleMenuClose();
-          }}
-          sx={{ color: 'error.main' }}
-        >
-          <ListItemIcon>
-            <DeleteIcon fontSize="small" color="error" />
-          </ListItemIcon>
+        <MenuItem onClick={() => { handleDeleteRecord(selectedRecord!); handleMenuClose(); }}>
+          <ListItemIcon><DeleteIcon fontSize="small" /></ListItemIcon>
           <ListItemText>Eliminar</ListItemText>
         </MenuItem>
       </Menu>
