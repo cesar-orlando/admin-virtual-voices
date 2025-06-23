@@ -312,3 +312,208 @@ export interface PaginatedRecordsResponse {
     fields: TableField[]
   }
 }
+
+// Tools System types
+export interface ITool extends BaseEntity {
+  name: string
+  displayName: string
+  description: string
+  category: string
+  isActive: boolean
+  c_name: string
+  createdBy: string
+  updatedBy?: string
+  config: ToolConfig
+  parameters: ToolParameters
+  responseMapping?: ResponseMapping
+  security: SecurityConfig
+}
+
+export interface ToolConfig {
+  endpoint: string
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  headers?: Record<string, string>
+  authType?: 'none' | 'api_key' | 'bearer' | 'basic'
+  authConfig?: {
+    apiKey?: string
+    bearerToken?: string
+    username?: string
+    password?: string
+  }
+  timeout?: number
+}
+
+export interface ToolParameters {
+  type: 'object'
+  properties: Record<string, ParameterProperty>
+  required: string[]
+}
+
+export interface ParameterProperty {
+  type: 'string' | 'number' | 'boolean' | 'array'
+  description: string
+  required?: boolean
+  enum?: string[]
+  format?: string
+  default?: any
+}
+
+export interface ResponseMapping {
+  successPath?: string
+  errorPath?: string
+  transformFunction?: string
+}
+
+export interface SecurityConfig {
+  rateLimit?: {
+    requests: number
+    window: string
+  }
+  allowedDomains?: string[]
+  maxTimeout?: number
+}
+
+export interface ToolCategory extends BaseEntity {
+  name: string
+  displayName: string
+  description: string
+  c_name: string
+  icon?: string
+  color?: string
+}
+
+export interface ToolExecution extends BaseEntity {
+  toolId: string
+  toolName: string
+  c_name: string
+  executedBy: string
+  parameters: Record<string, any>
+  response?: {
+    success: boolean
+    data?: any
+    error?: string
+    executionTime: number
+  }
+  status: 'pending' | 'success' | 'failed'
+}
+
+export interface ToolAnalytics {
+  c_name: string
+  period: { 
+    startDate?: string
+    endDate?: string 
+  }
+  stats: Array<{
+    _id: string
+    toolName: string
+    displayName: string
+    category: string
+    totalExecutions: number
+    successfulExecutions: number
+    failedExecutions: number
+    averageExecutionTime: number
+    lastExecuted?: Date
+  }>
+}
+
+export interface ToolDashboardStats {
+  totalTools: number
+  activeTools: number
+  executionsToday: number
+  successRate: number
+  categoriesCount: number
+  executionsTrend: Array<{
+    date: string
+    executions: number
+    success: number
+    failed: number
+  }>
+  topTools: Array<{
+    id: string
+    name: string
+    displayName: string
+    executions: number
+    successRate: number
+  }>
+  categoryDistribution: Array<{
+    category: string
+    count: number
+    percentage: number
+  }>
+}
+
+// Request/Response types for Tools
+export interface CreateToolRequest {
+  name: string
+  displayName: string
+  description: string
+  category: string
+  config: ToolConfig
+  parameters: ToolParameters
+  responseMapping?: ResponseMapping
+  security: SecurityConfig
+}
+
+export interface UpdateToolRequest {
+  displayName?: string
+  description?: string
+  category?: string
+  config?: Partial<ToolConfig>
+  parameters?: ToolParameters
+  responseMapping?: ResponseMapping
+  security?: Partial<SecurityConfig>
+}
+
+export interface ToolTestRequest {
+  testParameters: Record<string, any>
+}
+
+export interface ToolTestResponse {
+  success: boolean
+  executionTime: number
+  response?: any
+  error?: string
+}
+
+export interface ExecuteToolRequest {
+  toolName: string
+  parameters: Record<string, any>
+  c_name: string
+  executedBy: string
+}
+
+export interface BatchExecuteRequest {
+  tools: Array<{
+    toolName: string
+    parameters: Record<string, any>
+  }>
+  c_name: string
+  executedBy: string
+}
+
+export interface ValidateSchemaRequest {
+  parameters: ToolParameters
+}
+
+export interface ValidateEndpointRequest {
+  endpoint: string
+  method: string
+  timeout?: number
+}
+
+export interface ToolListParams {
+  page?: number
+  limit?: number
+  category?: string
+  isActive?: boolean
+  search?: string
+}
+
+export interface CreateCategoryRequest {
+  name: string
+  displayName: string
+  description: string
+  c_name: string
+  icon?: string
+  color?: string
+}
