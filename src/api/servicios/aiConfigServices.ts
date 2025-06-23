@@ -1,6 +1,7 @@
 import api from "../axios";
 import { handleError } from "../../Helpers/ErrorHandler";
 import type { UserProfile, AIConfig } from "../../types";
+import type { AiConfig } from "../../types/common";
 
 export const createAiConfig = async (config: AIConfig, user: UserProfile) => {
   try {
@@ -42,11 +43,11 @@ export const deleteAiConfig = async (configId: string, user: UserProfile) => {
   }
 };
 
-export const simulateAiResponse = async (user: UserProfile, message: string, configId: string) => {
+export const simulateAiResponse = async (user: UserProfile, messages: Array<{ from: "user" | "ai"; text: string }>, aiConfig: Partial<AiConfig>) => {
   try {
     const response = await api.post(`/ia-configs/simulate/${user.c_name}`, {
-      message,
-      configId,
+      messages,
+      aiConfig,
     });
     return response.data;
   } catch (error) {

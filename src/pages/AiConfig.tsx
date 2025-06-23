@@ -131,12 +131,13 @@ async function saveAiConfig(config: Partial<AIConfig>) {
   async function handleSendMessage() {
     if (!chatInput.trim()) return;
     const userMessage = chatInput;
-    setChatMessages(msgs => [...msgs, { from: 'user' as const, text: userMessage }]);
+    const updatedMessages = [...chatMessages, { from: 'user' as const, text: userMessage }];
+    setChatMessages(updatedMessages);
     setChatInput('');
     const response = await simulateAiResponse(
       user,
-      userMessage,
-      (aiConfig as AIConfig)._id as string
+      updatedMessages,
+      aiConfig
     );
     setTimeout(() => {
       setChatMessages(msgs => [...msgs, { from: 'ai', text: response.message }]);
@@ -811,7 +812,10 @@ async function saveAiConfig(config: Partial<AIConfig>) {
             </Button>
           </Box>
           <Button
-            onClick={() => setChatOpen(false)}
+            onClick={() => {
+              setChatOpen(false);
+              setChatMessages([]);
+            }}
             sx={{
               color: '#8B5CF6',
               '&:hover': {
