@@ -27,6 +27,10 @@ import TableChartIcon from '@mui/icons-material/TableChart';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import AddIcon from '@mui/icons-material/Add';
+import BuildIcon from '@mui/icons-material/Build';
+import DashboardCustomizeIcon from '@mui/icons-material/DashboardCustomize';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import AnalyticsIcon from '@mui/icons-material/Analytics';
 import { useAuth } from "../hooks/useAuth";
 import { getTables } from "../api/servicios";
 import type { DynamicTable } from "../types";
@@ -65,6 +69,36 @@ const mainNavItems: NavItem[] = [
       transition: 'all 0.2s ease-out',
     }} />, 
     path: "/ia" 
+  },
+  { 
+    label: "Herramientas", 
+    icon: <BuildIcon sx={{ 
+      fontSize: 24,
+      transition: 'all 0.2s ease-out',
+    }} />, 
+    path: "/herramientas",
+    children: [
+      {
+        label: "Dashboard",
+        icon: <DashboardCustomizeIcon sx={{ fontSize: 20 }} />,
+        path: "/herramientas-dashboard"
+      },
+      {
+        label: "Gestionar Herramientas",
+        icon: <BuildIcon sx={{ fontSize: 20 }} />,
+        path: "/herramientas"
+      },
+      {
+        label: "Nueva Herramienta",
+        icon: <AddIcon sx={{ fontSize: 20 }} />,
+        path: "/herramientas/nueva"
+      },
+      {
+        label: "Tester",
+        icon: <PlayArrowIcon sx={{ fontSize: 20 }} />,
+        path: "/herramientas/tester"
+      }
+    ]
   },
   { 
     label: "Equipos", 
@@ -111,6 +145,7 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
   const [hover, setHover] = useState(false);
   const [tables, setTables] = useState<DynamicTable[]>([]);
   const [tablesOpen, setTablesOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const theme = useTheme();
   const navigate = useNavigate();
@@ -152,6 +187,10 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
 
   const handleTablesToggle = () => {
     setTablesOpen(!tablesOpen);
+  };
+
+  const handleToolsToggle = () => {
+    setToolsOpen(!toolsOpen);
   };
 
   const handleTableClick = (tableSlug: string) => {
@@ -292,7 +331,11 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
                         if (item.children) {
                           navigate(item.path);
                           if (isExpanded) {
-                            handleTablesToggle();
+                            if (item.label === "Tablas") {
+                              handleTablesToggle();
+                            } else if (item.label === "Herramientas") {
+                              handleToolsToggle();
+                            }
                           }
                         } else {
                           navigate(item.path);
@@ -367,15 +410,19 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
                               size="small"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleTablesToggle();
+                                if (item.label === "Tablas") {
+                                  handleTablesToggle();
+                                } else if (item.label === "Herramientas") {
+                                  handleToolsToggle();
+                                }
                               }}
                               sx={{
                                 color: active ? '#E05EFF' : 'inherit',
-                                transform: tablesOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                                transform: (item.label === "Tablas" ? tablesOpen : item.label === "Herramientas" ? toolsOpen : false) ? 'rotate(180deg)' : 'rotate(0deg)',
                                 transition: 'transform 0.2s ease-out',
                               }}
                             >
-                              {tablesOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                              {(item.label === "Tablas" ? tablesOpen : item.label === "Herramientas" ? toolsOpen : false) ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                             </IconButton>
                           )}
                         </>
@@ -383,9 +430,9 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
                     </ListItemButton>
                   </ListItem>
 
-                  {/* Submenú para Tablas */}
+                  {/* Submenús */}
                   {item.children && isExpanded && (
-                    <Collapse in={tablesOpen} timeout="auto" unmountOnExit>
+                    <Collapse in={item.label === "Tablas" ? tablesOpen : item.label === "Herramientas" ? toolsOpen : false} timeout="auto" unmountOnExit>
                       <List component="div" disablePadding>
                         {item.children.map((child) => {
                           const childActive = location.pathname === child.path;
@@ -393,10 +440,15 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
                             <ListItem key={child.label} disablePadding sx={{ pl: 4, mb: 0.5 }}>
                               <ListItemButton
                                 onClick={() => {
-                                  if (child.path === "/tablas/nueva") {
-                                    handleCreateTable();
+                                  if (child.path.startsWith("/tablas")) {
+                                    if (child.path === "/tablas/nueva") {
+                                      handleCreateTable();
+                                    } else {
+                                      handleTableClick(child.path.split('/')[2]);
+                                    }
                                   } else {
-                                    handleTableClick(child.path.split('/')[2]);
+                                    navigate(child.path);
+                                    if (isMobile) onClose();
                                   }
                                 }}
                                 sx={{

@@ -12,3 +12,6 @@ export * from './whatsappServices';
 
 // Dynamic Table Services
 export * from './dynamicTableServices';
+
+// Tools Services
+export * from './toolsServices';

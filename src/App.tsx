@@ -16,6 +16,12 @@ import TableRecords from "./pages/TableRecords";
 import RecordForm from "./pages/RecordForm";
 import EditTable from './pages/EditTable';
 
+// Tools System imports
+import ToolsDashboard from "./pages/ToolsDashboard";
+import ToolsList from "./pages/ToolsList";
+import ToolForm from "./pages/ToolForm";
+import ToolTester from "./pages/ToolTester";
+
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
@@ -68,6 +74,15 @@ export default function App() {
             <Route path="tablas/:tableSlug/editar" element={<EditTable />} />
             <Route path="tablas/:tableSlug/nuevo" element={<RecordForm />} />
             <Route path="tablas/:tableSlug/editar/:recordId" element={<RecordForm />} />
+            
+            {/* Tools System Routes */}
+            <Route path="herramientas-dashboard" element={<ToolsDashboard />} />
+            <Route path="herramientas" element={<ToolsList />} />
+            <Route path="herramientas/nueva" element={<ToolForm />} />
+            <Route path="herramientas/:toolId/editar" element={<ToolForm />} />
+            <Route path="herramientas/:toolId/test" element={<ToolTester />} />
+            <Route path="herramientas/tester" element={<ToolTester />} />
+            
             {user.role === "Admin" && (
               <Route path="chats" element={<ChatsTab />} />
             )}
