@@ -59,6 +59,7 @@ export default function EditTable() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showIconPicker, setShowIconPicker] = useState(false);
+  const [selectOptionsInputs, setSelectOptionsInputs] = useState<{ [index: number]: string }>({});
 
   const { tableSlug } = useParams<{ tableSlug: string }>();
   const navigate = useNavigate();
@@ -100,6 +101,14 @@ export default function EditTable() {
     const updatedFields = [...fields];
     updatedFields[index] = { ...updatedFields[index], ...field };
     setFields(updatedFields);
+
+    // Si se actualiza el tipo a 'select', inicializa el input de opciones si no existe
+    if (field.type === 'select' && selectOptionsInputs[index] === undefined) {
+      setSelectOptionsInputs((prev) => ({
+        ...prev,
+        [index]: updatedFields[index].options?.join(', ') || '',
+      }));
+    }
   };
 
   const handleRemoveField = (index: number) => {
@@ -258,22 +267,37 @@ export default function EditTable() {
                         <Grid item xs={6} sm={2} md={2} sx={{ textAlign: 'right' }}>
                             <IconButton color="error" onClick={() => handleRemoveField(index)} size="small"><DeleteIcon /></IconButton>
                         </Grid>
-                         {field.type === 'select' && (
-                            <Grid item xs={12}>
-                                <TextField
-                                    fullWidth
-                                    label="Opciones (separadas por comas)"
-                                    value={field.options?.join(', ') || ''}
-                                    onChange={(e) => handleUpdateField(index, { options: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
-                                    size="small"
-                                />
-                            </Grid>
+                        {field.type === 'select' && (
+                          <Grid item xs={12}>
+                            <TextField
+                              fullWidth
+                              label="Opciones (separadas por comas)"
+                              value={selectOptionsInputs[index] ?? field.options?.join(', ') ?? ''}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setSelectOptionsInputs((prev) => ({
+                                  ...prev,
+                                  [index]: value,
+                                }));
+                                // No actualices field.options aquí, solo el input
+                              }}
+                              onBlur={() => {
+                                // Al salir del input, actualiza el campo real
+                                const options = (selectOptionsInputs[index] ?? '')
+                                  .split(',')
+                                  .map(s => s.trim())
+                                  .filter(Boolean);
+                                handleUpdateField(index, { options });
+                              }}
+                              size="small"
+                            />
+                          </Grid>
                         )}
-                    </Grid>
+                      </Grid>
                     </Paper>
-                </Grid>
+                  </Grid>
                 ))}
-            </Grid>
+              </Grid>
         </CardContent>
       </Card>
 

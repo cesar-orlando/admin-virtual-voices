@@ -86,6 +86,8 @@ export default function CreateTable() {
   const [formErrors, setFormErrors] = useState<{ slug?: string; general?: string }>({});
   const [importReport, setImportReport] = useState<ImportReport | null>(null);
   const [showIconPicker, setShowIconPicker] = useState(false);
+  const [selectOptionsInputs, setSelectOptionsInputs] = useState<{ [index: number]: string }>({});
+
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const theme = useTheme();
@@ -125,11 +127,19 @@ export default function CreateTable() {
     setFields([...fields, newField]);
   };
 
-  const handleUpdateField = (index: number, field: Partial<TableField>) => {
-    const updatedFields = [...fields];
-    updatedFields[index] = { ...updatedFields[index], ...field };
-    setFields(updatedFields);
-  };
+const handleUpdateField = (index: number, field: Partial<TableField>) => {
+  const updatedFields = [...fields];
+  updatedFields[index] = { ...updatedFields[index], ...field };
+  setFields(updatedFields);
+
+  // Si se actualiza el tipo a 'select', inicializa el input de opciones si no existe
+  if (field.type === 'select' && selectOptionsInputs[index] === undefined) {
+    setSelectOptionsInputs((prev) => ({
+      ...prev,
+      [index]: updatedFields[index].options?.join(', ') || '',
+    }));
+  }
+};
 
   const handleRemoveField = (index: number) => {
     const updatedFields = fields.filter((_, i) => i !== index);
@@ -467,9 +477,21 @@ export default function CreateTable() {
                       <TextField
                         fullWidth
                         label="Opciones (separadas por comas)"
-                        value={field.options?.join(', ') || ''}
+                        value={selectOptionsInputs[index] ?? field.options?.join(', ') ?? ''}
                         onChange={(e) => {
-                          const options = e.target.value.split(',').map(s => s.trim()).filter(Boolean);
+                          const value = e.target.value;
+                          setSelectOptionsInputs((prev) => ({
+                            ...prev,
+                            [index]: value,
+                          }));
+                          // No actualices field.options aquí, solo el input
+                        }}
+                        onBlur={() => {
+                          // Al salir del input, actualiza el campo real
+                          const options = (selectOptionsInputs[index] ?? '')
+                            .split(',')
+                            .map(s => s.trim())
+                            .filter(Boolean);
                           handleUpdateField(index, { options });
                         }}
                         size="small"
