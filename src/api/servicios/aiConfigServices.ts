@@ -25,9 +25,10 @@ export const fetchAllAiConfigs = async (user: UserProfile) => {
 
 export const updateAiConfig = async (config: Partial<AIConfig>, user: UserProfile) => {
   try {
-    const response = await api.put(`/ia-configs/${user.c_name}`, config);
+    const response = await api.put(`/ia-configs/${user.c_name}/${user.id}`, config);
     return response.data;
   } catch (error) {
+    console.log("error", (error as any).response.data)
     handleError(error as any);
     throw new Error('No se pudo actualizar la configuración de AI');
   }

@@ -8,13 +8,13 @@ import Layout from "./components/Layout";
 import Whatsapp from "./pages/Whatsapp";
 import Users from "./pages/Users";
 import AiConfig from "./pages/AiConfig";
-import { UserProfileTab } from "./components/UserProfileTab";
 import { ChatsTab } from "./pages/Chat";
 import Tables from "./pages/Tables";
 import CreateTable from "./pages/CreateTable";
 import TableRecords from "./pages/TableRecords";
 import RecordForm from "./pages/RecordForm";
 import EditTable from './pages/EditTable';
+import UserProfile from "./pages/UserProfile";
 
 // Tools System imports
 import ToolsDashboard from "./pages/ToolsDashboard";
@@ -68,7 +68,7 @@ export default function App() {
             <Route path="ia" element={<AiConfig />} />
             <Route path="equipos" element={<EquiposPage />} />
             <Route path="whatsapp" element={<Whatsapp />} />
-            <Route path="userProfile" element={<UserProfileTab />} />
+            <Route path="userProfile" element={<UserProfile />} />
             <Route path="tablas" element={<Tables />} />
             <Route path="tablas/nueva" element={<CreateTable />} />
             <Route path="tablas/:tableSlug" element={<TableRecords />} />

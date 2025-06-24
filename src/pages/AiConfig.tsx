@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Chip,
 } from "@mui/material";
 import MuiAlert from '@mui/material/Alert';
 import { simulateAiResponse, updateAiConfig, fetchAllAiConfigs, createAiConfig, deleteAiConfig } from "../api/servicios";
@@ -26,6 +27,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ChatIcon from '@mui/icons-material/Chat';
 import PhoneIcon from '@mui/icons-material/Phone';
+import Loading from '../components/Loading';
 
 
 export default function AiConfig() {
@@ -36,6 +38,7 @@ export default function AiConfig() {
   const [selectedId, setSelectedId] = useState("");
   const [aiConfig, setAiConfig] = useState<Partial<AIConfig>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState('');
@@ -48,7 +51,7 @@ export default function AiConfig() {
     setIsLoading(true);
     const loadData = async () => {
       const data = await fetchAllAiConfigs(user);
-      setAiConfigs(data);
+      console.log("data", data)
       if (data.length > 0) {
         setSelectedId(data[0]._id);
         setAiConfig(data[0]);
@@ -70,6 +73,7 @@ export default function AiConfig() {
   async function handleDeleteAiConfig(cfg: Partial<AIConfig>) {
     if (!window.confirm(`¿Seguro que deseas borrar la IA "${cfg.name}"?`)) return;
     try {
+      setActionLoading(true);
       await deleteAiConfig(cfg._id as string, user);
       setSnackbar({ open: true, message: "Configuración eliminada.", severity: "success" });
       const data = await fetchAllAiConfigs(user);
@@ -80,6 +84,8 @@ export default function AiConfig() {
       }
     } catch (err: any) {
       setSnackbar({ open: true, message: err.message || "Error al borrar.", severity: "error" });
+    } finally {
+      setActionLoading(false);
     }
   }
 
@@ -101,6 +107,7 @@ export default function AiConfig() {
 
 async function saveAiConfig(config: Partial<AIConfig>) {
   try {
+    setActionLoading(true);
     if (isNew) {
       // Crear nuevo
       await createAiConfig(config as AIConfig, user);
@@ -124,6 +131,8 @@ async function saveAiConfig(config: Partial<AIConfig>) {
     }
   } catch (err: any) {
     setSnackbar({ open: true, message: err.message || "Error al guardar.", severity: "error" });
+  } finally {
+    setActionLoading(false);
   }
 }
 
@@ -144,13 +153,7 @@ async function saveAiConfig(config: Partial<AIConfig>) {
     }, 700);
   }
 
-  if (isLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress sx={{ color: '#8B5CF6' }} />
-      </Box>
-    );
-  }
+  console.log("aiConfig.user?.name --->", aiConfig)
 
   return (
     <Box 
@@ -166,6 +169,9 @@ async function saveAiConfig(config: Partial<AIConfig>) {
           : 'rgba(255,255,255,0.96)',
       }}
     >
+      {isLoading && <Loading overlay message="Cargando configuraciones de AI..." />}
+
+      {actionLoading && <Loading overlay message="Procesando acción..." />}
       <Box
         sx={{
           display: 'flex',
@@ -195,6 +201,21 @@ async function saveAiConfig(config: Partial<AIConfig>) {
           >
             Configuración de AI
           </Typography>
+          <Chip
+            label={aiConfig.type || 'General'}
+            color="secondary"
+            sx={{
+              fontWeight: 600,
+              fontSize: '1rem',
+              background: '#E05EFF22',
+              color: '#8B5CF6',
+              px: 2,
+              mr: 2,
+              height: 32,
+              letterSpacing: 1,
+              textTransform: 'uppercase',
+            }}
+          />
           <Box
             sx={{
               display: 'flex',
@@ -433,6 +454,12 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                         },
                       }}
                     />
+                    {/* Mostrar el creador de la IA */}
+                    {aiConfig.user?.name && (
+                      <Typography variant="caption" sx={{ color: '#8B5CF6', fontWeight: 500, ml: 1 }}>
+                        Creado por: {aiConfig.user.name}
+                      </Typography>
+                    )}
                     <TextField
                       label="Mensaje de bienvenida"
                       value={aiConfig.welcomeMessage || ""}
