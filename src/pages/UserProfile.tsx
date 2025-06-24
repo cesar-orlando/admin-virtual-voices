@@ -13,7 +13,11 @@ import {
   Snackbar,
   InputAdornment,
   useTheme,
-  Fade
+  Fade,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
@@ -24,16 +28,20 @@ import CameraAltIcon from '@mui/icons-material/CameraAlt';
 import MuiAlert from '@mui/material/Alert';
 import type { UserProfile } from "../types";
 import { updateUser } from "../api/servicios";
+import { useCompanyStatuses } from "../hooks/useCompanyStatuses";
 
 export default function UserProfile() {
   const theme = useTheme();
   const userFromStorage = JSON.parse(localStorage.getItem("user") || "{}") as UserProfile;
+  const { statuses } = useCompanyStatuses();
+  
   const existingUser = {
     name: userFromStorage.name,
     email: userFromStorage.email,
     password: "",
     role: userFromStorage.role,
     company: userFromStorage.c_name,
+    status: userFromStorage.status || statuses[0] || 'Activo',
     profilePic: "https://i.pravatar.cc/150?img=3"
   };
   const [user, setUser] = useState(existingUser);
@@ -74,12 +82,14 @@ export default function UserProfile() {
       return;
     }
     try {
-      await updateUser(
-        user.name,
-        user.email,
-        user.password,
-        existingUser.company || ""
-      );
+      await updateUser(userFromStorage.id, {
+        name: user.name,
+        email: user.email,
+        password: user.password,
+        role: user.role,
+        status: user.status,
+        c_name: user.company
+      });
       setEdit(false);
       setSnackbar({ open: true, message: "Perfil actualizado correctamente", severity: "success" });
     } catch {
@@ -249,6 +259,24 @@ export default function UserProfile() {
             >
               {user.role?.toUpperCase() || 'USUARIO'}
             </Box>
+            <Box
+              sx={{
+                px: 2,
+                py: 0.5,
+                borderRadius: 99,
+                background: user.status === 'Activo' 
+                  ? 'linear-gradient(90deg, #10B98111 0%, #05966911 100%)'
+                  : 'linear-gradient(90deg, #EF444411 0%, #DC262611 100%)',
+                color: user.status === 'Activo' ? '#10B981' : '#EF4444',
+                fontWeight: 600,
+                fontSize: '0.95rem',
+                letterSpacing: 1,
+                textTransform: 'uppercase',
+                fontFamily: 'Montserrat, Arial, sans-serif',
+              }}
+            >
+              {user.status?.toUpperCase() || 'ACTIVO'}
+            </Box>
           </Box>
           <Box component="form" autoComplete="off" sx={{ width: '100%' }}>
             <TextField
@@ -312,6 +340,31 @@ export default function UserProfile() {
                 }
               }}
             />
+            <FormControl fullWidth margin="normal" disabled={!edit}>
+              <InputLabel sx={{ color: '#8B5CF6', fontWeight: 600 }}>Estado</InputLabel>
+              <Select
+                name="status"
+                value={user.status}
+                onChange={handleChange}
+                sx={{
+                  borderRadius: 12,
+                  background: 'rgba(255,255,255,0.7)',
+                  '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E05EFF11' },
+                  '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#8B5CF6' },
+                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#E05EFF' },
+                  '& .MuiSelect-select': { 
+                    color: theme.palette.mode === 'dark' ? '#fff' : '#23243a', 
+                    fontWeight: 600 
+                  }
+                }}
+              >
+                {statuses.map((status) => (
+                  <MenuItem key={status} value={status}>
+                    {status}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <TextField
               label="Contraseña"
               name="password"

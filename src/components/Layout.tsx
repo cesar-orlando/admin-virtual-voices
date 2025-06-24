@@ -15,6 +15,14 @@ import {
   Fade,
   Badge,
   Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  TextField,
+  Chip,
+  Stack,
 } from "@mui/material";
 import MenuIcon from "@mui/icons-material/Menu";
 import NotificationsIcon from "@mui/icons-material/Notifications";
@@ -24,6 +32,9 @@ import { getVirtualVoicesTheme } from "../theme/virtualVoicesTheme";
 import { ThemeProvider } from "@mui/material/styles";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
+import SettingsIcon from '@mui/icons-material/Settings';
+import Loading from './Loading';
+import { getCompanyConfig, updateCompanyConfig } from '../api/servicios/aiConfigServices';
 
 const collapsedWidth = 72;
 const expandedWidth = 240;
@@ -86,6 +97,46 @@ export default function Layout() {
   }, [location.pathname]);
 
   const navigate = useNavigate();
+
+  // Estado de empresa
+  const [companyConfigOpen, setCompanyConfigOpen] = useState(false);
+  const [companyLoading, setCompanyLoading] = useState(false);
+  const [companyLogo, setCompanyLogo] = useState('');
+  const [companyDisplayName, setCompanyDisplayName] = useState('');
+  const [companyStatuses, setCompanyStatuses] = useState<string[]>([]);
+  const [newStatus, setNewStatus] = useState('');
+
+  // Cargar datos reales de la empresa al abrir el modal
+  useEffect(() => {
+    if (companyConfigOpen) {
+      setCompanyLoading(true);
+      getCompanyConfig(user.c_name)
+        .then(data => {
+          console.log("data company", data)
+          setCompanyLogo(data.logoUrl || '');
+          setCompanyDisplayName(data.displayName || '');
+          setCompanyStatuses(data.statuses || ["Activo", "Inactivo"]);
+        })
+        .finally(() => setCompanyLoading(false));
+    }
+  }, [companyConfigOpen, user.c_name]);
+
+  // Guardar cambios en la base de datos
+  const handleSaveCompanyConfig = async () => {
+    setCompanyLoading(true);
+    try {
+      await updateCompanyConfig(user.c_name, {
+        displayName: companyDisplayName,
+        logoUrl: companyLogo,
+        statuses: companyStatuses
+      });
+      setCompanyConfigOpen(false);
+    } catch (err) {
+      alert('Error al guardar la configuración de la empresa.');
+    } finally {
+      setCompanyLoading(false);
+    }
+  };
 
   return (
     <ThemeProvider theme={theme}>
@@ -171,6 +222,28 @@ export default function Layout() {
                 />
                 <DarkModeIcon sx={{ color: mode === 'dark' ? '#8B5CF6' : '#BDBDBD', fontSize: 20 }} />
               </Box>
+              {/* Configuración de empresa solo para admin */}
+              {user.role === 'admin' && (
+                <Tooltip title="Configuración de empresa">
+                  <IconButton
+                    color="inherit"
+                    onClick={() => setCompanyConfigOpen(true)}
+                    aria-label="Configuración de empresa"
+                    sx={{
+                      background: theme.palette.mode === 'dark' 
+                        ? 'rgba(30,30,40,0.5)' 
+                        : 'rgba(255,255,255,0.5)',
+                      '&:hover': {
+                        background: theme.palette.mode === 'dark'
+                          ? 'rgba(139, 92, 246, 0.1)'
+                          : 'rgba(139, 92, 246, 0.05)',
+                      },
+                    }}
+                  >
+                    <SettingsIcon sx={{ fontSize: 22, color: theme.palette.mode === 'dark' ? '#E05EFF' : '#8B5CF6' }} />
+                  </IconButton>
+                </Tooltip>
+              )}
             </Box>
           </Toolbar>
         </AppBar>
@@ -250,6 +323,88 @@ export default function Layout() {
             ))}
           </Box>
         )}
+        {/* Modal de configuración de empresa */}
+        <Dialog open={companyConfigOpen} onClose={() => setCompanyConfigOpen(false)} maxWidth="sm" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700, color: '#8B5CF6', fontFamily: 'Montserrat, Arial, sans-serif' }}>
+            Configuración de Empresa
+          </DialogTitle>
+          <DialogContent dividers>
+            {companyLoading ? (
+              <Loading overlay message="Cargando configuración de empresa..." />
+            ) : (
+            <Stack spacing={3}>
+              <Box display="flex" alignItems="center" gap={2}>
+                <Avatar src={companyLogo} sx={{ width: 64, height: 64, border: '2px solid #8B5CF6' }} />
+                <Button variant="outlined" component="label" sx={{ color: '#8B5CF6', borderColor: '#8B5CF6' }}>
+                  Subir Logo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = ev => {
+                          if (typeof ev.target?.result === 'string') setCompanyLogo(ev.target.result);
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                </Button>
+              </Box>
+              <TextField
+                label="Nombre visible de la empresa"
+                value={companyDisplayName}
+                onChange={e => setCompanyDisplayName(e.target.value)}
+                fullWidth
+              />
+              <Box>
+                <Typography fontWeight={600} mb={1} color="#8B5CF6">Estatus permitidos</Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {companyStatuses.map((status, idx) => (
+                    <Chip
+                      key={status}
+                      label={status}
+                      color="secondary"
+                      onDelete={companyStatuses.length > 2 ? () => setCompanyStatuses(companyStatuses.filter((_, i) => i !== idx)) : undefined}
+                      sx={{ mb: 1, fontWeight: 600, background: '#E05EFF11', color: '#8B5CF6' }}
+                    />
+                  ))}
+                </Stack>
+                <Box display="flex" gap={1} mt={2}>
+                  <TextField
+                    label="Nuevo estatus"
+                    value={newStatus}
+                    onChange={e => setNewStatus(e.target.value)}
+                    size="small"
+                  />
+                  <Button
+                    variant="contained"
+                    disabled={!newStatus.trim()}
+                    onClick={() => {
+                      if (newStatus && !companyStatuses.includes(newStatus)) {
+                        setCompanyStatuses([...companyStatuses, newStatus]);
+                        setNewStatus('');
+                      }
+                    }}
+                    sx={{ background: '#8B5CF6', color: '#fff', fontWeight: 700 }}
+                  >
+                    Agregar
+                  </Button>
+                </Box>
+              </Box>
+            </Stack>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setCompanyConfigOpen(false)} color="secondary" disabled={companyLoading}>Cancelar</Button>
+            <Button variant="contained" sx={{ background: '#8B5CF6', fontWeight: 700 }} onClick={handleSaveCompanyConfig} disabled={companyLoading}>
+              {companyLoading ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </ThemeProvider>
   );

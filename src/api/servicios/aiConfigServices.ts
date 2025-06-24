@@ -56,3 +56,13 @@ export const simulateAiResponse = async (user: UserProfile, messages: Array<{ fr
     throw new Error('No se pudo simular la respuesta de AI');
   }
 };
+
+export const getCompanyConfig = async (companyName: string) => {
+  const response = await api.get(`/companies/${companyName}`);
+  return response.data[0];
+};
+
+export const updateCompanyConfig = async (companyName: string, data: Partial<{ displayName: string; logoUrl: string; statuses: string[] }>) => {
+  const response = await api.patch(`/companies/${companyName}`, data);
+  return response.data;
+};

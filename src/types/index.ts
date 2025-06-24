@@ -12,6 +12,7 @@ export interface UserProfile {
   email: string
   c_name: string
   role?: UserRole
+  status?: 'active' | 'inactive'
 }
 
 export interface UserProfileToken extends UserProfile {
