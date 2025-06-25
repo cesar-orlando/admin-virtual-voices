@@ -73,6 +73,35 @@ interface ImportReport {
   errors: { index: number; error: string }[];
 }
 
+// Utilidad para normalizar encabezados
+function normalizeHeader(header: string, index: number, existing: Set<string>): string {
+  let base = header
+    ? header
+        .toString()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+    : `campo_${index + 1}`;
+  let name = base;
+  let count = 1;
+  while (existing.has(name)) {
+    name = `${base}_${count++}`;
+  }
+  existing.add(name);
+  return name;
+}
+
+// Utilidad para detectar tipo de campo
+function detectType(values: any[]): string {
+  const nonEmpty = values.filter((v: any) => v !== undefined && v !== null && v !== '');
+  if (nonEmpty.length === 0) return 'text';
+  if (nonEmpty.every((v: any) => typeof v === 'number' || (!isNaN(Number(v)) && v !== ''))) return 'number';
+  if (nonEmpty.every((v: any) => !isNaN(Date.parse(v)))) return 'date';
+  if (nonEmpty.every((v: any) => ['true', 'false', '1', '0'].includes(String(v).toLowerCase()))) return 'boolean';
+  return 'text';
+}
+
 export default function CreateTable() {
   const [activeStep, setActiveStep] = useState(0);
   const [tableName, setTableName] = useState('');
@@ -162,50 +191,54 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        
-        // Extraer los encabezados de la primera fila
-        const headers: string[] = (XLSX.utils.sheet_to_json(worksheet, { header: 1 })[0] as string[]);
-        if (!headers || headers.length === 0) {
-            throw new Error("El archivo de Excel no contiene encabezados en la primera fila.");
-        }
+        const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        if (!rows || rows.length === 0) throw new Error('El archivo está vacío.');
 
-        // Crear los campos a partir de los encabezados
-        const newFields: TableField[] = headers.map((header, index) => ({
-          name: generateSlug(String(header)).replace(/-/g, '_'),
-          label: String(header),
-          type: 'text',
+        // ¿La primera fila es encabezado?
+        let headers = rows[0];
+        let dataStart = 1;
+        let hasHeader = headers.every(h => typeof h === 'string' && h.trim() !== '');
+        if (!hasHeader) {
+          // Si la primera fila no es encabezado, genera nombres genéricos
+          headers = Array.from({ length: rows[0].length }, (_, i) => `campo_${i + 1}`);
+          dataStart = 0;
+        }
+        // Normaliza encabezados y asegura unicidad
+        const existing: Set<string> = new Set();
+        const normalizedHeaders = headers.map((h: string, i: number) => normalizeHeader(h, i, existing));
+
+        // Extrae columnas para detección de tipo
+        const columns = normalizedHeaders.map((_, colIdx) => rows.slice(dataStart).map(row => row[colIdx]));
+        const types = columns.map(col => detectType(col));
+
+        // Crea los campos sugeridos
+        const newFields: TableField[] = normalizedHeaders.map((name, i) => ({
+          name,
+          label: headers[i] || name,
+          type: types[i] as FieldType,
           required: false,
-          order: index + 1,
+          order: i + 1,
           width: 150,
         }));
         setFields(newFields);
 
-        // Extraer los registros (filas de datos)
-        const recordsData: any[] = XLSX.utils.sheet_to_json(worksheet);
-
         // Mapear los datos de los registros para usar los nombres de campo internos (slugs)
-        const formattedRecords = recordsData.map(row => {
-            const newRow: Record<string, any> = {};
-            newFields.forEach(field => {
-                if (row[field.label] !== undefined) {
-                    newRow[field.name] = row[field.label];
-                }
-            });
-            return newRow;
+        const recordsData: any[] = rows.slice(dataStart).map(row => {
+          const newRow: Record<string, any> = {};
+          normalizedHeaders.forEach((name, i) => {
+            newRow[name] = row[i];
+          });
+          return newRow;
         });
-        setImportedRecords(formattedRecords);
-        console.log('Registros formateados desde Excel:', formattedRecords);
-        
+        setImportedRecords(recordsData);
         // Sugerir nombre de tabla basado en el nombre del archivo
         handleNameChange(file.name.replace(/\.(xlsx|xls|csv)$/, ''));
-        
       } catch (err) {
-         console.error("Error parsing Excel file:", err);
-         setFormErrors({ general: err instanceof Error ? err.message : "Error al procesar el archivo. Asegúrate de que sea un formato válido." });
+        setFormErrors({ general: err instanceof Error ? err.message : 'Error al procesar el archivo. Asegúrate de que sea un formato válido.' });
       } finally {
-         if (fileInputRef.current) {
-           fileInputRef.current.value = '';
-         }
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
       }
     };
     reader.readAsArrayBuffer(file);
