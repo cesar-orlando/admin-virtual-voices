@@ -1,32 +1,33 @@
-import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { UserProvider } from "./context/useAuth";
-import { useAuth } from "./hooks/useAuth";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Layout from "./components/Layout";
-import Whatsapp from "./pages/Whatsapp";
-import Users from "./pages/Users";
-import AiConfig from "./pages/AiConfig";
-import { ChatsTab } from "./pages/Chat";
-import Tables from "./pages/Tables";
-import CreateTable from "./pages/CreateTable";
-import TableRecords from "./pages/TableRecords";
-import RecordForm from "./pages/RecordForm";
-import EditTable from './pages/EditTable';
-import UserProfile from "./pages/UserProfile";
+import React from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { UserProvider } from './context/useAuth'
+import { useAuth } from './hooks/useAuth'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import Layout from './components/Layout'
+import Whatsapp from './pages/Whatsapp'
+import Users from './pages/Users'
+import AiConfig from './pages/AiConfig'
+import { ChatsTab } from './pages/Chat'
+import Tables from './pages/Tables'
+import CreateTable from './pages/CreateTable'
+import TableRecords from './pages/TableRecords'
+import RecordForm from './pages/RecordForm'
+import EditTable from './pages/EditTable'
+import UserProfile from './pages/UserProfile'
+import Metrics from './pages/Metrics'
 
 // Tools System imports
-import ToolsDashboard from "./pages/ToolsDashboard";
-import ToolsList from "./pages/ToolsList";
-import ToolForm from "./pages/ToolForm";
-import ToolTester from "./pages/ToolTester";
-import ToolsTest from "./pages/ToolsTest";
+import ToolsDashboard from './pages/ToolsDashboard'
+import ToolsList from './pages/ToolsList'
+import ToolForm from './pages/ToolForm'
+import ToolTester from './pages/ToolTester'
+import ToolsTest from './pages/ToolsTest'
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
-  const { user } = useAuth();
-  if (!user) return <Navigate to="/login" replace />;
-  return <>{children}</>;
+  const { user } = useAuth()
+  if (!user) return <Navigate to="/login" replace />
+  return <>{children}</>
 }
 
 function DashboardPage() {
@@ -35,7 +36,7 @@ function DashboardPage() {
       <h1>Dashboard</h1>
       <p>Bienvenido al dashboard de Virtual Voices</p>
     </div>
-  );
+  )
 }
 
 function EquiposPage() {
@@ -44,11 +45,11 @@ function EquiposPage() {
       <h1>Equipos</h1>
       <p>Gestión de equipos</p>
     </div>
-  );
+  )
 }
 
 export default function App() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
   return (
     <BrowserRouter>
       <UserProvider>
@@ -64,6 +65,7 @@ export default function App() {
             }
           >
             <Route index element={<DashboardPage />} />
+            <Route path="metricas" element={<Metrics />} />
             <Route path="usuarios" element={<Users />} />
             <Route path="ia" element={<AiConfig />} />
             <Route path="equipos" element={<EquiposPage />} />
@@ -75,7 +77,7 @@ export default function App() {
             <Route path="tablas/:tableSlug/editar" element={<EditTable />} />
             <Route path="tablas/:tableSlug/nuevo" element={<RecordForm />} />
             <Route path="tablas/:tableSlug/editar/:recordId" element={<RecordForm />} />
-            
+
             {/* Tools System Routes */}
             <Route path="herramientas-dashboard" element={<ToolsDashboard />} />
             <Route path="herramientas" element={<ToolsList />} />
@@ -84,14 +86,12 @@ export default function App() {
             <Route path="herramientas/:toolId/test" element={<ToolTester />} />
             <Route path="herramientas/tester" element={<ToolTester />} />
             <Route path="herramientas-test" element={<ToolsTest />} />
-            
-            {user.role === "Admin" && (
-              <Route path="chats" element={<ChatsTab />} />
-            )}
+
+            <Route path="chats" element={<ChatsTab />} />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>
       </UserProvider>
     </BrowserRouter>
-  );
+  )
 }

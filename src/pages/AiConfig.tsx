@@ -55,6 +55,7 @@ export default function AiConfig() {
       if (data.length > 0) {
         setSelectedId(data[0]._id);
         setAiConfig(data[0]);
+        setAiConfigs(data);
       }
       setIsLoading(false);
     };

@@ -11,9 +11,7 @@ export const updateUser = async (userId: string, userData: {
   c_name: string;
 }) => {
   try{
-  console.log('updateUser called with:', { userId, userData });
   const response = await api.put<UserProfile>(`/users/${userId}`, userData);
-  console.log('updateUser response:', response);
   return response.data;
 } catch (error) {
   handleError(error as any);
