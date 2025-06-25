@@ -34,6 +34,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useTools, useCategories, useValidation } from '../hooks/useTools';
 import type { ITool, CreateToolRequest, UpdateToolRequest, ParameterProperty } from '../types';
+import { getTables, getTableStructure } from '../api/servicios/dynamicTableServices';
+import { useAuth } from '../hooks/useAuth';
 
 // Schema de validación
 const toolSchema = z.object({
@@ -145,6 +147,12 @@ const ToolForm: React.FC = () => {
   const { useCreateTool, useUpdateTool, useToolById, useTestTool } = useTools();
   const { useCategoriesList } = useCategories();
   const { useValidateEndpoint, useValidateSchema } = useValidation();
+  const { user } = useAuth();
+  const [dynamicTables, setDynamicTables] = useState<any[]>([]);
+  const [selectedTable, setSelectedTable] = useState<any | null>(null);
+  const [loadingTables, setLoadingTables] = useState(false);
+  const [loadingFields, setLoadingFields] = useState(false);
+  const [advancedMode, setAdvancedMode] = useState(false);
 
   // Queries
   const { data: toolData, isLoading: toolLoading } = useToolById(toolId || '');
@@ -207,7 +215,40 @@ const ToolForm: React.FC = () => {
     }
   }, [isEdit, tool, reset]);
 
+  useEffect(() => {
+    if (activeStep === 1 && user) {
+      setLoadingTables(true);
+      getTables(user)
+        .then(res => setDynamicTables(res.tables || []))
+        .catch(() => setDynamicTables([]))
+        .finally(() => setLoadingTables(false));
+    }
+  }, [activeStep, user]);
+
   const watchedValues = watch();
+
+  // --- Generador de nombre técnico ---
+  function normalizeTechnicalName(str: string) {
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // quita acentos
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_') // todo lo que no sea letra/num a _
+      .replace(/^_+|_+$/g, ''); // quita _ al inicio/fin
+  }
+
+  useEffect(() => {
+    // Solo si no es edición (para no sobreescribir en modo edición)
+    if (!isEdit) {
+      const displayName = watch('displayName');
+      if (displayName) {
+        let technical = normalizeTechnicalName(displayName);
+        setValue('name', technical);
+      } else {
+        setValue('name', '');
+      }
+    }
+  }, [watch('displayName'), isEdit, setValue]);
 
   const handleNext = async () => {
     const fieldsToValidate = getFieldsForStep(activeStep);
@@ -291,6 +332,46 @@ const ToolForm: React.FC = () => {
         return ['security'];
       default:
         return [];
+    }
+  };
+
+  // Cuando selecciona una tabla
+  const handleSelectTable = async (slug: string) => {
+    if (!slug || !user) {
+      setSelectedTable(null);
+      setValue('config.endpoint', '');
+      setValue('parameters', defaultValues.parameters);
+      return;
+    }
+    setLoadingFields(true);
+    const table = dynamicTables.find(t => t.slug === slug);
+    setSelectedTable(table);
+    // Endpoint autogenerado
+    setValue('config.endpoint', `/records/table/${user.c_name}/${slug}`);
+    // Obtener estructura y mapear a parámetros
+    try {
+      const structure = await getTableStructure(slug, user);
+      const properties: any = {};
+      const required: string[] = [];
+      (structure.fields || []).forEach((field: any) => {
+        properties[field.name] = {
+          type: field.type === 'int' ? 'number' : field.type, // Ajusta según tus tipos
+          description: field.label || field.name,
+          required: !!field.required,
+          default: field.defaultValue,
+          enum: field.options || undefined,
+        };
+        if (field.required) required.push(field.name);
+      });
+      setValue('parameters', {
+        type: 'object',
+        properties,
+        required,
+      });
+    } catch {
+      setValue('parameters', defaultValues.parameters);
+    } finally {
+      setLoadingFields(false);
     }
   };
 
@@ -397,22 +478,6 @@ const ToolForm: React.FC = () => {
                     <Grid container spacing={3}>
                       <Grid item xs={12} sm={6}>
                         <Controller
-                          name="name"
-                          control={control}
-                          render={({ field }) => (
-                            <TextField
-                              {...field}
-                              fullWidth
-                              label="Nombre Técnico"
-                              placeholder="get_customer_data"
-                              error={!!errors.name}
-                              helperText={errors.name?.message || 'Solo letras, números, guiones y guiones bajos'}
-                            />
-                          )}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={6}>
-                        <Controller
                           name="displayName"
                           control={control}
                           render={({ field }) => (
@@ -423,6 +488,23 @@ const ToolForm: React.FC = () => {
                               placeholder="Obtener Datos del Cliente"
                               error={!!errors.displayName}
                               helperText={errors.displayName?.message}
+                            />
+                          )}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Controller
+                          name="name"
+                          control={control}
+                          render={({ field }) => (
+                            <TextField
+                              {...field}
+                              fullWidth
+                              label="Nombre Técnico"
+                              placeholder="get_customer_data"
+                              error={!!errors.name}
+                              helperText={errors.name?.message || 'Se genera automáticamente a partir del nombre para mostrar'}
+                              disabled
                             />
                           )}
                         />
@@ -475,6 +557,44 @@ const ToolForm: React.FC = () => {
                     </Typography>
                     <Grid container spacing={3}>
                       <Grid item xs={12}>
+                        {/* Selector de tabla dinámica */}
+                        <FormControl fullWidth sx={{ mb: 2 }}>
+                          <InputLabel>Selecciona una tabla dinámica</InputLabel>
+                          <Select
+                            value={selectedTable?.slug || ''}
+                            label="Selecciona una tabla dinámica"
+                            onChange={e => handleSelectTable(e.target.value)}
+                            disabled={loadingTables}
+                          >
+                            <MenuItem value="">Ninguna (endpoint manual)</MenuItem>
+                            {dynamicTables.map((table) => (
+                              <MenuItem key={table.slug} value={table.slug}>
+                                {table.name}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                        {/* Switch para modo avanzado */}
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={advancedMode}
+                              onChange={(_, checked) => {
+                                setAdvancedMode(checked);
+                                if (checked) {
+                                  setSelectedTable(null);
+                                  setValue('config.endpoint', '');
+                                  setValue('parameters', defaultValues.parameters);
+                                }
+                              }}
+                              color="primary"
+                            />
+                          }
+                          label="Modo avanzado (endpoint manual)"
+                          sx={{ mb: 2 }}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
                         <Controller
                           name="config.endpoint"
                           control={control}
@@ -486,6 +606,7 @@ const ToolForm: React.FC = () => {
                               placeholder="https://api.example.com/endpoint"
                               error={!!errors.config?.endpoint}
                               helperText={errors.config?.endpoint?.message}
+                              disabled={!!selectedTable && !advancedMode}
                             />
                           )}
                         />
@@ -525,6 +646,7 @@ const ToolForm: React.FC = () => {
                         />
                       </Grid>
                     </Grid>
+                    {loadingFields && <CircularProgress size={24} sx={{ mt: 2 }} />}
                   </Box>
                 )}
 
