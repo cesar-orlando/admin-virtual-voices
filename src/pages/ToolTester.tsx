@@ -39,7 +39,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useForm, Controller } from 'react-hook-form';
 import { useTools } from '../hooks/useTools';
-import type { ITool, ToolTestRequest } from '../types';
+import type { ITool, ToolTestRequest, ParameterProperty } from '../types';
 
 interface TestResult {
   success: boolean;
@@ -91,13 +91,14 @@ const ToolTester: React.FC = () => {
       const defaultParams: Record<string, any> = {};
       
       Object.entries(tool.parameters.properties).forEach(([key, param]) => {
-        if (param.default !== undefined) {
-          defaultParams[key] = param.default;
+        const typedParam = param as ParameterProperty;
+        if (typedParam.default !== undefined) {
+          defaultParams[key] = typedParam.default;
         } else {
           // Valores por defecto según el tipo
-          switch (param.type) {
+          switch (typedParam.type) {
             case 'string':
-              defaultParams[key] = param.enum ? param.enum[0] || '' : '';
+              defaultParams[key] = typedParam.enum && typedParam.enum.length > 0 ? typedParam.enum[0] : '';
               break;
             case 'number':
               defaultParams[key] = 0;
@@ -181,27 +182,28 @@ const ToolTester: React.FC = () => {
   };
 
   const renderParameterField = (paramName: string, param: any) => {
+    const typedParam = param as ParameterProperty;
     const fieldProps = {
       fullWidth: true,
       size: 'small' as const,
-      label: param.description || paramName,
+      label: typedParam.description || paramName,
       error: !!(errors as any)[paramName],
       helperText: (errors as any)[paramName]?.message,
     };
 
-    switch (param.type) {
+    switch (typedParam.type) {
       case 'string':
-        if (param.enum) {
+        if (typedParam.enum && typedParam.enum.length > 0) {
           return (
             <Controller
               name={paramName}
               control={control}
-              rules={{ required: param.required }}
+              rules={{ required: typedParam.required }}
               render={({ field }) => (
                 <FormControl {...fieldProps}>
-                  <InputLabel>{param.description || paramName}</InputLabel>
-                  <Select {...field} label={param.description || paramName}>
-                    {param.enum.map((option: string) => (
+                  <InputLabel>{typedParam.description || paramName}</InputLabel>
+                  <Select {...field} label={typedParam.description || paramName}>
+                    {typedParam.enum?.map((option: string) => (
                       <MenuItem key={option} value={option}>
                         {option}
                       </MenuItem>
@@ -216,13 +218,13 @@ const ToolTester: React.FC = () => {
           <Controller
             name={paramName}
             control={control}
-            rules={{ required: param.required }}
+            rules={{ required: typedParam.required }}
             render={({ field }) => (
               <TextField
                 {...field}
                 {...fieldProps}
-                type={param.format === 'email' ? 'email' : 'text'}
-                placeholder={param.format === 'email' ? 'ejemplo@email.com' : `Ingresa ${paramName}`}
+                type={typedParam.format === 'email' ? 'email' : 'text'}
+                placeholder={typedParam.format === 'email' ? 'ejemplo@email.com' : `Ingresa ${paramName}`}
               />
             )}
           />
@@ -233,7 +235,7 @@ const ToolTester: React.FC = () => {
           <Controller
             name={paramName}
             control={control}
-            rules={{ required: param.required }}
+            rules={{ required: typedParam.required }}
             render={({ field }) => (
               <TextField
                 {...field}
@@ -253,8 +255,8 @@ const ToolTester: React.FC = () => {
             control={control}
             render={({ field }) => (
               <FormControl {...fieldProps}>
-                <InputLabel>{param.description || paramName}</InputLabel>
-                <Select {...field} label={param.description || paramName}>
+                <InputLabel>{typedParam.description || paramName}</InputLabel>
+                <Select {...field} label={typedParam.description || paramName}>
                   <MenuItem value="true">Verdadero</MenuItem>
                   <MenuItem value="false">Falso</MenuItem>
                 </Select>
@@ -268,7 +270,7 @@ const ToolTester: React.FC = () => {
           <Controller
             name={paramName}
             control={control}
-            rules={{ required: param.required }}
+            rules={{ required: typedParam.required }}
             render={({ field }) => (
               <TextField
                 {...field}
