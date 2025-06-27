@@ -64,7 +64,7 @@ export function ChatsTab() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' })
 
   useEffect(() => {
-    const socket = io('http://localhost:3001') // Use your backend URL
+    const socket = io(import.meta.env.VITE_SOCKET_URL) // Use environment variable
 
     // Listen for new whatsapp-message events
     socket.on(`whatsapp-message-${user.c_name}`, (newMessageData: Message) => {

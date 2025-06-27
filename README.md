@@ -62,20 +62,45 @@ npm run dev
 
 ## ⚙️ Variables de Entorno
 
-Crea un archivo `.env` con:
+Crea un archivo `.env` en la raíz del proyecto con las siguientes variables:
 
 ```bash
 # API Configuration
-VITE_API_URL=http://localhost:3001/api
+VITE_API_BASE_URL=http://localhost:3001/api
 VITE_SOCKET_URL=http://localhost:3001
 
-# App Configuration
-VITE_APP_NAME="Virtual Voices"
-VITE_APP_VERSION="1.0.0"
+# Environment
+VITE_ENV=development
 
-# Development
-VITE_DEBUG=true
+# App Configuration
+VITE_APP_NAME="VirtualVoices Admin"
+VITE_APP_VERSION="1.0.0"
 ```
+
+### Configuración por Entorno
+
+#### Desarrollo
+```bash
+VITE_API_BASE_URL=http://localhost:3001/api
+VITE_SOCKET_URL=http://localhost:3001
+VITE_ENV=development
+```
+
+#### Producción
+```bash
+VITE_API_BASE_URL=https://api.tuapp.com/api
+VITE_SOCKET_URL=https://api.tuapp.com
+VITE_ENV=production
+```
+
+#### Staging
+```bash
+VITE_API_BASE_URL=https://staging.api.tuapp.com/api
+VITE_SOCKET_URL=https://staging.api.tuapp.com
+VITE_ENV=staging
+```
+
+**⚠️ Importante**: Nunca subas el archivo `.env` al repositorio. Asegúrate de que esté en `.gitignore`.
 
 ## 📝 Comandos Disponibles
 

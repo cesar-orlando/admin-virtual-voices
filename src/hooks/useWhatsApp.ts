@@ -38,7 +38,7 @@ export function useWhatsApp(user: UserProfile): UseWhatsAppReturn {
 
   // Inicializar socket connection
   useEffect(() => {
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001'
+    const socketUrl = import.meta.env.VITE_SOCKET_URL;
     const socketInstance = io(socketUrl)
 
     // Escuchar eventos de QR específicos para el usuario

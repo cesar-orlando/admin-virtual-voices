@@ -153,7 +153,7 @@ const mockCategories = [
 
 const ENV_OPTIONS = [
   { value: 'production', label: 'Producción', baseUrl: 'https://api.tuapp.com' },
-  { value: 'development', label: 'Desarrollo', baseUrl: 'http://localhost:3001/api' },
+  { value: 'development', label: 'Desarrollo', baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api' },
   { value: 'staging', label: 'Staging', baseUrl: 'https://staging.api.tuapp.com' },
   { value: 'other', label: 'Otro', baseUrl: '' },
 ];

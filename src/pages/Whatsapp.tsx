@@ -25,7 +25,7 @@ export default function Whatsapp() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   useEffect(() => {
-    const socket = io("http://localhost:3001");
+    const socket = io(import.meta.env.VITE_SOCKET_URL);
     
     // Escuchar el evento de QR
     socket.on(`whatsapp-qr-${user.c_name}-${user.id}`, (data) => {
