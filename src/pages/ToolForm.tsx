@@ -19,6 +19,16 @@ import {
   FormControlLabel,
   Alert,
   CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  IconButton as MuiIconButton,
+  Tooltip,
+  Chip as MuiChip,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -26,6 +36,9 @@ import {
   ArrowBack as BackIcon,
   ArrowForward as NextIcon,
   Warning as WarningIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -55,6 +68,7 @@ const toolSchema = z.object({
       password: z.string().optional(),
     }).optional(),
     timeout: z.number().min(1000).max(60000).optional(),
+    environment: z.string().optional(),
   }),
   parameters: z.object({
     type: z.literal('object'),
@@ -114,6 +128,8 @@ const defaultValues: ToolFormData = {
     headers: {},
     authType: 'none',
     timeout: 15000,
+    environment: '',
+    authConfig: {},
   },
   parameters: {
     type: 'object',
@@ -135,6 +151,28 @@ const mockCategories = [
   { _id: '4', name: 'analytics', displayName: 'Analytics' },
 ];
 
+const ENV_OPTIONS = [
+  { value: 'production', label: 'Producción', baseUrl: 'https://api.tuapp.com' },
+  { value: 'development', label: 'Desarrollo', baseUrl: 'http://localhost:3001/api' },
+  { value: 'staging', label: 'Staging', baseUrl: 'https://staging.api.tuapp.com' },
+  { value: 'other', label: 'Otro', baseUrl: '' },
+];
+
+// Tipos para el parámetro dinámico
+const PARAM_TYPES = [
+  { value: 'string', label: 'Texto' },
+  { value: 'number', label: 'Número' },
+  { value: 'boolean', label: 'Booleano' },
+  { value: 'array', label: 'Arreglo' },
+];
+const STRING_FORMATS = [
+  { value: 'email', label: 'Email' },
+  { value: 'phone', label: 'Teléfono' },
+  { value: 'date', label: 'Fecha' },
+  { value: 'url', label: 'URL' },
+  { value: 'uuid', label: 'UUID' },
+];
+
 const ToolForm: React.FC = () => {
   const navigate = useNavigate();
   const { toolId } = useParams();
@@ -153,6 +191,10 @@ const ToolForm: React.FC = () => {
   const [loadingTables, setLoadingTables] = useState(false);
   const [loadingFields, setLoadingFields] = useState(false);
   const [advancedMode, setAdvancedMode] = useState(false);
+  const [functionTypes, setFunctionTypes] = useState<any[]>([]);
+  const [functionType, setFunctionType] = useState<string>('');
+  const [functionTypesLoading, setFunctionTypesLoading] = useState(false);
+  const [functionTypesError, setFunctionTypesError] = useState<string | null>(null);
 
   // Queries
   const { data: toolData, isLoading: toolLoading } = useToolById(toolId || '');
@@ -182,6 +224,8 @@ const ToolForm: React.FC = () => {
     mode: 'onChange',
   });
 
+  const activeEnv = (import.meta.env.MODE || process.env.NODE_ENV || 'production').toLowerCase();
+
   // Verificar si hay IA configurada
   useEffect(() => {
     const checkAIConfig = async () => {
@@ -208,7 +252,10 @@ const ToolForm: React.FC = () => {
         displayName: tool.displayName,
         description: tool.description,
         category: tool.category,
-        config: tool.config,
+        config: {
+          ...tool.config,
+          authConfig: tool.config?.authConfig ?? {},
+        },
         parameters: tool.parameters,
         security: tool.security,
       });
@@ -249,6 +296,43 @@ const ToolForm: React.FC = () => {
       }
     }
   }, [watch('displayName'), isEdit, setValue]);
+
+  useEffect(() => {
+    // Set default environment on mount
+    if (!isEdit && !watch('config.environment')) {
+      const found = ENV_OPTIONS.find(opt => activeEnv.includes(opt.value));
+      setValue('config.environment', found ? found.value : 'production');
+    }
+  }, []);
+
+  // Cuando cambia el environment, si es tabla dinámica, actualiza el endpoint
+  useEffect(() => {
+    const envValue = watch('config.environment');
+    if (selectedTable && envValue && user) {
+      const envOpt = ENV_OPTIONS.find(opt => opt.value === envValue);
+      if (envOpt && envOpt.baseUrl) {
+        setValue('config.endpoint', `${envOpt.baseUrl}/records/table/${user.c_name}/${selectedTable.slug}`);
+      }
+    }
+  }, [watch('config.environment'), selectedTable, user, setValue]);
+
+  // Cargar functionTypes al montar y cuando cambia el usuario
+  useEffect(() => {
+    if (user?.c_name) {
+      setFunctionTypesLoading(true);
+      fetchFunctionTypes(user.c_name)
+        .then((types) => setFunctionTypes(types))
+        .catch(() => setFunctionTypesError('No se pudieron cargar los tipos de función'))
+        .finally(() => setFunctionTypesLoading(false));
+    }
+  }, [user]);
+
+  // Si es edición, selecciona el functionType de la tool
+  useEffect(() => {
+    if (isEdit && tool?.functionType) {
+      setFunctionType(tool.functionType);
+    }
+  }, [isEdit, tool]);
 
   const handleNext = async () => {
     const fieldsToValidate = getFieldsForStep(activeStep);
@@ -304,14 +388,28 @@ const ToolForm: React.FC = () => {
 
   const onSubmit = async (data: ToolFormData) => {
     try {
+      let payload: any = {
+        ...data,
+        c_name: user?.c_name,
+        functionType: functionType || undefined,
+      };
+      if (!payload.config.authConfig) payload.config.authConfig = {};
+      if (isEdit && tool) {
+        payload.updatedBy = user?.id;
+        delete payload.createdBy;
+      } else {
+        payload.createdBy = user?.id;
+      }
+      console.log('=== PAYLOAD ENVIADO AL BACKEND ===');
+      console.log(JSON.stringify(payload, null, 2));
       if (isEdit && tool) {
         await updateToolMutation.mutateAsync({
           toolId: tool._id,
-          data: data as UpdateToolRequest,
+          data: payload as UpdateToolRequest,
         });
         toast.success('Herramienta actualizada correctamente');
       } else {
-        await createToolMutation.mutateAsync(data as CreateToolRequest);
+        await createToolMutation.mutateAsync(payload as CreateToolRequest);
         toast.success('Herramienta creada correctamente');
       }
       navigate('/herramientas');
@@ -373,6 +471,90 @@ const ToolForm: React.FC = () => {
     } finally {
       setLoadingFields(false);
     }
+  };
+
+  // Estado para el parámetro en edición
+  const [paramEdit, setParamEdit] = useState<any | null>(null);
+  const [paramList, setParamList] = useState<any[]>([]);
+  const [paramError, setParamError] = useState<string | null>(null);
+
+  // Sincroniza paramList con react-hook-form
+  useEffect(() => {
+    // Convierte paramList a formato parameters
+    const properties: any = {};
+    const required: string[] = [];
+    paramList.forEach((p) => {
+      properties[p.name] = {
+        type: p.type,
+        description: p.description,
+        required: p.required,
+        enum: p.enum?.length ? p.enum : undefined,
+        format: p.format || undefined,
+      };
+      if (p.required) required.push(p.name);
+    });
+    setValue('parameters', {
+      type: 'object',
+      properties,
+      required,
+    });
+  }, [paramList, setValue]);
+
+  // Al editar herramienta, carga los parámetros existentes
+  useEffect(() => {
+    if (isEdit && tool?.parameters) {
+      // Normaliza el formato de parameters
+      const params = tool.parameters || {};
+      const props = typeof params.properties === 'object' ? params.properties : {};
+      const reqs = Array.isArray(params.required) ? params.required : [];
+      setParamList(
+        Object.entries(props).map(([name, val]: any) => ({
+          name,
+          type: val.type || 'string',
+          description: val.description || '',
+          required: reqs.includes(name),
+          enum: val.enum || [],
+          format: val.format || '',
+        }))
+      );
+      // Asegura que parameters en el form siempre tenga el formato correcto
+      setValue('parameters', {
+        type: 'object',
+        properties: props,
+        required: reqs,
+      });
+    }
+  }, [isEdit, tool, setValue]);
+
+  // Handler para agregar/editar parámetro
+  const handleSaveParam = () => {
+    if (!paramEdit?.name || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(paramEdit.name)) {
+      setParamError('El nombre es requerido y debe ser válido (letras, números, guion bajo, sin espacios)');
+      return;
+    }
+    if (!paramEdit.description) {
+      setParamError('La descripción es requerida');
+      return;
+    }
+    if (paramList.some((p) => p.name === paramEdit.name) && (!paramEdit._editing || paramEdit._editing !== paramEdit.name)) {
+      setParamError('El nombre del parámetro debe ser único');
+      return;
+    }
+    setParamError(null);
+    if (paramEdit._editing) {
+      setParamList(paramList.map((p) => (p.name === paramEdit._editing ? { ...paramEdit, _editing: undefined } : p)));
+    } else {
+      setParamList([...paramList, { ...paramEdit }]);
+    }
+    setParamEdit(null);
+  };
+
+  const handleEditParam = (name: string) => {
+    const p = paramList.find((p) => p.name === name);
+    if (p) setParamEdit({ ...p, _editing: name });
+  };
+  const handleDeleteParam = (name: string) => {
+    setParamList(paramList.filter((p) => p.name !== name));
   };
 
   if (toolLoading) {
@@ -556,6 +738,39 @@ const ToolForm: React.FC = () => {
                       Configuración de Endpoint
                     </Typography>
                     <Grid container spacing={3}>
+                      <Grid item xs={12} sm={6}>
+                        <Controller
+                          name="config.environment"
+                          control={control}
+                          render={({ field }) => (
+                            <FormControl fullWidth>
+                              <InputLabel>Environment</InputLabel>
+                              <Select {...field} label="Environment">
+                                {ENV_OPTIONS.map(opt => (
+                                  <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          )}
+                        />
+                      </Grid>
+                      {/* Si elige 'Otro', muestra un TextField para escribir el nombre */}
+                      {watch('config.environment') === 'other' && (
+                        <Grid item xs={12} sm={6}>
+                          <Controller
+                            name="config.environment"
+                            control={control}
+                            render={({ field }) => (
+                              <TextField
+                                {...field}
+                                fullWidth
+                                label="Nombre del Environment"
+                                placeholder="Ej: qa, test, local"
+                              />
+                            )}
+                          />
+                        </Grid>
+                      )}
                       <Grid item xs={12}>
                         {/* Selector de tabla dinámica */}
                         <FormControl fullWidth sx={{ mb: 2 }}>
@@ -593,6 +808,25 @@ const ToolForm: React.FC = () => {
                           label="Modo avanzado (endpoint manual)"
                           sx={{ mb: 2 }}
                         />
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth required disabled={functionTypesLoading} error={!!functionTypesError} sx={{ mb: 2 }}>
+                          <InputLabel>Tipo de Función</InputLabel>
+                          <Select
+                            value={functionType}
+                            label="Tipo de Función"
+                            onChange={e => setFunctionType(e.target.value)}
+                          >
+                            {functionTypes.length === 0 && !functionTypesLoading ? (
+                              <MenuItem value="" disabled>No hay tipos de función disponibles</MenuItem>
+                            ) : (
+                              functionTypes.map((ft) => (
+                                <MenuItem key={ft.type} value={ft.type}>{ft.displayName || ft.type}</MenuItem>
+                              ))
+                            )}
+                          </Select>
+                          {functionTypesError && <Typography color="error" variant="caption">{functionTypesError}</Typography>}
+                        </FormControl>
                       </Grid>
                       <Grid item xs={12}>
                         <Controller
@@ -656,17 +890,141 @@ const ToolForm: React.FC = () => {
                     <Typography variant="h6" gutterBottom>
                       Parámetros
                     </Typography>
-                    <Typography variant="body2" color="text.secondary" mb={3}>
-                      Esta funcionalidad estará disponible en la próxima versión.
+                    <Typography variant="body2" color="text.secondary" mb={2}>
+                      Agrega los parámetros que tu herramienta necesita. Puedes definir tipo, validaciones y valores por defecto.
                     </Typography>
-                    <Box sx={{ p: 3, border: '1px dashed #ccc', borderRadius: 2, textAlign: 'center' }}>
-                      <Typography variant="body1" color="text.secondary">
-                        Constructor de parámetros dinámico
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Permite definir tipos, validaciones y valores por defecto
-                      </Typography>
-                    </Box>
+                    {/* Formulario de edición/agregado */}
+                    {paramEdit ? (
+                      <Paper sx={{ p: 2, mb: 2 }}>
+                        <Grid container spacing={2}>
+                          <Grid item xs={12} sm={3}>
+                            <TextField
+                              label="Nombre"
+                              value={paramEdit.name}
+                              onChange={e => setParamEdit({ ...paramEdit, name: e.target.value.replace(/\s+/g, '_') })}
+                              fullWidth
+                              required
+                              helperText="Sin espacios, solo letras, números y guion bajo"
+                              disabled={!!paramEdit._editing}
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={3}>
+                            <FormControl fullWidth>
+                              <InputLabel>Tipo</InputLabel>
+                              <Select
+                                value={paramEdit.type}
+                                label="Tipo"
+                                onChange={e => setParamEdit({ ...paramEdit, type: e.target.value, enum: [], format: '' })}
+                              >
+                                {PARAM_TYPES.map(t => (
+                                  <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>
+                                ))}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} sm={3}>
+                            <TextField
+                              label="Descripción"
+                              value={paramEdit.description}
+                              onChange={e => setParamEdit({ ...paramEdit, description: e.target.value })}
+                              fullWidth
+                              required
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={1}>
+                            <FormControlLabel
+                              control={<Switch checked={!!paramEdit.required} onChange={e => setParamEdit({ ...paramEdit, required: e.target.checked })} />}
+                              label="Requerido"
+                            />
+                          </Grid>
+                          {/* Enum solo si tipo es 'string' o 'number' */}
+                          {(paramEdit.type === 'string' || paramEdit.type === 'number') && (
+                            <Grid item xs={12} sm={2}>
+                              <TextField
+                                label="Enum (opciones, separadas por coma)"
+                                value={paramEdit.enum?.join(',') || ''}
+                                onChange={e => setParamEdit({ ...paramEdit, enum: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                                fullWidth
+                                helperText="Opcional"
+                              />
+                            </Grid>
+                          )}
+                          {/* Format solo si tipo es 'string' */}
+                          {paramEdit.type === 'string' && (
+                            <Grid item xs={12} sm={2}>
+                              <FormControl fullWidth>
+                                <InputLabel>Formato</InputLabel>
+                                <Select
+                                  value={paramEdit.format || ''}
+                                  label="Formato"
+                                  onChange={e => setParamEdit({ ...paramEdit, format: e.target.value })}
+                                >
+                                  <MenuItem value="">Ninguno</MenuItem>
+                                  {STRING_FORMATS.map(f => (
+                                    <MenuItem key={f.value} value={f.value}>{f.label}</MenuItem>
+                                  ))}
+                                </Select>
+                              </FormControl>
+                            </Grid>
+                          )}
+                          <Grid item xs={12} sm={12}>
+                            {paramError && <Alert severity="error">{paramError}</Alert>}
+                          </Grid>
+                          <Grid item xs={12} sm={12} sx={{ display: 'flex', gap: 2 }}>
+                            <Button variant="contained" color="primary" startIcon={<SaveIcon />} onClick={handleSaveParam}>Guardar</Button>
+                            <Button variant="outlined" color="secondary" startIcon={<CancelIcon />} onClick={() => { setParamEdit(null); setParamError(null); }}>Cancelar</Button>
+                          </Grid>
+                        </Grid>
+                      </Paper>
+                    ) : null}
+                    {/* Tabla de parámetros */}
+                    {paramList.length === 0 ? (
+                      <Box sx={{ textAlign: 'center', py: 4 }}>
+                        <Typography variant="body1" color="text.secondary" gutterBottom>
+                          No hay parámetros definidos
+                        </Typography>
+                        <Button variant="contained" startIcon={<AddIcon />} onClick={() => setParamEdit({ name: '', type: 'string', description: '', required: false, enum: [], format: '' })}>
+                          Agregar Parámetro
+                        </Button>
+                      </Box>
+                    ) : (
+                      <>
+                        <TableContainer component={Paper} sx={{ mb: 2 }}>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Nombre</TableCell>
+                                <TableCell>Tipo</TableCell>
+                                <TableCell>Descripción</TableCell>
+                                <TableCell>Requerido</TableCell>
+                                <TableCell>Enum</TableCell>
+                                <TableCell>Formato</TableCell>
+                                <TableCell align="right">Acciones</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {paramList.map((p) => (
+                                <TableRow key={p.name}>
+                                  <TableCell>{p.name}</TableCell>
+                                  <TableCell>{PARAM_TYPES.find(t => t.value === p.type)?.label || p.type}</TableCell>
+                                  <TableCell>{p.description}</TableCell>
+                                  <TableCell>{p.required ? <MuiChip label="Sí" color="success" size="small" /> : <MuiChip label="No" color="default" size="small" />}</TableCell>
+                                  <TableCell>{p.enum?.length ? p.enum.join(', ') : '-'}</TableCell>
+                                  <TableCell>{p.format || '-'}</TableCell>
+                                  <TableCell align="right">
+                                    <Tooltip title="Editar"><MuiIconButton onClick={() => handleEditParam(p.name)}><EditIcon fontSize="small" /></MuiIconButton></Tooltip>
+                                    <Tooltip title="Eliminar"><MuiIconButton onClick={() => handleDeleteParam(p.name)}><DeleteIcon fontSize="small" color="error" /></MuiIconButton></Tooltip>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setParamEdit({ name: '', type: 'string', description: '', required: false, enum: [], format: '' })}>
+                          Agregar Parámetro
+                        </Button>
+                      </>
+                    )}
                   </Box>
                 )}
 
@@ -738,6 +1096,15 @@ const ToolForm: React.FC = () => {
                     Anterior
                   </Button>
                   <Box>
+                    {/* Log de errores de validación para debug */}
+                    {Object.keys(errors).length > 0 && (
+                      <pre style={{ color: 'red', fontSize: 12, marginBottom: 8 }}>{JSON.stringify(errors, null, 2)}</pre>
+                    )}
+                    {activeStep === steps.length - 1 && Object.keys(watch('parameters.properties') || {}).length === 0 && (
+                      <Alert severity="warning" sx={{ mb: 2 }}>
+                        Debes agregar al menos un parámetro para que la herramienta funcione correctamente.
+                      </Alert>
+                    )}
                     {activeStep === steps.length - 1 ? (
                       <Button
                         type="submit"
@@ -771,5 +1138,13 @@ const ToolForm: React.FC = () => {
     </Box>
   );
 };
+
+// Función utilitaria para obtener function-types desde el backend
+export async function fetchFunctionTypes(c_name: string): Promise<any[]> {
+  const res = await fetch(`/api/tools/function-types/${c_name}`);
+  if (!res.ok) throw new Error('No se pudieron obtener los tipos de función');
+  const data = await res.json();
+  return data.functionTypes || [];
+}
 
 export default ToolForm;

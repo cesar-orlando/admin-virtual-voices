@@ -183,7 +183,12 @@ export const getRecords = async (
       ...(filters && { filters: JSON.stringify(filters) })
     });
 
+    const url = `/records/table/${user.c_name}/${tableSlug}?${params}`;
+
+    console.log("url --->", url)
+
     const response = await api.get(`/records/table/${user.c_name}/${tableSlug}?${params}`);
+    console.log("response --->", response.data)
     return response.data as PaginatedRecordsResponse;
   } catch (error) {
     handleError(error as any);
