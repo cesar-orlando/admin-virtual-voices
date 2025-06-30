@@ -190,9 +190,11 @@ export default function Users() {
   };
 
   const loadUsers = async () => {
-    const data = await fetchCompanyUsers(user);
+    // Usar el nuevo servicio y pasar el companySlug
+    const companySlug = user.c_name || user.companySlug || 'test';
+    const usersArray = await fetchCompanyUsers(companySlug);
     // Asegura que todos los usuarios tengan los campos requeridos
-    const safeUsers = (data || []).map((u: any) => ({
+    const safeUsers = (usersArray || []).map((u: any) => ({
       id: u.id || u._id,
       name: u.name || '-',
       email: u.email || '-',

@@ -16,9 +16,11 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
+import BusinessIcon from "@mui/icons-material/Business";
 import { Link as RouterLink } from "react-router-dom";
 import { toast } from "react-toastify";
 import LogoVoice2 from '../assets/LogoVoice2.svg';
+import type { LoginRequest } from '../types';
 
 // Fuente Montserrat desde Google Fonts (solo para el login)
 const fontLink = document.createElement("link");
@@ -38,15 +40,17 @@ declare module "@mui/material/styles" {
 type LoginFormsInputs = {
   email: string;
   password: string;
+  companySlug: string;
 }
 
 const validation = yup.object().shape({
   email: yup.string().email("Correo inválido").required("El correo es obligatorio"),
   password: yup.string().min(10, "Mínimo 10 caracteres").required("La contraseña es obligatoria"),
+  companySlug: yup.string().required("Debe seleccionar una empresa"),
 });
 
 const Login = () => {
-  const { loginUser } = useAuth();
+  const { loginUser, currentCompany } = useAuth();
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -60,23 +64,62 @@ const Login = () => {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<LoginFormsInputs>({
     resolver: yupResolver(validation),
+    defaultValues: {
+      companySlug: "test" // Default to regular company
+    }
   });
+
+  const watchedEmail = watch("email");
+  const watchedCompanySlug = watch("companySlug");
 
   const handleLogin = async (form: LoginFormsInputs) => {
     setLoading(true);
     setServerError("");
+    
     try {
-      await loginUser(form.email, form.password);
+      const loginData: LoginRequest = {
+        email: form.email,
+        password: form.password,
+        companySlug: form.companySlug
+      };
+      
+      await loginUser(loginData);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Credenciales incorrectas o error al iniciar sesión.";
       setServerError(errorMessage);
-      toast.warning(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Predefined test accounts for easy access
+  const testAccounts = [
+    {
+      name: "Quick Learning Admin",
+      email: "admin@quicklearning.com",
+      password: "QuickLearning2024!",
+      companySlug: "quicklearning",
+      type: "Enterprise"
+    },
+    {
+      name: "Usuario Regular",
+      email: "korina@gmail.com",
+      password: "Korina1234567890.",
+      companySlug: "test",
+      type: "Regular"
+    }
+  ];
+
+  const fillTestAccount = (account: typeof testAccounts[0]) => {
+    setValue("email", account.email);
+    setValue("password", account.password);
+    setValue("companySlug", account.companySlug);
   };
 
   return (
@@ -117,7 +160,7 @@ const Login = () => {
         },
       }}
     >
-      <Box sx={{ width: isMobile ? '98vw' : 380, maxWidth: "98vw" }}>
+      <Box sx={{ width: isMobile ? '98vw' : 420, maxWidth: "98vw" }}>
         <Paper
           elevation={0}
           sx={{
@@ -139,20 +182,84 @@ const Login = () => {
               src={LogoVoice2}
               alt="Logo Virtual Voices"
               style={{
-                width: 180, // Ajusta el tamaño según lo que se vea mejor
+                width: 180,
                 height: 'auto',
                 marginBottom: 8,
                 display: 'block',
                 filter: 'drop-shadow(0 2px 8px #8B5CF6AA)'
               }}
             />
+            <Typography
+              variant="h6"
+              sx={{
+                color: "#BDBDBD",
+                fontFamily: 'Montserrat, Arial, sans-serif',
+                fontWeight: 400,
+                fontSize: 14,
+                textAlign: "center"
+              }}
+            >
+              Sistema Multi-Empresa
+            </Typography>
           </Box>
+
+          {/* Quick access test accounts */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" sx={{ color: '#BDBDBD', mb: 1, display: 'block' }}>
+              Acceso rápido para pruebas:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {testAccounts.map((account, index) => (
+                <Button
+                  key={index}
+                  size="small"
+                  variant="outlined"
+                  onClick={() => fillTestAccount(account)}
+                  sx={{
+                    fontSize: '0.7rem',
+                    textTransform: 'none',
+                    borderColor: account.type === 'Enterprise' ? '#E05EFF' : '#8B5CF6',
+                    color: account.type === 'Enterprise' ? '#E05EFF' : '#8B5CF6',
+                    '&:hover': {
+                      backgroundColor: account.type === 'Enterprise' ? 'rgba(224, 94, 255, 0.1)' : 'rgba(139, 92, 246, 0.1)',
+                    }
+                  }}
+                >
+                  {account.name}
+                </Button>
+              ))}
+            </Box>
+          </Box>
+
           <form onSubmit={handleSubmit(handleLogin)} noValidate autoComplete="off">
+            <TextField
+              label="Empresa"
+              fullWidth
+              margin="normal"
+              {...register("companySlug")}
+              error={!!errors.companySlug}
+              helperText={errors.companySlug?.message || 'Nombre corto de la empresa (ej: quicklearning, test, etc.)'}
+              inputProps={{ "aria-label": "Empresa", "aria-invalid": !!errors.companySlug }}
+              sx={{
+                input: {
+                  color: "#fff",
+                  fontFamily: 'Montserrat, Arial, sans-serif',
+                },
+                label: { color: "#BDBDBD" },
+                fieldset: { borderColor: errors.companySlug ? "#E05EFF" : "#8B5CF6" },
+                mb: 2,
+                transition: 'box-shadow 0.3s',
+                '& .Mui-focused fieldset': {
+                  borderColor: "#E05EFF",
+                  boxShadow: "0 0 8px 2px #E05EFF55",
+                },
+              }}
+              InputLabelProps={{ style: { color: "#BDBDBD" } }}
+            />
             <TextField
               label="Correo"
               fullWidth
               margin="normal"
-              autoFocus
               autoComplete="email"
               {...register("email")}
               error={!!errors.email}
@@ -239,14 +346,14 @@ const Login = () => {
                 fontWeight: 700,
                 fontSize: 18,
                 letterSpacing: 1,
-                background: "linear-gradient(90deg, #E05EFF 0%, #8B5CF6 50%, #3B82F6 100%)",
+                background: "linear-gradient(90deg, #8B5CF6 0%, #3B82F6 50%, #1976D2 100%)",
                 color: "#fff",
                 boxShadow: "0 2px 8px #3B82F6AA",
                 borderRadius: 3,
                 py: 1.5,
                 transition: "all 0.2s, box-shadow 0.3s",
                 '&:hover': {
-                  background: "linear-gradient(90deg, #3B82F6 0%, #8B5CF6 50%, #E05EFF 100%)",
+                  background: "linear-gradient(90deg, #1976D2 0%, #3B82F6 50%, #8B5CF6 100%)",
                   boxShadow: "0 4px 24px #E05EFF99, 0 2px 8px #3B82F6AA",
                   transform: 'scale(1.03)',
                 },

@@ -18,9 +18,14 @@ export const updateUser = async (userId: string, userData: {
 }
 };
 
-export const fetchCompanyUsers = async (user: UserProfile) => {
-  const response = await api.get(`/users/${user.c_name}`);
-  return response.data;
+export const fetchCompanyUsers = async (companySlug: string) => {
+  try {
+    const response = await api.get(`/core/users?companySlug=${companySlug}`);
+    return response.data.users || [];
+  } catch (error) {
+    handleError(error as any);
+    return [];
+  }
 };
 
 export const fetchClientData = async (user: UserProfile) => {
@@ -51,5 +56,15 @@ export const deleteUser = async (userId: string) => {
     return response.data;
   } catch (error) {
     handleError(error as any);
+  }
+};
+
+export const fetchAllUsers = async () => {
+  try {
+    const response = await api.get(`/core/users/all`);
+    return response.data.users || [];
+  } catch (error) {
+    handleError(error as any);
+    return [];
   }
 };

@@ -9,6 +9,10 @@ import {
   IconButton,
   InputAdornment,
   useMediaQuery,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import { useAuth } from "../hooks/useAuth";
 import { useForm } from "react-hook-form";
@@ -16,8 +20,12 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
+import BusinessIcon from "@mui/icons-material/Business";
+import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import { Link as RouterLink } from "react-router-dom";
 import { toast } from "react-toastify";
+import LogoVoice2 from '../assets/LogoVoice2.svg';
+import type { RegisterRequest, UserRole } from '../types';
 
 // Fuente Montserrat desde Google Fonts (solo para el registro)
 const fontLink = document.createElement("link");
@@ -38,14 +46,18 @@ type RegisterFormsInputs = {
   name: string;
   email: string;
   password: string;
+  role: string;
   c_name: string;
+  companySlug: string;
 }
 
 const validation = yup.object().shape({
   name: yup.string().required("El nombre es obligatorio"),
   email: yup.string().email("Correo inválido").required("El correo es obligatorio"),
   password: yup.string().min(10, "Mínimo 10 caracteres").required("La contraseña es obligatoria"),
+  role: yup.string().required("El rol es obligatorio"),
   c_name: yup.string().required("El nombre de la compañía es obligatorio"),
+  companySlug: yup.string().required("Debe seleccionar una empresa"),
 });
 
 const Register = () => {
@@ -63,23 +75,83 @@ const Register = () => {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<RegisterFormsInputs>({
     resolver: yupResolver(validation),
+    defaultValues: {
+      companySlug: "test",
+      role: "Usuario",
+      c_name: "test"
+    }
   });
+
+  const watchedEmail = watch("email");
+  const watchedCompanySlug = watch("companySlug");
+  const watchedRole = watch("role");
 
   const handleRegister = async (form: RegisterFormsInputs) => {
     setLoading(true);
     setServerError("");
+    
     try {
-      await registerUser(form.name, form.email, form.password, form.c_name);
+      const registerData: RegisterRequest = {
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        role: form.role,
+        c_name: form.c_name,
+        companySlug: form.companySlug
+      };
+      
+      await registerUser(registerData);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error al registrar usuario.";
       setServerError(errorMessage);
-      toast.warning(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Available roles based on company type
+  const getAvailableRoles = () => {
+    return [
+      { value: "Usuario", label: "Usuario", icon: null },
+      { value: "Admin", label: "Administrador", icon: <AdminPanelSettingsIcon /> }
+    ];
+  };
+
+  // Predefined test accounts for easy registration
+  const testAccounts = [
+    {
+      name: "Quick Learning Admin",
+      email: "admin@quicklearning.com",
+      password: "QuickLearning2024!",
+      role: "Admin",
+      companySlug: "quicklearning",
+      c_name: "quicklearning",
+      type: "Enterprise"
+    },
+    {
+      name: "Usuario Test",
+      email: "test@example.com",
+      password: "password1234567890",
+      role: "Usuario",
+      companySlug: "test",
+      c_name: "test",
+      type: "Regular"
+    }
+  ];
+
+  const fillTestAccount = (account: typeof testAccounts[0]) => {
+    setValue("name", account.name);
+    setValue("email", account.email);
+    setValue("password", account.password);
+    setValue("role", account.role);
+    setValue("companySlug", account.companySlug);
+    setValue("c_name", account.c_name);
   };
 
   return (
@@ -120,7 +192,7 @@ const Register = () => {
         },
       }}
     >
-      <Box sx={{ width: isMobile ? '98vw' : 380, maxWidth: "98vw" }}>
+      <Box sx={{ width: isMobile ? '98vw' : 460, maxWidth: "98vw" }}>
         <Paper
           elevation={0}
           sx={{
@@ -137,50 +209,99 @@ const Register = () => {
             transition: 'opacity 0.7s cubic-bezier(.4,0,.2,1), transform 0.7s cubic-bezier(.4,0,.2,1)',
           }}
         >
-          {/* Logo temporal estilizado */}
           <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mb: 2 }}>
-            <Box
-              sx={{
-                width: 64,
-                height: 64,
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #E05EFF 0%, #8B5CF6 60%, #3B82F6 100%)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                mb: 1,
-                boxShadow: "0 2px 16px 0 #8B5CF6AA",
+            <img
+              src={LogoVoice2}
+              alt="Logo Virtual Voices"
+              style={{
+                width: 160,
+                height: 'auto',
+                marginBottom: 8,
+                display: 'block',
+                filter: 'drop-shadow(0 2px 8px #8B5CF6AA)'
               }}
-            >
-              <Typography
-                sx={{
-                  fontFamily: 'Montserrat, Arial, sans-serif',
-                  fontWeight: 700,
-                  fontSize: 36,
-                  color: "#fff",
-                  letterSpacing: 2,
-                  textShadow: "0 2px 8px #3B82F6AA",
-                }}
-              >
-                V
-              </Typography>
-            </Box>
+            />
             <Typography
-              variant="h4"
+              variant="h5"
               fontWeight={700}
               sx={{
                 color: "#fff",
                 fontFamily: 'Montserrat, Arial, sans-serif',
-                letterSpacing: 2,
+                letterSpacing: 1,
                 textShadow: "0 2px 8px #3B82F6AA",
+                mb: 0.5
               }}
             >
-              VIRTUAL VOICES
+              REGISTRO
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "#BDBDBD",
+                fontFamily: 'Montserrat, Arial, sans-serif',
+                textAlign: "center"
+              }}
+            >
+              Sistema Multi-Empresa
             </Typography>
           </Box>
+
+          {/* Quick access test accounts */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" sx={{ color: '#BDBDBD', mb: 1, display: 'block' }}>
+              Registro rápido para pruebas:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {testAccounts.map((account, index) => (
+                <Button
+                  key={index}
+                  size="small"
+                  variant="outlined"
+                  onClick={() => fillTestAccount(account)}
+                  sx={{
+                    fontSize: '0.7rem',
+                    textTransform: 'none',
+                    borderColor: account.type === 'Enterprise' ? '#E05EFF' : '#8B5CF6',
+                    color: account.type === 'Enterprise' ? '#E05EFF' : '#8B5CF6',
+                    '&:hover': {
+                      backgroundColor: account.type === 'Enterprise' ? 'rgba(224, 94, 255, 0.1)' : 'rgba(139, 92, 246, 0.1)',
+                    }
+                  }}
+                >
+                  {account.type} - {account.role}
+                </Button>
+              ))}
+            </Box>
+          </Box>
+
           <form onSubmit={handleSubmit(handleRegister)} noValidate autoComplete="off">
             <TextField
-              label="Nombre"
+              label="Empresa"
+              fullWidth
+              margin="normal"
+              {...register("companySlug")}
+              error={!!errors.companySlug}
+              helperText={errors.companySlug?.message || 'Nombre corto de la empresa (ej: quicklearning, test, etc.)'}
+              inputProps={{ "aria-label": "Empresa", "aria-invalid": !!errors.companySlug }}
+              sx={{
+                input: {
+                  color: "#fff",
+                  fontFamily: 'Montserrat, Arial, sans-serif',
+                },
+                label: { color: "#BDBDBD" },
+                fieldset: { borderColor: errors.companySlug ? "#E05EFF" : "#8B5CF6" },
+                mb: 2,
+                transition: 'box-shadow 0.3s',
+                '& .Mui-focused fieldset': {
+                  borderColor: "#E05EFF",
+                  boxShadow: "0 0 8px 2px #E05EFF55",
+                },
+              }}
+              InputLabelProps={{ style: { color: "#BDBDBD" } }}
+            />
+
+            <TextField
+              label="Nombre completo"
               fullWidth
               margin="normal"
               autoFocus
@@ -203,14 +324,10 @@ const Register = () => {
                 },
               }}
               InputLabelProps={{ style: { color: "#BDBDBD" } }}
-              FormHelperTextProps={{
-                id: "name-error-text",
-                role: errors.name ? "alert" : undefined,
-                "aria-live": errors.name ? "assertive" : undefined,
-              }}
             />
+
             <TextField
-              label="Correo"
+              label="Correo electrónico"
               fullWidth
               margin="normal"
               autoComplete="email"
@@ -233,12 +350,56 @@ const Register = () => {
                 },
               }}
               InputLabelProps={{ style: { color: "#BDBDBD" } }}
-              FormHelperTextProps={{
-                id: "email-error-text",
-                role: errors.email ? "alert" : undefined,
-                "aria-live": errors.email ? "assertive" : undefined,
-              }}
             />
+
+            {/* Role Selector */}
+            <FormControl 
+              fullWidth 
+              margin="normal"
+              error={!!errors.role}
+            >
+              <InputLabel 
+                id="role-selector-label"
+                sx={{ color: "#BDBDBD" }}
+              >
+                Rol de usuario
+              </InputLabel>
+              <Select
+                labelId="role-selector-label"
+                {...register("role")}
+                value={watchedRole}
+                label="Rol de usuario"
+                onChange={(e) => setValue("role", e.target.value)}
+                sx={{
+                  color: "#fff",
+                  fieldset: { 
+                    borderColor: errors.role ? "#E05EFF" : "#8B5CF6" 
+                  },
+                  '& .Mui-focused fieldset': {
+                    borderColor: "#E05EFF",
+                    boxShadow: "0 0 8px 2px #E05EFF55",
+                  },
+                  '& .MuiSelect-icon': {
+                    color: "#8B5CF6"
+                  }
+                }}
+              >
+                {getAvailableRoles().map((role) => (
+                  <MenuItem key={role.value} value={role.value}>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      {role.icon && <Box sx={{ mr: 1 }}>{role.icon}</Box>}
+                      <Typography>{role.label}</Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+              {errors.role && (
+                <Typography variant="caption" sx={{ color: '#f44336', mt: 0.5, px: 1 }}>
+                  {errors.role.message}
+                </Typography>
+              )}
+            </FormControl>
+
             <TextField
               label="Contraseña"
               type={showPassword ? "text" : "password"}
@@ -278,46 +439,17 @@ const Register = () => {
                   </InputAdornment>
                 ),
               }}
-              FormHelperTextProps={{
-                id: "password-error-text",
-                role: errors.password ? "alert" : undefined,
-                "aria-live": errors.password ? "assertive" : undefined,
-              }}
             />
-            <TextField
-              label="Nombre de la compañía"
-              fullWidth
-              margin="normal"
-              {...register("c_name")}
-              error={!!errors.c_name}
-              helperText={errors.c_name?.message}
-              inputProps={{ "aria-label": "Nombre de la compañía", "aria-invalid": !!errors.c_name }}
-              sx={{
-                input: {
-                  color: "#fff",
-                  fontFamily: 'Montserrat, Arial, sans-serif',
-                },
-                label: { color: "#BDBDBD" },
-                fieldset: { borderColor: errors.c_name ? "#E05EFF" : "#8B5CF6" },
-                mb: 2,
-                transition: 'box-shadow 0.3s',
-                '& .Mui-focused fieldset': {
-                  borderColor: "#E05EFF",
-                  boxShadow: "0 0 8px 2px #E05EFF55",
-                },
-              }}
-              InputLabelProps={{ style: { color: "#BDBDBD" } }}
-              FormHelperTextProps={{
-                id: "c_name-error-text",
-                role: errors.c_name ? "alert" : undefined,
-                "aria-live": errors.c_name ? "assertive" : undefined,
-              }}
-            />
+
+            {/* Hidden company name field that syncs with companySlug */}
+            <input type="hidden" {...register("c_name")} />
+
             {serverError && (
               <Typography color="error" sx={{ mt: 1, mb: 1, textAlign: "center" }} role="alert" aria-live="assertive">
                 {serverError}
               </Typography>
             )}
+
             <Button
               type="submit"
               fullWidth
@@ -328,14 +460,14 @@ const Register = () => {
                 fontWeight: 700,
                 fontSize: 18,
                 letterSpacing: 1,
-                background: "linear-gradient(90deg, #E05EFF 0%, #8B5CF6 50%, #3B82F6 100%)",
+                background: "linear-gradient(90deg, #8B5CF6 0%, #3B82F6 50%, #1976D2 100%)",
                 color: "#fff",
                 boxShadow: "0 2px 8px #3B82F6AA",
                 borderRadius: 3,
                 py: 1.5,
                 transition: "all 0.2s, box-shadow 0.3s",
                 '&:hover': {
-                  background: "linear-gradient(90deg, #3B82F6 0%, #8B5CF6 50%, #E05EFF 100%)",
+                  background: "linear-gradient(90deg, #1976D2 0%, #3B82F6 50%, #8B5CF6 100%)",
                   boxShadow: "0 4px 24px #E05EFF99, 0 2px 8px #3B82F6AA",
                   transform: 'scale(1.03)',
                 },
