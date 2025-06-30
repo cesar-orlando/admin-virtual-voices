@@ -13,6 +13,7 @@ export interface UserProfile {
   c_name: string
   role?: UserRole
   status?: 'active' | 'inactive'
+  companySlug?: string
 }
 
 export interface UserProfileToken extends UserProfile {
@@ -20,8 +21,8 @@ export interface UserProfileToken extends UserProfile {
 }
 
 export const UserRole = {
-  ADMIN: 'admin',
-  USER: 'user',
+  ADMIN: 'Admin',
+  USER: 'Usuario',
   MODERATOR: 'moderator'
 } as const;
 
@@ -31,6 +32,7 @@ export type UserRole = typeof UserRole[keyof typeof UserRole];
 export interface LoginRequest {
   email: string
   password: string
+  companySlug?: string
 }
 
 export interface RegisterRequest {
@@ -38,12 +40,75 @@ export interface RegisterRequest {
   email: string
   password: string
   c_name: string
+  role?: string
+  companySlug?: string
 }
 
 export interface AuthResponse {
   user: UserProfile
   token: string
   message?: string
+}
+
+// Company Enterprise Types
+export interface CompanyConfig {
+  slug: string
+  name: string
+  displayName: string
+  isEnterprise: boolean
+  features: {
+    quickLearning?: boolean
+    controlMinutos?: boolean
+    elevenLabs?: boolean
+    autoAssignment?: boolean
+  }
+  database: {
+    type: 'local' | 'external'
+    connectionString?: string
+  }
+  branding?: {
+    logo?: string
+    primaryColor?: string
+    secondaryColor?: string
+  }
+}
+
+// Quick Learning Enterprise specific types
+export interface QuickLearningUser extends UserProfile {
+  companySlug: 'quicklearning'
+  role: 'Admin' | 'Usuario'
+  enterpriseFeatures?: {
+    advancedAnalytics: boolean
+    customWorkflows: boolean
+    dedicatedSupport: boolean
+  }
+}
+
+export interface QuickLearningLoginRequest extends LoginRequest {
+  companySlug: 'quicklearning'
+}
+
+export interface QuickLearningRegisterRequest extends RegisterRequest {
+  companySlug: 'quicklearning'
+  role: 'Admin' | 'Usuario'
+}
+
+// Company detection types
+export interface CompanyDetectionResponse {
+  companies: CompanyConfig[]
+  recommended?: string
+  defaultSlug: string
+}
+
+// Environment configuration
+export interface EnvironmentConfig {
+  apiBaseUrl: string
+  environment: 'development' | 'qa' | 'production'
+  features: {
+    multiCompany: boolean
+    enterpriseMode: boolean
+    quickLearningIntegration: boolean
+  }
 }
 
 // WhatsApp types

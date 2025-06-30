@@ -9,6 +9,8 @@ import {
   IconButton,
   InputAdornment,
   useMediaQuery,
+  Alert,
+  Collapse,
 } from "@mui/material";
 import { useAuth } from "../hooks/useAuth";
 import { useForm } from "react-hook-form";
@@ -16,9 +18,12 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
+import BusinessIcon from "@mui/icons-material/Business";
 import { Link as RouterLink } from "react-router-dom";
 import { toast } from "react-toastify";
 import LogoVoice2 from '../assets/LogoVoice2.svg';
+import { CompanySelector } from '../components/CompanySelector';
+import { LoginRequest, CompanyConfig } from '../types';
 
 // Fuente Montserrat desde Google Fonts (solo para el login)
 const fontLink = document.createElement("link");
@@ -38,18 +43,22 @@ declare module "@mui/material/styles" {
 type LoginFormsInputs = {
   email: string;
   password: string;
+  companySlug: string;
 }
 
 const validation = yup.object().shape({
   email: yup.string().email("Correo inválido").required("El correo es obligatorio"),
   password: yup.string().min(10, "Mínimo 10 caracteres").required("La contraseña es obligatoria"),
+  companySlug: yup.string().required("Debe seleccionar una empresa"),
 });
 
 const Login = () => {
-  const { loginUser } = useAuth();
+  const { loginUser, currentCompany } = useAuth();
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [selectedCompany, setSelectedCompany] = useState<CompanyConfig | null>(null);
+  const [showCompanyInfo, setShowCompanyInfo] = useState(false);
   const isMobile = useMediaQuery("(max-width:600px)");
   const [cardVisible, setCardVisible] = useState(false);
 
@@ -60,23 +69,77 @@ const Login = () => {
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<LoginFormsInputs>({
     resolver: yupResolver(validation),
+    defaultValues: {
+      companySlug: "test" // Default to regular company
+    }
   });
+
+  const watchedEmail = watch("email");
+  const watchedCompanySlug = watch("companySlug");
+
+  const handleCompanyChange = (companySlug: string, company: CompanyConfig | null) => {
+    setValue("companySlug", companySlug);
+    setSelectedCompany(company);
+    setShowCompanyInfo(!!company);
+    
+    if (company?.isEnterprise) {
+      setServerError(""); // Clear any previous errors when switching to enterprise
+    }
+  };
 
   const handleLogin = async (form: LoginFormsInputs) => {
     setLoading(true);
     setServerError("");
+    
     try {
-      await loginUser(form.email, form.password);
+      const loginData: LoginRequest = {
+        email: form.email,
+        password: form.password,
+        companySlug: form.companySlug
+      };
+      
+      await loginUser(loginData);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Credenciales incorrectas o error al iniciar sesión.";
       setServerError(errorMessage);
-      toast.warning(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Predefined test accounts for easy access
+  const testAccounts = [
+    {
+      name: "Quick Learning Admin",
+      email: "admin@quicklearning.com",
+      password: "QuickLearning2024!",
+      companySlug: "quicklearning",
+      type: "Enterprise"
+    },
+    {
+      name: "Usuario Regular",
+      email: "korina@gmail.com",
+      password: "Korina1234567890.",
+      companySlug: "test",
+      type: "Regular"
+    }
+  ];
+
+  const fillTestAccount = (account: typeof testAccounts[0]) => {
+    setValue("email", account.email);
+    setValue("password", account.password);
+    setValue("companySlug", account.companySlug);
+    handleCompanyChange(account.companySlug, 
+      account.companySlug === "quicklearning" 
+        ? { slug: "quicklearning", name: "Quick Learning", displayName: "Quick Learning Enterprise", isEnterprise: true, features: {}, database: { type: 'external' } }
+        : { slug: "test", name: "Empresa Regular", displayName: "Empresa Regular", isEnterprise: false, features: {}, database: { type: 'local' } }
+    );
   };
 
   return (
@@ -117,7 +180,7 @@ const Login = () => {
         },
       }}
     >
-      <Box sx={{ width: isMobile ? '98vw' : 380, maxWidth: "98vw" }}>
+      <Box sx={{ width: isMobile ? '98vw' : 420, maxWidth: "98vw" }}>
         <Paper
           elevation={0}
           sx={{
@@ -139,20 +202,90 @@ const Login = () => {
               src={LogoVoice2}
               alt="Logo Virtual Voices"
               style={{
-                width: 180, // Ajusta el tamaño según lo que se vea mejor
+                width: 180,
                 height: 'auto',
                 marginBottom: 8,
                 display: 'block',
                 filter: 'drop-shadow(0 2px 8px #8B5CF6AA)'
               }}
             />
+            <Typography
+              variant="h6"
+              sx={{
+                color: "#BDBDBD",
+                fontFamily: 'Montserrat, Arial, sans-serif',
+                fontWeight: 400,
+                fontSize: 14,
+                textAlign: "center"
+              }}
+            >
+              Sistema Multi-Empresa
+            </Typography>
           </Box>
+
+          {/* Quick access test accounts */}
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="caption" sx={{ color: '#BDBDBD', mb: 1, display: 'block' }}>
+              Acceso rápido para pruebas:
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              {testAccounts.map((account, index) => (
+                <Button
+                  key={index}
+                  size="small"
+                  variant="outlined"
+                  onClick={() => fillTestAccount(account)}
+                  sx={{
+                    fontSize: '0.7rem',
+                    textTransform: 'none',
+                    borderColor: account.type === 'Enterprise' ? '#E05EFF' : '#8B5CF6',
+                    color: account.type === 'Enterprise' ? '#E05EFF' : '#8B5CF6',
+                    '&:hover': {
+                      backgroundColor: account.type === 'Enterprise' ? 'rgba(224, 94, 255, 0.1)' : 'rgba(139, 92, 246, 0.1)',
+                    }
+                  }}
+                >
+                  {account.name}
+                </Button>
+              ))}
+            </Box>
+          </Box>
+
           <form onSubmit={handleSubmit(handleLogin)} noValidate autoComplete="off">
+            {/* Company Selector */}
+            <CompanySelector
+              value={watchedCompanySlug}
+              onChange={handleCompanyChange}
+              email={watchedEmail}
+              error={!!errors.companySlug}
+              helperText={errors.companySlug?.message}
+            />
+
+            {/* Enterprise Info Alert */}
+            <Collapse in={showCompanyInfo && selectedCompany?.isEnterprise}>
+              <Alert 
+                severity="info" 
+                icon={<BusinessIcon />}
+                sx={{ 
+                  mb: 2, 
+                  backgroundColor: 'rgba(224, 94, 255, 0.1)',
+                  color: '#fff',
+                  '& .MuiAlert-icon': { color: '#E05EFF' }
+                }}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                  Quick Learning Enterprise
+                </Typography>
+                <Typography variant="caption">
+                  Conectando a base de datos enterprise externa con funciones avanzadas
+                </Typography>
+              </Alert>
+            </Collapse>
+
             <TextField
               label="Correo"
               fullWidth
               margin="normal"
-              autoFocus
               autoComplete="email"
               {...register("email")}
               error={!!errors.email}
@@ -239,14 +372,18 @@ const Login = () => {
                 fontWeight: 700,
                 fontSize: 18,
                 letterSpacing: 1,
-                background: "linear-gradient(90deg, #E05EFF 0%, #8B5CF6 50%, #3B82F6 100%)",
+                background: selectedCompany?.isEnterprise 
+                  ? "linear-gradient(90deg, #E05EFF 0%, #8B5CF6 50%, #3B82F6 100%)"
+                  : "linear-gradient(90deg, #8B5CF6 0%, #3B82F6 50%, #1976D2 100%)",
                 color: "#fff",
                 boxShadow: "0 2px 8px #3B82F6AA",
                 borderRadius: 3,
                 py: 1.5,
                 transition: "all 0.2s, box-shadow 0.3s",
                 '&:hover': {
-                  background: "linear-gradient(90deg, #3B82F6 0%, #8B5CF6 50%, #E05EFF 100%)",
+                  background: selectedCompany?.isEnterprise
+                    ? "linear-gradient(90deg, #3B82F6 0%, #8B5CF6 50%, #E05EFF 100%)"
+                    : "linear-gradient(90deg, #1976D2 0%, #3B82F6 50%, #8B5CF6 100%)",
                   boxShadow: "0 4px 24px #E05EFF99, 0 2px 8px #3B82F6AA",
                   transform: 'scale(1.03)',
                 },
@@ -257,7 +394,9 @@ const Login = () => {
               disabled={loading}
               endIcon={!loading && <Visibility sx={{ opacity: 0 }} />} // para mantener altura
             >
-              {loading ? <CircularProgress size={24} color="inherit" /> : "Entrar"}
+              {loading ? <CircularProgress size={24} color="inherit" /> : 
+                selectedCompany?.isEnterprise ? "Acceder a Enterprise" : "Entrar"
+              }
             </Button>
           </form>
         </Paper>
@@ -280,6 +419,11 @@ const Login = () => {
         </Box>
         <Box sx={{ mt: 3, textAlign: "center", color: "#BDBDBD", fontSize: 13, fontFamily: 'Montserrat, Arial, sans-serif' }}>
           © {new Date().getFullYear()} Virtual Voices. Todos los derechos reservados.
+          {selectedCompany?.isEnterprise && (
+            <Typography variant="caption" sx={{ display: 'block', mt: 0.5, color: '#E05EFF' }}>
+              Quick Learning Enterprise Edition
+            </Typography>
+          )}
         </Box>
       </Box>
     </Box>
