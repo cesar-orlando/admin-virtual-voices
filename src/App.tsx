@@ -16,6 +16,7 @@ import RecordForm from './pages/RecordForm'
 import EditTable from './pages/EditTable'
 import UserProfile from './pages/UserProfile'
 import Metrics from './pages/Metrics'
+import QuickLearningDashboard from './pages/QuickLearningDashboard'
 
 // Tools System imports
 import ToolsDashboard from './pages/ToolsDashboard'
@@ -27,6 +28,12 @@ import ToolsTest from './pages/ToolsTest'
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+function QuickLearningProtectedRoute({ children }: React.PropsWithChildren) {
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  if (user.c_name !== 'quicklearning') return <Navigate to="/" replace />
   return <>{children}</>
 }
 
@@ -88,6 +95,11 @@ export default function App() {
             <Route path="herramientas-test" element={<ToolsTest />} />
 
             <Route path="chats" element={<ChatsTab />} />
+            <Route path="quicklearning/whatsapp" element={
+              <QuickLearningProtectedRoute>
+                <QuickLearningDashboard />
+              </QuickLearningProtectedRoute>
+            } />
           </Route>
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

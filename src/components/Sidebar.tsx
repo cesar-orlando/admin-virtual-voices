@@ -46,139 +46,11 @@ interface NavItem {
   children?: NavItem[]
 }
 
-const mainNavItems: NavItem[] = [
-  {
-    label: 'Dashboard',
-    icon: (
-      <DashboardIcon
-        sx={{
-          fontSize: 24,
-          transition: 'all 0.2s ease-out',
-        }}
-      />
-    ),
-    path: '/',
-  },
-  {
-    label: 'Métricas',
-    icon: (
-      <AnalyticsIcon
-        sx={{
-          fontSize: 24,
-          transition: 'all 0.2s ease-out',
-        }}
-      />
-    ),
-    path: '/metricas',
-  },
-  {
-    label: 'Usuarios',
-    icon: (
-      <PeopleIcon
-        sx={{
-          fontSize: 24,
-          transition: 'all 0.2s ease-out',
-        }}
-      />
-    ),
-    path: '/usuarios',
-  },
-  {
-    label: 'IA',
-    icon: (
-      <SmartToyIcon
-        sx={{
-          fontSize: 24,
-          transition: 'all 0.2s ease-out',
-        }}
-      />
-    ),
-    path: '/ia',
-  },
-  {
-    label: 'Herramientas',
-    icon: (
-      <BuildIcon
-        sx={{
-          fontSize: 24,
-          transition: 'all 0.2s ease-out',
-        }}
-      />
-    ),
-    path: '/herramientas',
-    children: [
-      {
-        label: 'Dashboard',
-        icon: <DashboardCustomizeIcon sx={{ fontSize: 20 }} />,
-        path: '/herramientas-dashboard',
-      },
-      {
-        label: 'Gestionar Herramientas',
-        icon: <BuildIcon sx={{ fontSize: 20 }} />,
-        path: '/herramientas',
-      },
-      {
-        label: 'Nueva Herramienta',
-        icon: <AddIcon sx={{ fontSize: 20 }} />,
-        path: '/herramientas/nueva',
-      },
-      {
-        label: 'Tester',
-        icon: <PlayArrowIcon sx={{ fontSize: 20 }} />,
-        path: '/herramientas/tester',
-      },
-    ],
-  },
-  {
-    label: 'Equipos',
-    icon: (
-      <GroupIcon
-        sx={{
-          fontSize: 24,
-          transition: 'all 0.2s ease-out',
-        }}
-      />
-    ),
-    path: '/equipos',
-  },
-  {
-    label: 'Whatsapp',
-    icon: (
-      <WhatsAppIcon
-        sx={{
-          fontSize: 24,
-          transition: 'all 0.2s ease-out',
-        }}
-      />
-    ),
-    path: '/whatsapp',
-  },
-  {
-    label: 'Chats',
-    icon: (
-      <ChatIcon
-        sx={{
-          fontSize: 24,
-          transition: 'all 0.2s ease-out',
-        }}
-      />
-    ),
-    path: '/chats',
-  },
-]
-
 interface SidebarProps {
   mobileOpen: boolean
   onClose: () => void
   mode: 'light' | 'dark'
   onHoverChange: (hover: boolean) => void
-}
-
-const getFilteredNavItems = (user: any) => {
-  return mainNavItems.filter(item => {
-    // Permitir que todos los usuarios vean Chats
-    return true
-  })
 }
 
 export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: SidebarProps) {
@@ -194,7 +66,6 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
   const isExpanded = hover || isMobile
   const { logoutUser } = useAuth()
   const user = JSON.parse(localStorage.getItem('user') || '{}')
-  const filteredNavItems = getFilteredNavItems(user)
 
   // Cargar tablas dinámicas
   useEffect(() => {
@@ -269,7 +140,56 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
     ],
   }
 
-  const allNavItems = [...filteredNavItems, tablesNavItem]
+  // Construir el menú principal dinámicamente según la empresa
+  const mainNavItems: NavItem[] = [
+    {
+      label: 'Dashboard',
+      icon: <DashboardIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/',
+    },
+    {
+      label: 'Métricas',
+      icon: <AnalyticsIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/metricas',
+    },
+    {
+      label: 'Usuarios',
+      icon: <PeopleIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/usuarios',
+    },
+    {
+      label: 'IA',
+      icon: <SmartToyIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/ia',
+    },
+    {
+      label: 'Herramientas',
+      icon: <BuildIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/herramientas',
+      children: [
+        { label: 'Dashboard', icon: <DashboardCustomizeIcon sx={{ fontSize: 20 }} />, path: '/herramientas-dashboard' },
+        { label: 'Gestionar Herramientas', icon: <BuildIcon sx={{ fontSize: 20 }} />, path: '/herramientas' },
+        { label: 'Nueva Herramienta', icon: <AddIcon sx={{ fontSize: 20 }} />, path: '/herramientas/nueva' },
+        { label: 'Tester', icon: <PlayArrowIcon sx={{ fontSize: 20 }} />, path: '/herramientas/tester' },
+      ],
+    },
+    {
+      label: 'Equipos',
+      icon: <GroupIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/equipos',
+    },
+    {
+      label: 'Whatsapp',
+      icon: <WhatsAppIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/whatsapp',
+    },
+    // Solo agregar QuickLearning WA si es quicklearning
+    ...(user.c_name === 'quicklearning' ? [
+      {
+        label: 'QuickLearning WA',
+        icon: <WhatsAppIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/quicklearning/whatsapp',
+      },
+    ] : []),
+    {
+      label: 'Chats',
+      icon: <ChatIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/chats',
+    },
+  ];
+
+  const allNavItems = [...mainNavItems, tablesNavItem]
 
   return (
     <Drawer

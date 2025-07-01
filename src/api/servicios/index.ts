@@ -15,3 +15,6 @@ export * from './dynamicTableServices';
 
 // Tools Services
 export * from './toolsServices';
+
+// Quick Learning Twilio Services
+export * from './quickLearningTwilioServices';

@@ -280,6 +280,9 @@ export interface WhatsAppSocketData {
   message?: string
 }
 
+// Quick Learning Twilio exports
+export * from './quicklearning';
+
 // Dynamic Tables types
 export interface DynamicTable extends BaseEntity {
   name: string
