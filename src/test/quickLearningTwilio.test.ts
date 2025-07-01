@@ -27,8 +27,8 @@ import type {
 const mockTwilioStatus: TwilioStatus = {
   service: 'twilio',
   status: 'active',
-  twilioAccountSid: 'AC5f21ea4eaf1c576c0d13fca789f63a5d',
-  twilioPhoneNumber: '+5213341610750',
+  twilioAccountSid: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+  twilioPhoneNumber: '+xxxxxxxxxxxx',
   lastWebhookReceived: new Date().toISOString(),
   messagesCount: {
     today: 15,
