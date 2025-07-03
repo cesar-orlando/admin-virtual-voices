@@ -5,7 +5,7 @@ import type { AiConfig } from "../../types/common";
 
 export const createAiConfig = async (config: AIConfig, user: UserProfile) => {
   try {
-    const response = await api.post(`/ia-configs/${user.c_name}`, config);
+    const response = await api.post(`/ia-configs/${user.companySlug}`, config);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -15,7 +15,7 @@ export const createAiConfig = async (config: AIConfig, user: UserProfile) => {
 
 export const fetchAllAiConfigs = async (user: UserProfile) => {
   try {
-    const response = await api.get(`/ia-configs/${user.c_name}/${user.id}`);
+    const response = await api.get(`/ia-configs/${user.companySlug}/${user.id}`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -25,7 +25,7 @@ export const fetchAllAiConfigs = async (user: UserProfile) => {
 
 export const updateAiConfig = async (config: Partial<AIConfig>, user: UserProfile) => {
   try {
-    const response = await api.put(`/ia-configs/${user.c_name}/${user.id}`, config);
+    const response = await api.put(`/ia-configs/${user.companySlug}/${user.id}`, config);
     return response.data;
   } catch (error) {
     console.log("error", (error as any).response.data)
@@ -36,7 +36,7 @@ export const updateAiConfig = async (config: Partial<AIConfig>, user: UserProfil
 
 export const deleteAiConfig = async (configId: string, user: UserProfile) => {
   try {
-    const response = await api.delete(`/ia-configs/${user.c_name}/${configId}`);
+    const response = await api.delete(`/ia-configs/${user.companySlug}/${configId}`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -46,7 +46,7 @@ export const deleteAiConfig = async (configId: string, user: UserProfile) => {
 
 export const simulateAiResponse = async (user: UserProfile, messages: Array<{ from: "user" | "ai"; text: string }>, aiConfig: Partial<AiConfig>) => {
   try {
-    const response = await api.post(`/ia-configs/simulate/${user.c_name}`, {
+    const response = await api.post(`/ia-configs/testIA/${user.companySlug}`, {
       messages,
       aiConfig,
     });

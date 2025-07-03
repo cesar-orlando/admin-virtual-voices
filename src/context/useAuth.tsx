@@ -170,7 +170,6 @@ export const UserProvider = ({ children }: Props) => {
           name: response.data.name,
           email: response.data.email,
           role: response.data.role as UserRole,
-          c_name: response.data.c_name,
           companySlug: response.data.companySlug,
           status: 'active'
         };
@@ -230,10 +229,11 @@ export const UserProvider = ({ children }: Props) => {
     name: string,
     email: string,
     password: string,
-    c_name: string
+    role: string,
+    companySlug: string
   ) => {
     try {
-      await registerAPI_Legacy(name, email, password, c_name);
+      await registerAPI_Legacy(name, email, password, role, companySlug);
       toast.success("Usuario registrado exitosamente");
       navigate("/login");
     } catch (error: any) {
@@ -251,12 +251,13 @@ export const UserProvider = ({ children }: Props) => {
       const response = await loginAPI_Legacy(email, password);
       if (response) {
         const token = response.data.token;
-        const userObj = {
+        const userObj: UserProfile = {
           id: response.data.id,
           name: response.data.name,
           email: response.data.email,
           role: response.data.role as UserRole,
-          c_name: response.data.c_name,
+          companySlug: response.data.companySlug,
+          status: 'active'
         };
         localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(userObj));

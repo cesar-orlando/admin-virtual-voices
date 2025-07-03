@@ -81,7 +81,7 @@ export default function Users() {
   const [selectedUserForMetrics, setSelectedUserForMetrics] = useState<User | null>(null);
 
   // Si el usuario no es admin, no puede ver la página
-  if (user.role !== 'admin') {
+  if (user.role !== 'Administrador') {
     return (
       <Box sx={{ width: '100vw', height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Typography variant="h5" color="error" fontWeight={700}>
@@ -332,20 +332,6 @@ export default function Users() {
             {value || 'active'}
           </Box>
         );
-      },
-    },
-    {
-      id: 'lastLogin',
-      label: 'Último acceso',
-      minWidth: 170,
-      format: (value: string) => {
-        if (!value) return "-";
-        const date = new Date(value);
-        if (isNaN(date.getTime())) return "-";
-        return new Intl.DateTimeFormat('es-ES', {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-        }).format(date);
       },
     },
     {

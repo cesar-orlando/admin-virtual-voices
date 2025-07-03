@@ -47,17 +47,15 @@ type RegisterFormsInputs = {
   email: string;
   password: string;
   role: string;
-  c_name: string;
   companySlug: string;
-}
+};
 
 const validation = yup.object().shape({
   name: yup.string().required("El nombre es obligatorio"),
   email: yup.string().email("Correo inválido").required("El correo es obligatorio"),
   password: yup.string().min(10, "Mínimo 10 caracteres").required("La contraseña es obligatoria"),
   role: yup.string().required("El rol es obligatorio"),
-  c_name: yup.string().required("El nombre de la compañía es obligatorio"),
-  companySlug: yup.string().required("Debe seleccionar una empresa"),
+  companySlug: yup.string().required("El nombre corto de la empresa es obligatorio")
 });
 
 const Register = () => {
@@ -81,30 +79,26 @@ const Register = () => {
   } = useForm<RegisterFormsInputs>({
     resolver: yupResolver(validation),
     defaultValues: {
-      companySlug: "test",
       role: "Usuario",
-      c_name: "test"
+      companySlug: ""
     }
   });
 
-  const watchedEmail = watch("email");
-  const watchedCompanySlug = watch("companySlug");
   const watchedRole = watch("role");
+  const watchedCompanySlug = watch("companySlug");
 
   const handleRegister = async (form: RegisterFormsInputs) => {
     setLoading(true);
     setServerError("");
-    
     try {
-      const registerData: RegisterRequest = {
+      const registerData = {
         name: form.name,
         email: form.email,
         password: form.password,
         role: form.role,
-        c_name: form.c_name,
         companySlug: form.companySlug
       };
-      
+      console.log("registerData", registerData);
       await registerUser(registerData);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error al registrar usuario.";
@@ -113,45 +107,6 @@ const Register = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Available roles based on company type
-  const getAvailableRoles = () => {
-    return [
-      { value: "Usuario", label: "Usuario", icon: null },
-      { value: "Admin", label: "Administrador", icon: <AdminPanelSettingsIcon /> }
-    ];
-  };
-
-  // Predefined test accounts for easy registration
-  const testAccounts = [
-    {
-      name: "Quick Learning Admin",
-      email: "admin@quicklearning.com",
-      password: "QuickLearning2024!",
-      role: "Admin",
-      companySlug: "quicklearning",
-      c_name: "quicklearning",
-      type: "Enterprise"
-    },
-    {
-      name: "Usuario Test",
-      email: "test@example.com",
-      password: "password1234567890",
-      role: "Usuario",
-      companySlug: "test",
-      c_name: "test",
-      type: "Regular"
-    }
-  ];
-
-  const fillTestAccount = (account: typeof testAccounts[0]) => {
-    setValue("name", account.name);
-    setValue("email", account.email);
-    setValue("password", account.password);
-    setValue("role", account.role);
-    setValue("companySlug", account.companySlug);
-    setValue("c_name", account.c_name);
   };
 
   return (
@@ -246,60 +201,7 @@ const Register = () => {
             </Typography>
           </Box>
 
-          {/* Quick access test accounts */}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" sx={{ color: '#BDBDBD', mb: 1, display: 'block' }}>
-              Registro rápido para pruebas:
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {testAccounts.map((account, index) => (
-                <Button
-                  key={index}
-                  size="small"
-                  variant="outlined"
-                  onClick={() => fillTestAccount(account)}
-                  sx={{
-                    fontSize: '0.7rem',
-                    textTransform: 'none',
-                    borderColor: account.type === 'Enterprise' ? '#E05EFF' : '#8B5CF6',
-                    color: account.type === 'Enterprise' ? '#E05EFF' : '#8B5CF6',
-                    '&:hover': {
-                      backgroundColor: account.type === 'Enterprise' ? 'rgba(224, 94, 255, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-                    }
-                  }}
-                >
-                  {account.type} - {account.role}
-                </Button>
-              ))}
-            </Box>
-          </Box>
-
           <form onSubmit={handleSubmit(handleRegister)} noValidate autoComplete="off">
-            <TextField
-              label="Empresa"
-              fullWidth
-              margin="normal"
-              {...register("companySlug")}
-              error={!!errors.companySlug}
-              helperText={errors.companySlug?.message || 'Nombre corto de la empresa (ej: quicklearning, test, etc.)'}
-              inputProps={{ "aria-label": "Empresa", "aria-invalid": !!errors.companySlug }}
-              sx={{
-                input: {
-                  color: "#fff",
-                  fontFamily: 'Montserrat, Arial, sans-serif',
-                },
-                label: { color: "#BDBDBD" },
-                fieldset: { borderColor: errors.companySlug ? "#E05EFF" : "#8B5CF6" },
-                mb: 2,
-                transition: 'box-shadow 0.3s',
-                '& .Mui-focused fieldset': {
-                  borderColor: "#E05EFF",
-                  boxShadow: "0 0 8px 2px #E05EFF55",
-                },
-              }}
-              InputLabelProps={{ style: { color: "#BDBDBD" } }}
-            />
-
             <TextField
               label="Nombre completo"
               fullWidth
@@ -384,14 +286,12 @@ const Register = () => {
                   }
                 }}
               >
-                {getAvailableRoles().map((role) => (
-                  <MenuItem key={role.value} value={role.value}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      {role.icon && <Box sx={{ mr: 1 }}>{role.icon}</Box>}
-                      <Typography>{role.label}</Typography>
-                    </Box>
-                  </MenuItem>
-                ))}
+                <MenuItem key="Usuario" value="Usuario">
+                  Usuario
+                </MenuItem>
+                <MenuItem key="Administrador" value="Administrador">
+                  Administrador
+                </MenuItem>
               </Select>
               {errors.role && (
                 <Typography variant="caption" sx={{ color: '#f44336', mt: 0.5, px: 1 }}>
@@ -441,8 +341,31 @@ const Register = () => {
               }}
             />
 
-            {/* Hidden company name field that syncs with companySlug */}
-            <input type="hidden" {...register("c_name")} />
+            <TextField
+              label="Nombre corto de la empresa"
+              fullWidth
+              margin="normal"
+              autoComplete="companySlug"
+              {...register("companySlug")}
+              error={!!errors.companySlug}
+              helperText={errors.companySlug?.message}
+              inputProps={{ "aria-label": "Nombre corto de la empresa", "aria-invalid": !!errors.companySlug }}
+              sx={{
+                input: {
+                  color: "#fff",
+                  fontFamily: 'Montserrat, Arial, sans-serif',
+                },
+                label: { color: "#BDBDBD" },
+                fieldset: { borderColor: errors.companySlug ? "#E05EFF" : "#8B5CF6" },
+                mb: 2,
+                transition: 'box-shadow 0.3s',
+                '& .Mui-focused fieldset': {
+                  borderColor: "#E05EFF",
+                  boxShadow: "0 0 8px 2px #E05EFF55",
+                },
+              }}
+              InputLabelProps={{ style: { color: "#BDBDBD" } }}
+            />
 
             {serverError && (
               <Typography color="error" sx={{ mt: 1, mb: 1, textAlign: "center" }} role="alert" aria-live="assertive">

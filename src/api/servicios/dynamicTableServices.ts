@@ -19,7 +19,7 @@ export const createTable = async (tableData: CreateTableRequest, user: UserProfi
   try {
     const payload = {
       ...tableData,
-      c_name: user.c_name,
+      c_name: user.companySlug,
       createdBy: user.id
     };
     const response = await api.post(`/tables/`, payload);
@@ -34,7 +34,7 @@ export const createTable = async (tableData: CreateTableRequest, user: UserProfi
 // Obtener todas las tablas de una empresa
 export const getTables = async (user: UserProfile) => {
   try {
-    const response = await api.get(`/tables/${user.c_name}`);
+    const response = await api.get(`/tables/${user.companySlug}`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -45,7 +45,7 @@ export const getTables = async (user: UserProfile) => {
 // Obtener una tabla específica por slug
 export const getTableBySlug = async (tableSlug: string, user: UserProfile) => {
   try {
-    const response = await api.get(`/tables/${user.c_name}/${tableSlug}`);
+    const response = await api.get(`/tables/${user.companySlug}/${tableSlug}`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -58,7 +58,7 @@ export const updateTable = async (tableId: string, tableData: UpdateTableRequest
   try {
     const response = await api.put(`/tables/${tableId}`, {
       ...tableData,
-      c_name: user.c_name
+      c_name: user.companySlug
     });
     return response.data;
   } catch (error) {
@@ -70,7 +70,8 @@ export const updateTable = async (tableId: string, tableData: UpdateTableRequest
 // Eliminar una tabla (soft delete)
 export const deleteTable = async (tableId: string, user: UserProfile) => {
   try {
-    const response = await api.delete(`/tables/${user.c_name}/${tableId}`, {
+    // Axios permite enviar body en DELETE usando { data: ... }
+    const response = await api.delete(`/tables/${user.companySlug}/${tableId}`, {
       data: { deletedBy: user.email }
     });
     return response.data;
@@ -83,7 +84,7 @@ export const deleteTable = async (tableId: string, user: UserProfile) => {
 // Obtener estructura de tabla
 export const getTableStructure = async (tableSlug: string, user: UserProfile) => {
   try {
-    const response = await api.get(`/tables/${user.c_name}/${tableSlug}/structure`);
+    const response = await api.get(`/tables/${user.companySlug}/${tableSlug}/structure`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -94,7 +95,7 @@ export const getTableStructure = async (tableSlug: string, user: UserProfile) =>
 // Actualizar estructura de tabla
 export const updateTableStructure = async (tableId: string, fields: any[], user: UserProfile) => {
   try {
-    const response = await api.patch(`/tables/${user.c_name}/${tableId}/structure`, {
+    const response = await api.patch(`/tables/${user.companySlug}/${tableId}/structure`, {
       fields,
       updatedBy: user.id
     });
@@ -108,10 +109,10 @@ export const updateTableStructure = async (tableId: string, fields: any[], user:
 // Duplicar tabla
 export const duplicateTable = async (tableId: string, newName: string, newSlug: string, user: UserProfile) => {
   try {
-    const response = await api.post(`/tables/${user.c_name}/${tableId}/duplicate`, {
+    const response = await api.post(`/tables/${user.companySlug}/${tableId}/duplicate`, {
       newName,
       newSlug,
-      c_name: user.c_name,
+      c_name: user.companySlug,
       createdBy: user.id
     });
     return response.data;
@@ -124,7 +125,7 @@ export const duplicateTable = async (tableId: string, newName: string, newSlug: 
 // Exportar tabla
 export const exportTable = async (tableSlug: string, user: UserProfile) => {
   try {
-    const response = await api.get(`/tables/${user.c_name}/${tableSlug}/export`, {
+    const response = await api.get(`/tables/${user.companySlug}/${tableSlug}/export`, {
       responseType: 'blob'
     });
     return response.data;
@@ -137,9 +138,9 @@ export const exportTable = async (tableSlug: string, user: UserProfile) => {
 // Importar tabla
 export const importTable = async (tableData: any, user: UserProfile) => {
   try {
-    const response = await api.post(`/tables/${user.c_name}/import`, {
+    const response = await api.post(`/tables/${user.companySlug}/import`, {
       tableData,
-      c_name: user.c_name,
+      c_name: user.companySlug,
       createdBy: user.id
     });
     return response.data;
@@ -156,7 +157,7 @@ export const createRecord = async (recordData: CreateRecordRequest, user: UserPr
   try {
     const response = await api.post(`/records/`, {
       ...recordData,
-      c_name: user.c_name,
+      c_name: user.companySlug,
       createdBy: user.id
     });
     return response.data;
@@ -185,11 +186,11 @@ export const getRecords = async (
       ...(filters && { filters: JSON.stringify(filters) })
     });
 
-    const url = `/records/table/${user.c_name}/${tableSlug}?${params}`;
+    const url = `/records/table/${user.companySlug}/${tableSlug}?${params}`;
 
     console.log("url --->", url)
 
-    const response = await api.get(`/records/table/${user.c_name}/${tableSlug}?${params}`);
+    const response = await api.get(`/records/table/${user.companySlug}/${tableSlug}?${params}`);
     console.log("response --->", response.data)
     return response.data as PaginatedRecordsResponse;
   } catch (error) {
@@ -201,7 +202,7 @@ export const getRecords = async (
 // Obtener un registro específico
 export const getRecordById = async (recordId: string, user: UserProfile) => {
   try {
-    const response = await api.get(`/records/${user.c_name}/${recordId}`);
+    const response = await api.get(`/records/${user.companySlug}/${recordId}`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -212,7 +213,7 @@ export const getRecordById = async (recordId: string, user: UserProfile) => {
 // Obtener un registro con su estructura de tabla
 export const getRecordWithStructure = async (recordId: string, user: UserProfile) => {
   try {
-    const response = await api.get(`/records/${user.c_name}/${recordId}/with-structure`);
+    const response = await api.get(`/records/${user.companySlug}/${recordId}/with-structure`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -223,7 +224,7 @@ export const getRecordWithStructure = async (recordId: string, user: UserProfile
 // Obtener un registro con datos de tabla
 export const getRecordWithTable = async (recordId: string, user: UserProfile) => {
   try {
-    const response = await api.get(`/records/${user.c_name}/${recordId}/with-table`);
+    const response = await api.get(`/records/${user.companySlug}/${recordId}/with-table`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -236,7 +237,7 @@ export const updateRecord = async (recordId: string, recordData: UpdateRecordReq
   try {
     const response = await api.put(`/records/${recordId}`, {
       ...recordData,
-      c_name: user.c_name,
+      c_name: user.companySlug,
       updatedBy: user.id
     });
     return response.data;
@@ -249,7 +250,7 @@ export const updateRecord = async (recordId: string, recordData: UpdateRecordReq
 // Eliminar un registro
 export const deleteRecord = async (recordId: string, user: UserProfile) => {
   try {
-    const response = await api.delete(`/records/${user.c_name}/${recordId}`);
+    const response = await api.delete(`/records/${user.companySlug}/${recordId}`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -263,7 +264,7 @@ export const validateRecord = async (tableSlug: string, data: Record<string, any
     const response = await api.post(`/records/validate`, {
       tableSlug,
       data,
-      c_name: user.c_name
+      c_name: user.companySlug
     });
     return response.data;
   } catch (error) {
@@ -282,7 +283,7 @@ export const searchRecords = async (
   limit: number = 10
 ) => {
   try {
-    const response = await api.post(`/records/${user.c_name}/${tableSlug}/search`, {
+    const response = await api.post(`/records/${user.companySlug}/${tableSlug}/search`, {
       query,
       filters,
       page,
@@ -298,7 +299,7 @@ export const searchRecords = async (
 // Obtener estadísticas de la tabla
 export const getTableStats = async (tableSlug: string, user: UserProfile) => {
   try {
-    const response = await api.get(`/records/stats/${user.c_name}/${tableSlug}`);
+    const response = await api.get(`/records/stats/${user.companySlug}/${tableSlug}`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -313,7 +314,7 @@ export const bulkUpdateRecords = async (
   user: UserProfile
 ) => {
   try {
-    const response = await api.post(`/records/${user.c_name}/${tableSlug}/bulk`, {
+    const response = await api.post(`/records/${user.companySlug}/${tableSlug}/bulk`, {
       records,
       updatedBy: user.id
     });
@@ -331,7 +332,7 @@ export const bulkDeleteRecords = async (
   user: UserProfile
 ) => {
   try {
-    const response = await api.delete(`/records/${user.c_name}/${tableSlug}/bulk`, {
+    const response = await api.delete(`/records/${user.companySlug}/${tableSlug}/bulk`, {
       data: { recordIds }
     });
     return response.data;
@@ -348,7 +349,7 @@ export const importRecords = async (
   user: UserProfile
 ) => {
   try {
-    const response = await api.post(`/records/${user.c_name}/${tableSlug}/import`, {
+    const response = await api.post(`/records/${user.companySlug}/${tableSlug}/import`, {
       records,
       createdBy: user.id
     });
@@ -372,7 +373,7 @@ export const exportRecords = async (
       ...(filters && { filters: JSON.stringify(filters) })
     });
 
-    const response = await api.get(`/records/${user.c_name}/${tableSlug}/export?${params}`, {
+    const response = await api.get(`/records/${user.companySlug}/${tableSlug}/export?${params}`, {
       responseType: 'blob'
     });
     return response.data;
@@ -392,7 +393,7 @@ export const addFieldToAllRecords = async (
   try {
     const response = await api.post(`/records/add-field`, {
       tableSlug,
-      c_name: user.c_name,
+      c_name: user.companySlug,
       fieldName,
       defaultValue,
       updatedBy: user.id
@@ -413,7 +414,7 @@ export const deleteFieldsFromAllRecords = async (
   try {
     const response = await api.post(`/records/delete-fields`, {
       tableSlug,
-      c_name: user.c_name,
+      c_name: user.companySlug,
       fieldNames,
       updatedBy: user.id
     });
@@ -452,7 +453,7 @@ export const renameFieldInAllRecords = async (
   try {
     const response = await api.post(`/records/rename-field`, {
       tableSlug,
-      c_name: user.c_name,
+      c_name: user.companySlug,
       oldFieldName,
       newFieldName,
       updatedBy: user.id

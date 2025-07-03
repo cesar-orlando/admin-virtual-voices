@@ -17,7 +17,7 @@ export type UserContextType = {
     isLoggedIn: () => boolean;
     setCurrentCompany: (company: CompanyConfig | null) => void;
     // Legacy support
-    registerUser_Legacy: (email: string, name: string, password: string, c_name: string) => Promise<void>;
+    registerUser_Legacy: (name: string, email: string, password: string, role: string, companySlug: string) => Promise<void>;
     loginUser_Legacy: (email: string, password: string) => Promise<void>;
 };
 

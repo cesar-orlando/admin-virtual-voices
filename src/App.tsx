@@ -71,7 +71,7 @@ export default function App() {
               </ProtectedRoute>
             }
           >
-            <Route index element={<DashboardPage />} />
+            <Route index element={<Metrics />} />
             <Route path="metricas" element={<Metrics />} />
             <Route path="usuarios" element={<Users />} />
             <Route path="ia" element={<AiConfig />} />

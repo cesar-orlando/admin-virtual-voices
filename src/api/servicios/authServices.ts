@@ -36,7 +36,6 @@ export const loginAPI = async (loginData: LoginRequest) => {
         name: response.data.user.name,
         email: response.data.user.email,
         role: response.data.user.role,
-        c_name: response.data.user.companySlug || 'test',
         companySlug: response.data.user.companySlug,
         token: response.data.token
       }
@@ -52,18 +51,9 @@ export const loginAPI = async (loginData: LoginRequest) => {
 // Enhanced register API for multi-company support  
 export const registerAPI = async (registerData: RegisterRequest) => {
   try {
-    // Use the new core users endpoint for multi-company support
-    const endpoint = registerData.companySlug ? "/core/users/register" : "/users/register";
-    
-    const response = await api.post<{
-      id: string;
-      name: string;
-      email: string;
-      role: string;
-      companySlug: string;
-      status: number;
-    }>(endpoint, registerData);
-    
+    // Siempre usar el endpoint multiempresa
+    const endpoint = "/core/users/register";
+    const response = await api.post(endpoint, registerData);
     // Transform response to match expected UserProfileToken format
     const transformedResponse = {
       ...response,
@@ -72,12 +62,10 @@ export const registerAPI = async (registerData: RegisterRequest) => {
         name: response.data.name,
         email: response.data.email,
         role: response.data.role,
-        c_name: response.data.companySlug || registerData.c_name,
         companySlug: response.data.companySlug,
         token: '' // Register doesn't return token, user needs to login
       }
     };
-    
     return transformedResponse;
   } catch (error) {
     handleError(error as any);
@@ -110,7 +98,6 @@ export const quickLearningLoginAPI = async (loginData: QuickLearningLoginRequest
         name: response.data.user.name,
         email: response.data.user.email,
         role: response.data.user.role,
-        c_name: "quicklearning",
         companySlug: "quicklearning",
         token: response.data.token
       }
@@ -143,7 +130,6 @@ export const quickLearningRegisterAPI = async (registerData: QuickLearningRegist
         name: response.data.name,
         email: response.data.email,
         role: response.data.role,
-        c_name: "quicklearning",
         companySlug: "quicklearning",
         token: ''
       }
@@ -260,6 +246,6 @@ export const loginAPI_Legacy = async (email: string, password: string) => {
   return loginAPI({ email, password });
 };
 
-export const registerAPI_Legacy = async (name: string, email: string, password: string, c_name: string) => {
-  return registerAPI({ name, email, password, c_name });
+export const registerAPI_Legacy = async (name: string, email: string, password: string, role: string, companySlug: string) => {
+  return registerAPI({ name, email, password, role, companySlug });
 };

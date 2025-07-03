@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef } from 'react'
 import {
   Box,
   Typography,
@@ -19,145 +19,152 @@ import {
   DialogContent,
   DialogActions,
   Chip,
-} from "@mui/material";
-import MuiAlert from '@mui/material/Alert';
-import { simulateAiResponse, updateAiConfig, fetchAllAiConfigs, createAiConfig, deleteAiConfig } from "../api/servicios";
-import type { AIConfig } from '../types';
-import AddIcon from '@mui/icons-material/Add';
-import DeleteIcon from '@mui/icons-material/Delete';
-import ChatIcon from '@mui/icons-material/Chat';
-import PhoneIcon from '@mui/icons-material/Phone';
-import Loading from '../components/Loading';
-
+} from '@mui/material'
+import MuiAlert from '@mui/material/Alert'
+import {
+  simulateAiResponse,
+  updateAiConfig,
+  fetchAllAiConfigs,
+  createAiConfig,
+  deleteAiConfig,
+} from '../api/servicios'
+import type { AIConfig } from '../types'
+import AddIcon from '@mui/icons-material/Add'
+import DeleteIcon from '@mui/icons-material/Delete'
+import ChatIcon from '@mui/icons-material/Chat'
+import PhoneIcon from '@mui/icons-material/Phone'
+import Loading from '../components/Loading'
 
 export default function AiConfig() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const theme = useTheme();
-  const chatButtonRef = useRef<HTMLButtonElement>(null);
-  const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([]);
-  const [selectedId, setSelectedId] = useState("");
-  const [aiConfig, setAiConfig] = useState<Partial<AIConfig>>({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState(false);
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatInput, setChatInput] = useState('');
-  const [chatMessages, setChatMessages] = useState<Array<{ from: "user" | "ai"; text: string }>>([]);
-  const toneOptions = ["Todos", "formal", "persuasivo", "amigable"];
-  const objetivoOptions = ["agendar", "responder", "recomendar", "ventas", "soporte"];
-  const [isNew, setIsNew] = useState(false);
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const theme = useTheme()
+  const chatButtonRef = useRef<HTMLButtonElement>(null)
+  const [aiConfigs, setAiConfigs] = useState<AIConfig[]>([])
+  const [selectedId, setSelectedId] = useState('')
+  const [aiConfig, setAiConfig] = useState<Partial<AIConfig>>({})
+  const [isLoading, setIsLoading] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success' as 'success' | 'error',
+  })
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [chatMessages, setChatMessages] = useState<Array<{ from: 'user' | 'ai'; text: string }>>([])
+  const toneOptions = ['Todos', 'formal', 'persuasivo', 'amigable']
+  const objetivoOptions = ['agendar', 'responder', 'recomendar', 'ventas', 'soporte']
+  const [isNew, setIsNew] = useState(false)
 
   useEffect(() => {
-    setIsLoading(true);
+    setIsLoading(true)
     const loadData = async () => {
-      const data = await fetchAllAiConfigs(user);
-      console.log("data", data)
+      const data = await fetchAllAiConfigs(user)
+      console.log('data', data)
       if (data.length > 0) {
-        setSelectedId(data[0]._id);
-        setAiConfig(data[0]);
-        setAiConfigs(data);
+        setSelectedId(data[0]._id)
+        setAiConfig(data[0])
+        setAiConfigs(data)
       }
-      setIsLoading(false);
-    };
-    loadData();
-  }, [user.c_name, user.id]);
+      setIsLoading(false)
+    }
+    loadData()
+  }, [user.c_name, user.id])
 
   const handleSelectChange = (event: any) => {
-    setIsNew(false);
-    const config = aiConfigs.find(cfg => cfg._id === event.target.value);
+    setIsNew(false)
+    const config = aiConfigs.find(cfg => cfg._id === event.target.value)
     if (config) {
-      setSelectedId(config._id);
-      setAiConfig(config);
+      setSelectedId(config._id)
+      setAiConfig(config)
     }
-  };
+  }
 
   async function handleDeleteAiConfig(cfg: Partial<AIConfig>) {
-    if (!window.confirm(`¿Seguro que deseas borrar la IA "${cfg.name}"?`)) return;
+    if (!window.confirm(`¿Seguro que deseas borrar la IA "${cfg.name}"?`)) return
     try {
-      setActionLoading(true);
-      await deleteAiConfig(cfg._id as string, user);
-      setSnackbar({ open: true, message: "Configuración eliminada.", severity: "success" });
-      const data = await fetchAllAiConfigs(user);
-      setAiConfigs(data);
+      setActionLoading(true)
+      await deleteAiConfig(cfg._id as string, user)
+      setSnackbar({ open: true, message: 'Configuración eliminada.', severity: 'success' })
+      const data = await fetchAllAiConfigs(user)
+      setAiConfigs(data)
       if (data.length > 0) {
-        setSelectedId(data[0]._id);
-        setAiConfig(data[0]);
+        setSelectedId(data[0]._id)
+        setAiConfig(data[0])
       }
     } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || "Error al borrar.", severity: "error" });
+      setSnackbar({ open: true, message: err.message || 'Error al borrar.', severity: 'error' })
     } finally {
-      setActionLoading(false);
+      setActionLoading(false)
     }
   }
 
   const handleNewAI = () => {
-    setIsNew(true);
+    setIsNew(true)
     setAiConfig({
-        name: "",
-        welcomeMessage: "",
-        tone: "",
-        objective: "",
-        customPrompt: "",
-        user: {
-            id: user.id,
-            name: user.name
-        }
-    });
-    setSelectedId(""); // Deselecciona el actual
-    };
-
-async function saveAiConfig(config: Partial<AIConfig>) {
-  try {
-    setActionLoading(true);
-    if (isNew) {
-      // Crear nuevo
-      await createAiConfig(config as AIConfig, user);
-      setSnackbar({ open: true, message: "Nuevo AI creado correctamente.", severity: "success" });
-      setIsNew(false);
-    } else {
-      // Actualizar existente
-      if (!config._id) return;
-      await updateAiConfig(config as AIConfig, user);
-      setSnackbar({ open: true, message: "Configuración guardada correctamente.", severity: "success" });
-    }
-    // Actualiza lista
-    const data = await fetchAllAiConfigs(user);
-    setAiConfigs(data);
-    const updated = data.find((cfg: AIConfig) =>
-      isNew ? cfg.name === config.name : cfg._id === config._id
-    );
-    if (updated) {
-      setAiConfig(updated);
-      setSelectedId(updated._id);
-    }
-  } catch (err: any) {
-    setSnackbar({ open: true, message: err.message || "Error al guardar.", severity: "error" });
-  } finally {
-    setActionLoading(false);
+      name: '',
+      welcomeMessage: '',
+      tone: '',
+      objective: '',
+      customPrompt: '',
+      user: {
+        id: user.id,
+        name: user.name,
+      },
+    })
+    setSelectedId('') // Deselecciona el actual
   }
-}
+
+  async function saveAiConfig(config: Partial<AIConfig>) {
+    try {
+      setActionLoading(true)
+      if (isNew) {
+        // Crear nuevo
+        await createAiConfig(config as AIConfig, user)
+        setSnackbar({ open: true, message: 'Nuevo AI creado correctamente.', severity: 'success' })
+        setIsNew(false)
+      } else {
+        // Actualizar existente
+        if (!config._id) return
+        await updateAiConfig(config as AIConfig, user)
+        setSnackbar({
+          open: true,
+          message: 'Configuración guardada correctamente.',
+          severity: 'success',
+        })
+      }
+      // Actualiza lista
+      const data = await fetchAllAiConfigs(user)
+      setAiConfigs(data)
+      const updated = data.find((cfg: AIConfig) =>
+        isNew ? cfg.name === config.name : cfg._id === config._id
+      )
+      if (updated) {
+        setAiConfig(updated)
+        setSelectedId(updated._id)
+      }
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || 'Error al guardar.', severity: 'error' })
+    } finally {
+      setActionLoading(false)
+    }
+  }
 
   // Simulación simple de respuesta AI
   async function handleSendMessage() {
-    if (!chatInput.trim()) return;
-    const userMessage = chatInput;
-    const updatedMessages = [...chatMessages, { from: 'user' as const, text: userMessage }];
-    setChatMessages(updatedMessages);
-    setChatInput('');
-    const response = await simulateAiResponse(
-      user,
-      updatedMessages,
-      aiConfig
-    );
+    if (!chatInput.trim()) return
+    const userMessage = chatInput
+    const updatedMessages = [...chatMessages, { from: 'user' as const, text: userMessage }]
+    setChatMessages(updatedMessages)
+    setChatInput('')
+    const response = await simulateAiResponse(user, updatedMessages, aiConfig)
     setTimeout(() => {
-      setChatMessages(msgs => [...msgs, { from: 'ai', text: response.message }]);
-    }, 700);
+      setChatMessages(msgs => [...msgs, { from: 'ai', text: response.message }])
+    }, 700)
   }
 
-  console.log("aiConfig.user?.name --->", aiConfig)
-
   return (
-    <Box 
+    <Box
       component="main"
       sx={{
         width: '90vw',
@@ -165,9 +172,8 @@ async function saveAiConfig(config: Partial<AIConfig>) {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
-        backgroundColor: theme.palette.mode === 'dark' 
-          ? 'rgba(30,30,40,0.95)'
-          : 'rgba(255,255,255,0.96)',
+        backgroundColor:
+          theme.palette.mode === 'dark' ? 'rgba(30,30,40,0.95)' : 'rgba(255,255,255,0.96)',
       }}
     >
       {isLoading && <Loading overlay message="Cargando configuraciones de AI..." />}
@@ -226,59 +232,65 @@ async function saveAiConfig(config: Partial<AIConfig>) {
             }}
           >
             {!isNew && (
-            <Button
+              <Button
                 ref={chatButtonRef}
                 variant="contained"
                 startIcon={<DeleteIcon />}
-                onClick={() => handleDeleteAiConfig(aiConfig)} 
+                onClick={() => handleDeleteAiConfig(aiConfig)}
                 sx={{
-                borderRadius: 2,
-                px: 3,
-                py: 1,
-                backgroundColor: theme.palette.mode === 'dark' ? '#8B5CF6' : '#3B82F6',
-                backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                boxShadow: theme.palette.mode === 'dark'
-                  ? '0 4px 24px rgba(139, 92, 246, 0.3)'
-                  : '0 4px 24px rgba(59, 130, 246, 0.3)',
-                '&:hover': {
-                  backgroundImage: 'linear-gradient(135deg, #8B5CF6 0%, #E05EFF 100%)',
-                  transform: 'translateY(-1px)',
-                  boxShadow: theme.palette.mode === 'dark'
-                    ? '0 4px 32px rgba(139, 92, 246, 0.4)'
-                    : '0 4px 32px rgba(59, 130, 246, 0.4)',
-                },
-                transition: 'all 0.2s ease-out',
-              }}
-            >
-              Borrar AI
-            </Button>
+                  borderRadius: 2,
+                  px: 3,
+                  py: 1,
+                  backgroundColor: theme.palette.mode === 'dark' ? '#8B5CF6' : '#3B82F6',
+                  backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+                  boxShadow:
+                    theme.palette.mode === 'dark'
+                      ? '0 4px 24px rgba(139, 92, 246, 0.3)'
+                      : '0 4px 24px rgba(59, 130, 246, 0.3)',
+                  '&:hover': {
+                    backgroundImage: 'linear-gradient(135deg, #8B5CF6 0%, #E05EFF 100%)',
+                    transform: 'translateY(-1px)',
+                    boxShadow:
+                      theme.palette.mode === 'dark'
+                        ? '0 4px 32px rgba(139, 92, 246, 0.4)'
+                        : '0 4px 32px rgba(59, 130, 246, 0.4)',
+                  },
+                  transition: 'all 0.2s ease-out',
+                }}
+              >
+                Borrar AI
+              </Button>
             )}
             <Button
-                ref={chatButtonRef}
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleNewAI} 
-                sx={{
+              ref={chatButtonRef}
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={handleNewAI}
+              sx={{
                 borderRadius: 2,
                 px: 3,
                 py: 1,
                 backgroundColor: theme.palette.mode === 'dark' ? '#8B5CF6' : '#3B82F6',
                 backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                boxShadow: theme.palette.mode === 'dark'
-                  ? '0 4px 24px rgba(139, 92, 246, 0.3)'
-                  : '0 4px 24px rgba(59, 130, 246, 0.3)',
+                boxShadow:
+                  theme.palette.mode === 'dark'
+                    ? '0 4px 24px rgba(139, 92, 246, 0.3)'
+                    : '0 4px 24px rgba(59, 130, 246, 0.3)',
                 '&:hover': {
                   backgroundImage: 'linear-gradient(135deg, #8B5CF6 0%, #E05EFF 100%)',
                   transform: 'translateY(-1px)',
-                  boxShadow: theme.palette.mode === 'dark'
-                    ? '0 4px 32px rgba(139, 92, 246, 0.4)'
-                    : '0 4px 32px rgba(59, 130, 246, 0.4)',
+                  boxShadow:
+                    theme.palette.mode === 'dark'
+                      ? '0 4px 32px rgba(139, 92, 246, 0.4)'
+                      : '0 4px 32px rgba(59, 130, 246, 0.4)',
                 },
                 transition: 'all 0.2s ease-out',
               }}
             >
               Agregar Nuevo AI
             </Button>
+
+            {/* se desactiva por ahora, hasta que se implemente la llamada a la IA             
             <Button
               ref={chatButtonRef}
               variant="contained"
@@ -304,7 +316,7 @@ async function saveAiConfig(config: Partial<AIConfig>) {
               }}
             >
               Simular Llamada
-            </Button>
+            </Button> */}
             <Button
               variant="contained"
               startIcon={<ChatIcon />}
@@ -315,15 +327,17 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                 py: 1,
                 backgroundColor: theme.palette.mode === 'dark' ? '#8B5CF6' : '#3B82F6',
                 backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                boxShadow: theme.palette.mode === 'dark'
-                  ? '0 4px 24px rgba(139, 92, 246, 0.3)'
-                  : '0 4px 24px rgba(59, 130, 246, 0.3)',
+                boxShadow:
+                  theme.palette.mode === 'dark'
+                    ? '0 4px 24px rgba(139, 92, 246, 0.3)'
+                    : '0 4px 24px rgba(59, 130, 246, 0.3)',
                 '&:hover': {
                   backgroundImage: 'linear-gradient(135deg, #8B5CF6 0%, #E05EFF 100%)',
                   transform: 'translateY(-1px)',
-                  boxShadow: theme.palette.mode === 'dark'
-                    ? '0 4px 32px rgba(139, 92, 246, 0.4)'
-                    : '0 4px 32px rgba(59, 130, 246, 0.4)',
+                  boxShadow:
+                    theme.palette.mode === 'dark'
+                      ? '0 4px 32px rgba(139, 92, 246, 0.4)'
+                      : '0 4px 32px rgba(59, 130, 246, 0.4)',
                 },
                 transition: 'all 0.2s ease-out',
               }}
@@ -339,7 +353,9 @@ async function saveAiConfig(config: Partial<AIConfig>) {
               borderRadius: 3,
               overflow: 'hidden',
               backgroundColor:
-                theme.palette.mode === 'dark' ? 'rgba(30, 30, 40, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                theme.palette.mode === 'dark'
+                  ? 'rgba(30, 30, 40, 0.95)'
+                  : 'rgba(255, 255, 255, 0.95)',
               backdropFilter: 'blur(16px)',
               boxShadow:
                 theme.palette.mode === 'dark'
@@ -349,27 +365,33 @@ async function saveAiConfig(config: Partial<AIConfig>) {
           >
             <Box sx={{ p: 3 }}>
               <FormControl fullWidth sx={{ mb: 3 }}>
-                <InputLabel sx={{
-                  marginTop: '-8px',
-                  padding: '2px 8px',
-                  transform: 'translate(14px, 16px) scale(1)',
-                  backgroundColor: theme.palette.mode === 'dark' 
-                    ? 'rgba(30, 30, 40, 0.95)'
-                    : 'rgba(255, 255, 255, 0.95)',
-                  '&.Mui-focused': {
-                    color: '#8B5CF6',
+                <InputLabel
+                  sx={{
+                    marginTop: '-8px',
                     padding: '2px 8px',
-                  },
-                  '&.MuiInputLabel-shrink': {
-                    marginTop: 0,
-                    fontSize: '1rem',
-                    padding: '2px 8px',
-                    transform: 'translate(14px, -9px) scale(0.75)',
-                    backgroundColor: theme.palette.mode === 'dark' 
-                      ? 'rgba(30, 30, 40, 0.95)'
-                      : 'rgba(255, 255, 255, 0.95)',
-                  },
-                }}>Selecciona configuración</InputLabel>
+                    transform: 'translate(14px, 16px) scale(1)',
+                    backgroundColor:
+                      theme.palette.mode === 'dark'
+                        ? 'rgba(30, 30, 40, 0.95)'
+                        : 'rgba(255, 255, 255, 0.95)',
+                    '&.Mui-focused': {
+                      color: '#8B5CF6',
+                      padding: '2px 8px',
+                    },
+                    '&.MuiInputLabel-shrink': {
+                      marginTop: 0,
+                      fontSize: '1rem',
+                      padding: '2px 8px',
+                      transform: 'translate(14px, -9px) scale(0.75)',
+                      backgroundColor:
+                        theme.palette.mode === 'dark'
+                          ? 'rgba(30, 30, 40, 0.95)'
+                          : 'rgba(255, 255, 255, 0.95)',
+                    },
+                  }}
+                >
+                  Selecciona configuración
+                </InputLabel>
                 <Select
                   value={selectedId}
                   label="Selecciona configuración"
@@ -401,24 +423,25 @@ async function saveAiConfig(config: Partial<AIConfig>) {
 
               {aiConfig && (
                 <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    await saveAiConfig(aiConfig);
+                  onSubmit={async e => {
+                    e.preventDefault()
+                    await saveAiConfig(aiConfig)
                   }}
                   style={{ width: '100%' }}
                 >
-                  <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <TextField
                       label="Nombre"
-                      value={aiConfig.name || ""}
+                      value={aiConfig.name || ''}
                       onChange={e => setAiConfig(prev => ({ ...prev, name: e.target.value }))}
                       fullWidth
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           borderRadius: 2,
-                          boxShadow: theme.palette.mode === 'dark'
-                            ? '0 2px 8px rgba(0, 0, 0, 0.2)'
-                            : '0 2px 8px rgba(0, 0, 0, 0.05)',
+                          boxShadow:
+                            theme.palette.mode === 'dark'
+                              ? '0 2px 8px rgba(0, 0, 0, 0.2)'
+                              : '0 2px 8px rgba(0, 0, 0, 0.05)',
                           '& fieldset': {
                             borderColor: 'rgba(139, 92, 246, 0.2)',
                             borderWidth: 2,
@@ -434,9 +457,10 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                         '& .MuiInputLabel-root': {
                           marginTop: '-8px',
                           padding: '0 8px',
-                          backgroundColor: theme.palette.mode === 'dark' 
-                            ? 'rgba(30, 30, 40, 0.95)'
-                            : 'rgba(255, 255, 255, 0.95)',
+                          backgroundColor:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(30, 30, 40, 0.95)'
+                              : 'rgba(255, 255, 255, 0.95)',
                           '&.Mui-focused': {
                             color: '#8B5CF6',
                             padding: '0 8px',
@@ -446,9 +470,10 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                           marginTop: 0,
                           fontSize: '1rem',
                           padding: '0 8px',
-                          backgroundColor: theme.palette.mode === 'dark' 
-                            ? 'rgba(30, 30, 40, 0.95)'
-                            : 'rgba(255, 255, 255, 0.95)',
+                          backgroundColor:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(30, 30, 40, 0.95)'
+                              : 'rgba(255, 255, 255, 0.95)',
                         },
                         '& .MuiOutlinedInput-input': {
                           padding: '16px 14px',
@@ -457,23 +482,29 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                     />
                     {/* Mostrar el creador de la IA */}
                     {aiConfig.user?.name && (
-                      <Typography variant="caption" sx={{ color: '#8B5CF6', fontWeight: 500, ml: 1 }}>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: '#8B5CF6', fontWeight: 500, ml: 1 }}
+                      >
                         Creado por: {aiConfig.user.name}
                       </Typography>
                     )}
                     <TextField
                       label="Mensaje de bienvenida"
-                      value={aiConfig.welcomeMessage || ""}
-                      onChange={e => setAiConfig(prev => ({ ...prev, welcomeMessage: e.target.value }))}
+                      value={aiConfig.welcomeMessage || ''}
+                      onChange={e =>
+                        setAiConfig(prev => ({ ...prev, welcomeMessage: e.target.value }))
+                      }
                       fullWidth
                       minRows={2}
                       multiline
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           borderRadius: 2,
-                          boxShadow: theme.palette.mode === 'dark'
-                            ? '0 2px 8px rgba(0, 0, 0, 0.2)'
-                            : '0 2px 8px rgba(0, 0, 0, 0.05)',
+                          boxShadow:
+                            theme.palette.mode === 'dark'
+                              ? '0 2px 8px rgba(0, 0, 0, 0.2)'
+                              : '0 2px 8px rgba(0, 0, 0, 0.05)',
                           '& fieldset': {
                             borderColor: 'rgba(139, 92, 246, 0.2)',
                             borderWidth: 2,
@@ -489,9 +520,10 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                         '& .MuiInputLabel-root': {
                           marginTop: '-8px',
                           padding: '0 8px',
-                          backgroundColor: theme.palette.mode === 'dark' 
-                            ? 'rgba(30, 30, 40, 0.95)'
-                            : 'rgba(255, 255, 255, 0.95)',
+                          backgroundColor:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(30, 30, 40, 0.95)'
+                              : 'rgba(255, 255, 255, 0.95)',
                           '&.Mui-focused': {
                             color: '#8B5CF6',
                             padding: '0 8px',
@@ -501,9 +533,10 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                           marginTop: 0,
                           fontSize: '1rem',
                           padding: '0 8px',
-                          backgroundColor: theme.palette.mode === 'dark' 
-                            ? 'rgba(30, 30, 40, 0.95)'
-                            : 'rgba(255, 255, 255, 0.95)',
+                          backgroundColor:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(30, 30, 40, 0.95)'
+                              : 'rgba(255, 255, 255, 0.95)',
                         },
                         '& .MuiOutlinedInput-input': {
                           padding: '16px 14px',
@@ -511,24 +544,30 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                       }}
                     />
                     <FormControl fullWidth>
-                      <InputLabel sx={{ 
-                        '&.Mui-focused': { color: '#8B5CF6' },
-                        marginTop: '-8px',
-                        padding: '0 8px',
-                        backgroundColor: theme.palette.mode === 'dark' 
-                          ? 'rgba(30, 30, 40, 0.95)'
-                          : 'rgba(255, 255, 255, 0.95)',
-                        '&.MuiInputLabel-shrink': {
-                          marginTop: 0,
-                          fontSize: '1rem',
+                      <InputLabel
+                        sx={{
+                          '&.Mui-focused': { color: '#8B5CF6' },
+                          marginTop: '-8px',
                           padding: '0 8px',
-                          backgroundColor: theme.palette.mode === 'dark' 
-                            ? 'rgba(30, 30, 40, 0.95)'
-                            : 'rgba(255, 255, 255, 0.95)',
-                        },
-                      }}>Tono</InputLabel>
+                          backgroundColor:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(30, 30, 40, 0.95)'
+                              : 'rgba(255, 255, 255, 0.95)',
+                          '&.MuiInputLabel-shrink': {
+                            marginTop: 0,
+                            fontSize: '1rem',
+                            padding: '0 8px',
+                            backgroundColor:
+                              theme.palette.mode === 'dark'
+                                ? 'rgba(30, 30, 40, 0.95)'
+                                : 'rgba(255, 255, 255, 0.95)',
+                          },
+                        }}
+                      >
+                        Tono
+                      </InputLabel>
                       <Select
-                        value={aiConfig.tone || ""}
+                        value={aiConfig.tone || ''}
                         label="Tono"
                         onChange={e => setAiConfig(prev => ({ ...prev, tone: e.target.value }))}
                         sx={{
@@ -544,32 +583,44 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                           },
                         }}
                       >
-                        {toneOptions.filter(t => t !== "Todos").map(option => (
-                          <MenuItem key={option} value={option}>{option}</MenuItem>
-                        ))}
+                        {toneOptions
+                          .filter(t => t !== 'Todos')
+                          .map(option => (
+                            <MenuItem key={option} value={option}>
+                              {option}
+                            </MenuItem>
+                          ))}
                       </Select>
                     </FormControl>
                     <FormControl fullWidth>
-                      <InputLabel sx={{ 
-                        '&.Mui-focused': { color: '#8B5CF6' },
-                        marginTop: '-8px',
-                        padding: '0 8px',
-                        backgroundColor: theme.palette.mode === 'dark' 
-                          ? 'rgba(30, 30, 40, 0.95)'
-                          : 'rgba(255, 255, 255, 0.95)',
-                        '&.MuiInputLabel-shrink': {
-                          marginTop: 0,
-                          fontSize: '1rem',
+                      <InputLabel
+                        sx={{
+                          '&.Mui-focused': { color: '#8B5CF6' },
+                          marginTop: '-8px',
                           padding: '0 8px',
-                          backgroundColor: theme.palette.mode === 'dark' 
-                            ? 'rgba(30, 30, 40, 0.95)'
-                            : 'rgba(255, 255, 255, 0.95)',
-                        },
-                      }}>Objetivo</InputLabel>
+                          backgroundColor:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(30, 30, 40, 0.95)'
+                              : 'rgba(255, 255, 255, 0.95)',
+                          '&.MuiInputLabel-shrink': {
+                            marginTop: 0,
+                            fontSize: '1rem',
+                            padding: '0 8px',
+                            backgroundColor:
+                              theme.palette.mode === 'dark'
+                                ? 'rgba(30, 30, 40, 0.95)'
+                                : 'rgba(255, 255, 255, 0.95)',
+                          },
+                        }}
+                      >
+                        Objetivo
+                      </InputLabel>
                       <Select
-                        value={aiConfig.objective || ""}
+                        value={aiConfig.objective || ''}
                         label="Objetivo"
-                        onChange={e => setAiConfig(prev => ({ ...prev, objective: e.target.value }))}
+                        onChange={e =>
+                          setAiConfig(prev => ({ ...prev, objective: e.target.value }))
+                        }
                         sx={{
                           borderRadius: 2,
                           '& .MuiOutlinedInput-notchedOutline': {
@@ -584,23 +635,28 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                         }}
                       >
                         {objetivoOptions.map(option => (
-                          <MenuItem key={option} value={option}>{option}</MenuItem>
+                          <MenuItem key={option} value={option}>
+                            {option}
+                          </MenuItem>
                         ))}
                       </Select>
                     </FormControl>
                     <TextField
                       label="Contexto"
-                      value={aiConfig.customPrompt || ""}
-                      onChange={e => setAiConfig(prev => ({ ...prev, customPrompt: e.target.value }))}
+                      value={aiConfig.customPrompt || ''}
+                      onChange={e =>
+                        setAiConfig(prev => ({ ...prev, customPrompt: e.target.value }))
+                      }
                       fullWidth
                       minRows={3}
                       multiline
                       sx={{
                         '& .MuiOutlinedInput-root': {
                           borderRadius: 2,
-                          boxShadow: theme.palette.mode === 'dark'
-                            ? '0 2px 8px rgba(0, 0, 0, 0.2)'
-                            : '0 2px 8px rgba(0, 0, 0, 0.05)',
+                          boxShadow:
+                            theme.palette.mode === 'dark'
+                              ? '0 2px 8px rgba(0, 0, 0, 0.2)'
+                              : '0 2px 8px rgba(0, 0, 0, 0.05)',
                           '& fieldset': {
                             borderColor: 'rgba(139, 92, 246, 0.2)',
                             borderWidth: 2,
@@ -616,9 +672,10 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                         '& .MuiInputLabel-root': {
                           marginTop: '-8px',
                           padding: '0 8px',
-                          backgroundColor: theme.palette.mode === 'dark' 
-                            ? 'rgba(30, 30, 40, 0.95)'
-                            : 'rgba(255, 255, 255, 0.95)',
+                          backgroundColor:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(30, 30, 40, 0.95)'
+                              : 'rgba(255, 255, 255, 0.95)',
                           '&.Mui-focused': {
                             color: '#8B5CF6',
                             padding: '0 8px',
@@ -628,9 +685,10 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                           marginTop: 0,
                           fontSize: '1rem',
                           padding: '0 8px',
-                          backgroundColor: theme.palette.mode === 'dark' 
-                            ? 'rgba(30, 30, 40, 0.95)'
-                            : 'rgba(255, 255, 255, 0.95)',
+                          backgroundColor:
+                            theme.palette.mode === 'dark'
+                              ? 'rgba(30, 30, 40, 0.95)'
+                              : 'rgba(255, 255, 255, 0.95)',
                         },
                         '& .MuiOutlinedInput-input': {
                           padding: '16px 14px',
@@ -647,15 +705,17 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                         py: 1.5,
                         backgroundColor: theme.palette.mode === 'dark' ? '#8B5CF6' : '#3B82F6',
                         backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                        boxShadow: theme.palette.mode === 'dark'
-                          ? '0 4px 24px rgba(139, 92, 246, 0.3)'
-                          : '0 4px 24px rgba(59, 130, 246, 0.3)',
+                        boxShadow:
+                          theme.palette.mode === 'dark'
+                            ? '0 4px 24px rgba(139, 92, 246, 0.3)'
+                            : '0 4px 24px rgba(59, 130, 246, 0.3)',
                         '&:hover': {
                           backgroundImage: 'linear-gradient(135deg, #8B5CF6 0%, #E05EFF 100%)',
                           transform: 'translateY(-1px)',
-                          boxShadow: theme.palette.mode === 'dark'
-                            ? '0 4px 32px rgba(139, 92, 246, 0.4)'
-                            : '0 4px 32px rgba(59, 130, 246, 0.4)',
+                          boxShadow:
+                            theme.palette.mode === 'dark'
+                              ? '0 4px 32px rgba(139, 92, 246, 0.4)'
+                              : '0 4px 32px rgba(59, 130, 246, 0.4)',
                         },
                         transition: 'all 0.2s ease-out',
                       }}
@@ -691,10 +751,10 @@ async function saveAiConfig(config: Partial<AIConfig>) {
       <Dialog
         open={chatOpen}
         onClose={() => {
-          setChatOpen(false);
+          setChatOpen(false)
           setTimeout(() => {
-            chatButtonRef.current?.focus();
-          }, 0);
+            chatButtonRef.current?.focus()
+          }, 0)
         }}
         maxWidth="md"
         fullWidth
@@ -702,7 +762,9 @@ async function saveAiConfig(config: Partial<AIConfig>) {
           sx: {
             borderRadius: 3,
             backgroundColor:
-              theme.palette.mode === 'dark' ? 'rgba(30, 30, 40, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+              theme.palette.mode === 'dark'
+                ? 'rgba(30, 30, 40, 0.95)'
+                : 'rgba(255, 255, 255, 0.95)',
             backdropFilter: 'blur(16px)',
             boxShadow: '0 4px 24px rgba(139, 92, 246, 0.15)',
             minHeight: '40vh',
@@ -732,15 +794,17 @@ async function saveAiConfig(config: Partial<AIConfig>) {
               background: 'transparent',
             },
             '&::-webkit-scrollbar-thumb': {
-              background: theme.palette.mode === 'dark'
-                ? 'rgba(139, 92, 246, 0.3)'
-                : 'rgba(59, 130, 246, 0.2)',
+              background:
+                theme.palette.mode === 'dark'
+                  ? 'rgba(139, 92, 246, 0.3)'
+                  : 'rgba(59, 130, 246, 0.2)',
               borderRadius: '4px',
             },
             '&::-webkit-scrollbar-thumb:hover': {
-              background: theme.palette.mode === 'dark'
-                ? 'rgba(139, 92, 246, 0.4)'
-                : 'rgba(59, 130, 246, 0.3)',
+              background:
+                theme.palette.mode === 'dark'
+                  ? 'rgba(139, 92, 246, 0.4)'
+                  : 'rgba(59, 130, 246, 0.3)',
             },
           }}
         >
@@ -751,9 +815,10 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                 textAlign="center"
                 sx={{
                   py: 4,
-                  color: theme.palette.mode === 'dark'
-                    ? 'rgba(255, 255, 255, 0.5)'
-                    : 'rgba(30, 30, 40, 0.5)',
+                  color:
+                    theme.palette.mode === 'dark'
+                      ? 'rgba(255, 255, 255, 0.5)'
+                      : 'rgba(30, 30, 40, 0.5)',
                 }}
               >
                 Inicia la conversación con la AI…
@@ -764,23 +829,23 @@ async function saveAiConfig(config: Partial<AIConfig>) {
                 key={idx}
                 alignSelf={msg.from === 'user' ? 'flex-end' : 'flex-start'}
                 sx={{
-                  backgroundColor: msg.from === 'user'
-                    ? '#8B5CF6'
-                    : theme.palette.mode === 'dark'
-                      ? 'rgba(139, 92, 246, 0.1)'
-                      : 'rgba(59, 130, 246, 0.05)',
-                  color: msg.from === 'user'
-                    ? '#fff'
-                    : theme.palette.mode === 'dark'
+                  backgroundColor:
+                    msg.from === 'user'
+                      ? '#8B5CF6'
+                      : theme.palette.mode === 'dark'
+                        ? 'rgba(139, 92, 246, 0.1)'
+                        : 'rgba(59, 130, 246, 0.05)',
+                  color:
+                    msg.from === 'user'
                       ? '#fff'
-                      : '#1E1E28',
+                      : theme.palette.mode === 'dark'
+                        ? '#fff'
+                        : '#1E1E28',
                   px: 2,
                   py: 1,
                   borderRadius: 2,
                   maxWidth: '80%',
-                  boxShadow: msg.from === 'user'
-                    ? '0 2px 8px rgba(139, 92, 246, 0.2)'
-                    : 'none',
+                  boxShadow: msg.from === 'user' ? '0 2px 8px rgba(139, 92, 246, 0.2)' : 'none',
                 }}
               >
                 {msg.text}
@@ -801,7 +866,12 @@ async function saveAiConfig(config: Partial<AIConfig>) {
             <TextField
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSendMessage(); } }}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleSendMessage()
+                }
+              }}
               placeholder="Escribe tu mensaje..."
               fullWidth
               size="small"
@@ -841,8 +911,8 @@ async function saveAiConfig(config: Partial<AIConfig>) {
           </Box>
           <Button
             onClick={() => {
-              setChatOpen(false);
-              setChatMessages([]);
+              setChatOpen(false)
+              setChatMessages([])
             }}
             sx={{
               color: '#8B5CF6',
@@ -856,5 +926,5 @@ async function saveAiConfig(config: Partial<AIConfig>) {
         </DialogActions>
       </Dialog>
     </Box>
-  );
-} 
+  )
+}

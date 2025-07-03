@@ -42,7 +42,8 @@ import {
   getTables, 
   deleteTable, 
   duplicateTable, 
-  exportTable 
+  exportTable,
+  getTableStats
 } from '../api/servicios';
 import type { DynamicTable } from '../types';
 import { useSnackbar } from 'notistack';
@@ -57,6 +58,7 @@ export default function Tables() {
   const [newTableName, setNewTableName] = useState('');
   const [newTableSlug, setNewTableSlug] = useState('');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleteTableStats, setDeleteTableStats] = useState<{ totalRecords: number } | null>(null);
 
   const theme = useTheme();
   const navigate = useNavigate();
@@ -93,7 +95,6 @@ export default function Tables() {
 
   const handleMenuClose = () => {
     setAnchorEl(null);
-    setSelectedTable(null);
   };
 
   const handleViewTable = () => {
@@ -110,13 +111,27 @@ export default function Tables() {
     handleMenuClose();
   };
 
+  const handleOpenDeleteDialog = async (table: DynamicTable) => {
+    setSelectedTable(table);
+    setConfirmDeleteOpen(true);
+    setDeleteTableStats(null);
+    if (user && table.slug) {
+      try {
+        const stats = await getTableStats(table.slug, user);
+        setDeleteTableStats(stats);
+      } catch (err) {
+        setDeleteTableStats(null);
+      }
+    }
+  };
+
   const handleDeleteTable = async () => {
     if (!selectedTable || !user) return;
     try {
       const result = await deleteTable(selectedTable._id, user);
       await loadTables();
       setConfirmDeleteOpen(false);
-      handleMenuClose();
+      setSelectedTable(null);
       enqueueSnackbar(
         `Tabla eliminada por ${result.deletedBy} el ${new Date(result.deletedAt).toLocaleString()}. Registros eliminados: ${result.recordsDeleted}`,
         { variant: 'success' }
@@ -389,7 +404,7 @@ export default function Tables() {
         </MenuItem>
         <MenuItem
           onClick={() => {
-            setConfirmDeleteOpen(true);
+            handleOpenDeleteDialog(selectedTable!);
             handleMenuClose();
           }}
           sx={{ color: 'error.main' }}
@@ -436,7 +451,7 @@ export default function Tables() {
       </Dialog>
 
       {/* Confirm Delete Dialog */}
-      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
+      <Dialog open={confirmDeleteOpen} onClose={() => { setConfirmDeleteOpen(false); setSelectedTable(null); }}>
         <DialogTitle>¿Estás seguro que quieres eliminar esta tabla?</DialogTitle>
         <DialogContent>
           <Alert severity="warning" sx={{ mb: 2 }}>
@@ -446,12 +461,16 @@ export default function Tables() {
             Nombre de la tabla: <strong>{selectedTable?.name}</strong>
           </Typography>
           <Typography>
-            Registros asociados: <strong>{selectedTable?.recordsCount ?? 0}</strong>
+            Registros asociados: <strong>{deleteTableStats ? deleteTableStats.totalRecords : '...'}</strong>
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setConfirmDeleteOpen(false)}>Cancelar</Button>
-          <Button onClick={handleDeleteTable} color="error" variant="contained">
+          <Button 
+            onClick={handleDeleteTable} 
+            color="error" 
+            variant="contained"
+          >
             Eliminar
           </Button>
         </DialogActions>

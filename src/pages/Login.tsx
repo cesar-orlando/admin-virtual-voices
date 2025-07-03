@@ -74,7 +74,7 @@ const Login = () => {
   } = useForm<LoginFormsInputs>({
     resolver: yupResolver(validation),
     defaultValues: {
-      companySlug: "test" // Default to regular company
+      companySlug: "" // Default to regular company
     }
   });
 
@@ -100,30 +100,6 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Predefined test accounts for easy access
-  const testAccounts = [
-    {
-      name: "Quick Learning Admin",
-      email: "admin@quicklearning.com",
-      password: "QuickLearning2024!",
-      companySlug: "quicklearning",
-      type: "Enterprise"
-    },
-    {
-      name: "Usuario Regular",
-      email: "korina@gmail.com",
-      password: "Korina1234567890.",
-      companySlug: "test",
-      type: "Regular"
-    }
-  ];
-
-  const fillTestAccount = (account: typeof testAccounts[0]) => {
-    setValue("email", account.email);
-    setValue("password", account.password);
-    setValue("companySlug", account.companySlug);
   };
 
   return (
@@ -216,34 +192,6 @@ const Login = () => {
             </Box>
           )}
 
-          {/* Quick access test accounts */}
-          <Box sx={{ mb: 2 }}>
-            <Typography variant="caption" sx={{ color: '#BDBDBD', mb: 1, display: 'block' }}>
-              Acceso rápido para pruebas:
-            </Typography>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {testAccounts.map((account, index) => (
-                <Button
-                  key={index}
-                  size="small"
-                  variant="outlined"
-                  onClick={() => fillTestAccount(account)}
-                  sx={{
-                    fontSize: '0.7rem',
-                    textTransform: 'none',
-                    borderColor: account.type === 'Enterprise' ? '#E05EFF' : '#8B5CF6',
-                    color: account.type === 'Enterprise' ? '#E05EFF' : '#8B5CF6',
-                    '&:hover': {
-                      backgroundColor: account.type === 'Enterprise' ? 'rgba(224, 94, 255, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-                    }
-                  }}
-                >
-                  {account.name}
-                </Button>
-              ))}
-            </Box>
-          </Box>
-
           <form onSubmit={handleSubmit(handleLogin)} noValidate autoComplete="off">
             <TextField
               label="Empresa"
@@ -251,7 +199,6 @@ const Login = () => {
               margin="normal"
               {...register("companySlug")}
               error={!!errors.companySlug}
-              helperText={errors.companySlug?.message || 'Nombre corto de la empresa (ej: quicklearning, test, etc.)'}
               inputProps={{ "aria-label": "Empresa", "aria-invalid": !!errors.companySlug }}
               sx={{
                 input: {

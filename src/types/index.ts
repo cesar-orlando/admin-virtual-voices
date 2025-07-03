@@ -10,10 +10,10 @@ export interface UserProfile {
   id: string
   name: string
   email: string
-  c_name: string
   role?: UserRole
   status?: 'active' | 'inactive'
   companySlug?: string
+  c_name?: string
 }
 
 export interface UserProfileToken extends UserProfile {
@@ -39,9 +39,8 @@ export interface RegisterRequest {
   name: string
   email: string
   password: string
-  c_name: string
-  role?: string
-  companySlug?: string
+  role: string
+  companySlug: string
 }
 
 export interface AuthResponse {

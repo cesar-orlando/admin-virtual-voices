@@ -142,13 +142,13 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
 
   // Construir el menú principal dinámicamente según la empresa
   const mainNavItems: NavItem[] = [
-    {
+/*     {
       label: 'Dashboard',
       icon: <DashboardIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/',
-    },
+    }, */
     {
-      label: 'Métricas',
-      icon: <AnalyticsIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/metricas',
+      label: 'Dashboard',
+      icon: <AnalyticsIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/',
     },
     {
       label: 'Usuarios',
