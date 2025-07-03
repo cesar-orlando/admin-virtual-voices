@@ -45,6 +45,7 @@ import {
   exportTable 
 } from '../api/servicios';
 import type { DynamicTable } from '../types';
+import { useSnackbar } from 'notistack';
 
 export default function Tables() {
   const [tables, setTables] = useState<DynamicTable[]>([]);
@@ -55,11 +56,13 @@ export default function Tables() {
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [newTableName, setNewTableName] = useState('');
   const [newTableSlug, setNewTableSlug] = useState('');
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const theme = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
   const location = useLocation();
+  const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
     loadTables();
@@ -109,11 +112,15 @@ export default function Tables() {
 
   const handleDeleteTable = async () => {
     if (!selectedTable || !user) return;
-
     try {
-      await deleteTable(selectedTable._id, user);
+      const result = await deleteTable(selectedTable._id, user);
       await loadTables();
+      setConfirmDeleteOpen(false);
       handleMenuClose();
+      enqueueSnackbar(
+        `Tabla eliminada por ${result.deletedBy} el ${new Date(result.deletedAt).toLocaleString()}. Registros eliminados: ${result.recordsDeleted}`,
+        { variant: 'success' }
+      );
     } catch (err) {
       console.error('Error deleting table:', err);
     }
@@ -380,7 +387,13 @@ export default function Tables() {
           </ListItemIcon>
           <ListItemText>Exportar</ListItemText>
         </MenuItem>
-        <MenuItem onClick={handleDeleteTable} sx={{ color: 'error.main' }}>
+        <MenuItem
+          onClick={() => {
+            setConfirmDeleteOpen(true);
+            handleMenuClose();
+          }}
+          sx={{ color: 'error.main' }}
+        >
           <ListItemIcon>
             <DeleteIcon fontSize="small" color="error" />
           </ListItemIcon>
@@ -418,6 +431,28 @@ export default function Tables() {
             disabled={!newTableName || !newTableSlug}
           >
             Duplicar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirm Delete Dialog */}
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
+        <DialogTitle>¿Estás seguro que quieres eliminar esta tabla?</DialogTitle>
+        <DialogContent>
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Esta acción <strong>eliminará la tabla y todos sus registros asociados</strong>. No se puede deshacer.
+          </Alert>
+          <Typography>
+            Nombre de la tabla: <strong>{selectedTable?.name}</strong>
+          </Typography>
+          <Typography>
+            Registros asociados: <strong>{selectedTable?.recordsCount ?? 0}</strong>
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteOpen(false)}>Cancelar</Button>
+          <Button onClick={handleDeleteTable} color="error" variant="contained">
+            Eliminar
           </Button>
         </DialogActions>
       </Dialog>

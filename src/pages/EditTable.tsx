@@ -24,16 +24,23 @@ import {
   Paper,
   CircularProgress,
   useTheme,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Delete as DeleteIcon,
   Save as SaveIcon,
   ArrowBack as ArrowBackIcon,
+  Warning as WarningIcon,
+  CheckCircle as CheckCircleIcon,
+  Cancel as CancelIcon,
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { getTableBySlug, updateTable } from '../api/servicios';
+import { getTableBySlug, updateTable, getTableStats, addFieldToAllRecords, renameFieldInAllRecords } from '../api/servicios';
 import type { DynamicTable, TableField, FieldType, UpdateTableRequest } from '../types';
 
 const FIELD_TYPES: { value: FieldType; label: string; icon: string }[] = [
@@ -55,11 +62,17 @@ const ICONS = [
 export default function EditTable() {
   const [table, setTable] = useState<DynamicTable | null>(null);
   const [fields, setFields] = useState<TableField[]>([]);
+  const [originalFields, setOriginalFields] = useState<TableField[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [selectOptionsInputs, setSelectOptionsInputs] = useState<{ [index: number]: string }>({});
+  const [showNewFieldDialog, setShowNewFieldDialog] = useState(false);
+  const [newFieldIndex, setNewFieldIndex] = useState<number | null>(null);
+  const [newFieldDefaultValue, setNewFieldDefaultValue] = useState<string>('');
+  const [tableStats, setTableStats] = useState<{ totalRecords: number } | null>(null);
+  const [wasInactive, setWasInactive] = useState(false);
 
   const { tableSlug } = useParams<{ tableSlug: string }>();
   const navigate = useNavigate();
@@ -77,12 +90,64 @@ export default function EditTable() {
       const tableData = await getTableBySlug(tableSlug, user);
       setTable(tableData);
       setFields(tableData.fields);
+      setOriginalFields(tableData.fields);
+      setWasInactive(!tableData.isActive);
+      
+      // Cargar estadísticas de la tabla para saber cuántos registros tiene
+      try {
+        const stats = await getTableStats(tableSlug, user);
+        setTableStats(stats);
+      } catch (err) {
+        console.error('Error loading table stats:', err);
+      }
     } catch (err) {
       setError('Error al cargar la tabla');
       console.error('Error loading table:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Función para detectar nuevos campos
+  const detectNewFields = (currentFields: TableField[], originalFields: TableField[]) => {
+    const originalFieldNames = new Set(originalFields.map(f => f.name));
+    return currentFields
+      .map((field, index) => ({ field, index }))
+      .filter(({ field }) => !originalFieldNames.has(field.name));
+  };
+
+  // Función para detectar campos renombrados
+  const detectRenamedFields = (currentFields: TableField[], originalFields: TableField[]) => {
+    const originalFieldMap = new Map(originalFields.map(f => [f.name, f]));
+    const renamedFields: Array<{ 
+      oldField: TableField; 
+      newField: TableField; 
+      index: number; 
+      oldName: string; 
+      newName: string; 
+    }> = [];
+
+    currentFields.forEach((field, index) => {
+      // Buscar si este campo existía antes con un nombre diferente
+      const originalField = originalFieldMap.get(field.name);
+      if (!originalField) {
+        // Es un campo nuevo, no nos interesa aquí
+        return;
+      }
+
+      // Verificar si el campo original en esta posición tenía un nombre diferente
+      if (originalFields[index] && originalFields[index].name !== field.name) {
+        renamedFields.push({
+          oldField: originalFields[index],
+          newField: field,
+          index,
+          oldName: originalFields[index].name,
+          newName: field.name
+        });
+      }
+    });
+
+    return renamedFields;
   };
 
   const handleAddField = () => {
@@ -94,7 +159,18 @@ export default function EditTable() {
       order: fields.length + 1,
       width: 150,
     };
-    setFields([...fields, newField]);
+    const updatedFields = [...fields, newField];
+    setFields(updatedFields);
+    
+    // Verificar si hay registros en la tabla y si este es un nuevo campo
+    if (tableStats && tableStats.totalRecords > 0) {
+      const newFields = detectNewFields(updatedFields, originalFields);
+      if (newFields.length > 0) {
+        const latestNewField = newFields[newFields.length - 1];
+        setNewFieldIndex(latestNewField.index);
+        setShowNewFieldDialog(true);
+      }
+    }
   };
 
   const handleUpdateField = (index: number, field: Partial<TableField>) => {
@@ -108,6 +184,18 @@ export default function EditTable() {
         ...prev,
         [index]: updatedFields[index].options?.join(', ') || '',
       }));
+    }
+
+    // Detectar si se cambió el nombre de un campo y hay registros existentes
+    if (field.name && tableStats && tableStats.totalRecords > 0) {
+      const renamedFields = detectRenamedFields(updatedFields, originalFields);
+      if (renamedFields.length > 0) {
+        const renamedField = renamedFields.find(rf => rf.index === index);
+        if (renamedField) {
+          setNewFieldIndex(index);
+          setShowNewFieldDialog(true);
+        }
+      }
     }
   };
 
@@ -129,6 +217,24 @@ export default function EditTable() {
       setSaving(true);
       setError(null);
 
+      // Detectar nuevos campos y campos renombrados antes de guardar
+      const newFields = detectNewFields(fields, originalFields);
+      const renamedFields = detectRenamedFields(fields, originalFields);
+      
+      // Si hay nuevos campos y registros existentes, actualizar el valor por defecto
+      if (newFields.length > 0 && tableStats && tableStats.totalRecords > 0) {
+        const updatedFieldsWithDefaults = [...fields];
+        newFields.forEach(({ field, index }) => {
+          if (newFieldDefaultValue && index === newFieldIndex) {
+            updatedFieldsWithDefaults[index] = {
+              ...updatedFieldsWithDefaults[index],
+              defaultValue: newFieldDefaultValue
+            };
+          }
+        });
+        setFields(updatedFieldsWithDefaults);
+      }
+
       const tableData: UpdateTableRequest = {
         name: table.name,
         slug: table.slug,
@@ -139,6 +245,49 @@ export default function EditTable() {
       };
 
       await updateTable(table._id, tableData, user);
+
+      // Mostrar mensaje especial si se activó una tabla inactiva
+      if (wasInactive && table.isActive) {
+        // Se activó una tabla que estaba inactiva
+        console.log('¡Tabla activada exitosamente!');
+      }
+
+      // Si hay nuevos campos con valor por defecto, actualizar todos los registros existentes
+      if (newFields.length > 0 && tableStats && tableStats.totalRecords > 0) {
+        for (const { field, index } of newFields) {
+          if (newFieldDefaultValue && index === newFieldIndex) {
+            try {
+              await addFieldToAllRecords(
+                table.slug,
+                field.name,
+                newFieldDefaultValue,
+                user
+              );
+            } catch (err) {
+              console.error(`Error adding field ${field.name} to all records:`, err);
+              // No lanzar error aquí para no interrumpir el guardado de la tabla
+            }
+          }
+        }
+      }
+
+      // Si hay campos renombrados, actualizar todos los registros existentes
+      if (renamedFields.length > 0 && tableStats && tableStats.totalRecords > 0) {
+        for (const { oldName, newName } of renamedFields) {
+          try {
+            await renameFieldInAllRecords(
+              table.slug,
+              oldName,
+              newName,
+              user
+            );
+          } catch (err) {
+            console.error(`Error renaming field ${oldName} to ${newName} in all records:`, err);
+            // No lanzar error aquí para no interrumpir el guardado de la tabla
+          }
+        }
+      }
+
       navigate('/tablas');
     } catch (err) {
       setError('Error al actualizar la tabla');
@@ -151,6 +300,52 @@ export default function EditTable() {
   const handleTablePropChange = (prop: keyof DynamicTable, value: any) => {
     if (table) {
       setTable({ ...table, [prop]: value });
+    }
+  };
+
+  const handleNewFieldDialogClose = () => {
+    setShowNewFieldDialog(false);
+    setNewFieldIndex(null);
+    setNewFieldDefaultValue('');
+  };
+
+  const handleSetDefaultValue = () => {
+    if (newFieldIndex !== null) {
+      const updatedFields = [...fields];
+      updatedFields[newFieldIndex] = {
+        ...updatedFields[newFieldIndex],
+        defaultValue: newFieldDefaultValue
+      };
+      setFields(updatedFields);
+    }
+    handleNewFieldDialogClose();
+  };
+
+  const handleSkipDefaultValue = () => {
+    handleNewFieldDialogClose();
+  };
+
+  // Función para obtener el tipo de valor por defecto sugerido
+  const getSuggestedDefaultValue = (fieldType: FieldType): string => {
+    switch (fieldType) {
+      case 'text':
+        return '';
+      case 'email':
+        return '';
+      case 'number':
+        return '0';
+      case 'date':
+        return new Date().toISOString().split('T')[0];
+      case 'boolean':
+        return 'false';
+      case 'select':
+        return '';
+      case 'currency':
+        return '0.00';
+      case 'file':
+        return '';
+      default:
+        return '';
     }
   };
 
@@ -177,6 +372,41 @@ export default function EditTable() {
           </Typography>
         </Box>
       </Box>
+
+      {/* Status Alert */}
+      {!table.isActive && (
+        <Alert 
+          severity="warning" 
+          sx={{ mb: 3 }}
+          action={
+            <Button 
+              color="inherit" 
+              size="small"
+              onClick={() => handleTablePropChange('isActive', true)}
+            >
+              Activar
+            </Button>
+          }
+        >
+          <Typography variant="body2">
+            <strong>Esta tabla está inactiva.</strong> Puedes editarla y activarla nuevamente cuando esté lista.
+            Las tablas inactivas no aparecen en las listas principales pero mantienen todos sus datos.
+          </Typography>
+        </Alert>
+      )}
+
+      {/* Success Alert for Reactivated Table */}
+      {wasInactive && table.isActive && (
+        <Alert 
+          severity="success" 
+          sx={{ mb: 3 }}
+          onClose={() => setWasInactive(false)}
+        >
+          <Typography variant="body2">
+            <strong>¡Tabla activada exitosamente!</strong> La tabla "{table.name}" ahora está activa y visible en todas las listas.
+          </Typography>
+        </Alert>
+      )}
 
       {/* Basic Info Card */}
       <Card sx={{ mb: 3 }}>
@@ -206,16 +436,39 @@ export default function EditTable() {
                 Seleccionar Ícono: {table.icon}
               </Button>
             </Grid>
-             <Grid item xs={12} md={6}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={table.isActive}
-                    onChange={(e) => handleTablePropChange('isActive', e.target.checked)}
+            <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={table.isActive}
+                      onChange={(e) => handleTablePropChange('isActive', e.target.checked)}
+                      color={table.isActive ? "success" : "warning"}
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {table.isActive ? 'Tabla Activa' : 'Tabla Inactiva'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {table.isActive 
+                          ? 'Visible en todas las listas y funcional' 
+                          : 'Oculta de las listas principales pero editable'
+                        }
+                      </Typography>
+                    </Box>
+                  }
+                />
+                {!table.isActive && (
+                  <Chip 
+                    label="Inactiva" 
+                    color="warning" 
+                    size="small" 
+                    variant="outlined"
                   />
-                }
-                label="Tabla Activa"
-              />
+                )}
+              </Box>
             </Grid>
             <Grid item xs={12}>
               <TextField
@@ -302,9 +555,27 @@ export default function EditTable() {
       </Card>
 
       {/* Save Button */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-        <Button variant="contained" onClick={handleUpdateTable} disabled={saving} startIcon={<SaveIcon />}>
-          {saving ? 'Guardando...' : 'Guardar Cambios'}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+        <Button
+          variant="outlined"
+          onClick={() => navigate('/tablas')}
+          startIcon={<ArrowBackIcon />}
+        >
+          Cancelar
+        </Button>
+        <Button
+          variant="contained"
+          onClick={handleUpdateTable}
+          disabled={saving}
+          startIcon={<SaveIcon />}
+          sx={{
+            background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+            '&:hover': {
+              background: 'linear-gradient(135deg, #D04EFF 0%, #7A4CF6 100%)',
+            }
+          }}
+        >
+          {saving ? 'Guardando...' : `Guardar Cambios${!table.isActive ? ' (Inactiva)' : ''}`}
         </Button>
       </Box>
 
@@ -315,7 +586,14 @@ export default function EditTable() {
           <Grid container spacing={1}>
             {ICONS.map((icon) => (
               <Grid item key={icon}>
-                <Button variant={table.icon === icon ? 'contained' : 'outlined'} onClick={() => { handleTablePropChange('icon', icon); setShowIconPicker(false); }} sx={{ minWidth: 48, height: 48, fontSize: 20 }}>
+                <Button
+                  variant={table.icon === icon ? 'contained' : 'outlined'}
+                  onClick={() => {
+                    handleTablePropChange('icon', icon);
+                    setShowIconPicker(false);
+                  }}
+                  sx={{ minWidth: 48, height: 48, fontSize: 20 }}
+                >
                   {icon}
                 </Button>
               </Grid>
@@ -324,6 +602,125 @@ export default function EditTable() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setShowIconPicker(false)}>Cancelar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* New Field Dialog */}
+      <Dialog open={showNewFieldDialog} onClose={handleNewFieldDialogClose} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <WarningIcon color="warning" />
+            {newFieldIndex !== null && fields[newFieldIndex] && 
+             originalFields[newFieldIndex] && 
+             originalFields[newFieldIndex].name !== fields[newFieldIndex].name 
+              ? 'Campo Renombrado' 
+              : 'Nuevo Campo Detectado'
+            }
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {newFieldIndex !== null && fields[newFieldIndex] && (
+            <Box>
+              {originalFields[newFieldIndex] && 
+               originalFields[newFieldIndex].name !== fields[newFieldIndex].name ? (
+                // Campo renombrado
+                <>
+                  <Typography variant="h6" gutterBottom>
+                    Has renombrado el campo: <strong>{originalFields[newFieldIndex].label || originalFields[newFieldIndex].name}</strong> → <strong>{fields[newFieldIndex].label || fields[newFieldIndex].name}</strong>
+                  </Typography>
+                  
+                  <Alert severity="info" sx={{ mb: 3 }}>
+                    <Typography variant="body2">
+                      Este cambio afectará a <strong>{tableStats?.totalRecords || 0} registros existentes</strong>. 
+                      Los datos existentes se migrarán al nuevo nombre del campo.
+                    </Typography>
+                  </Alert>
+                </>
+              ) : (
+                // Nuevo campo
+                <>
+                  <Typography variant="h6" gutterBottom>
+                    Has agregado un nuevo campo: <strong>{fields[newFieldIndex].label || fields[newFieldIndex].name}</strong>
+                  </Typography>
+                  
+                  <Alert severity="info" sx={{ mb: 3 }}>
+                    <Typography variant="body2">
+                      Esta tabla tiene <strong>{tableStats?.totalRecords || 0} registros existentes</strong>. 
+                      ¿Qué valor quieres asignar a este campo para todos los registros existentes?
+                    </Typography>
+                  </Alert>
+
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle1" gutterBottom>
+                      Opciones disponibles:
+                    </Typography>
+                    <List dense>
+                      <ListItem>
+                        <ListItemIcon>
+                          <CheckCircleIcon color="primary" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Establecer un valor por defecto"
+                          secondary="Todos los registros existentes tendrán este valor en el nuevo campo"
+                        />
+                      </ListItem>
+                      <ListItem>
+                        <ListItemIcon>
+                          <CancelIcon color="secondary" />
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary="Dejar vacío"
+                          secondary="Los registros existentes tendrán este campo vacío (null)"
+                        />
+                      </ListItem>
+                    </List>
+                  </Box>
+
+                  <TextField
+                    fullWidth
+                    label="Valor por defecto (opcional)"
+                    value={newFieldDefaultValue}
+                    onChange={(e) => setNewFieldDefaultValue(e.target.value)}
+                    placeholder={getSuggestedDefaultValue(fields[newFieldIndex].type)}
+                    helperText={`Sugerido para tipo ${fields[newFieldIndex].type}: ${getSuggestedDefaultValue(fields[newFieldIndex].type)}`}
+                    sx={{ mb: 2 }}
+                  />
+                </>
+              )}
+
+              <Alert severity="warning">
+                <Typography variant="body2">
+                  <strong>Nota:</strong> Esta acción afectará a todos los {tableStats?.totalRecords || 0} registros existentes. 
+                  {originalFields[newFieldIndex] && originalFields[newFieldIndex].name !== fields[newFieldIndex].name 
+                    ? ' Los datos existentes se migrarán al nuevo nombre del campo.'
+                    : ' Puedes modificar los valores individuales después desde la vista de registros.'
+                  }
+                </Typography>
+              </Alert>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {(!originalFields[newFieldIndex!] || originalFields[newFieldIndex!].name === fields[newFieldIndex!]?.name) && (
+            <Button onClick={handleSkipDefaultValue} color="secondary">
+              Dejar Vacío
+            </Button>
+          )}
+          <Button 
+            onClick={handleSetDefaultValue} 
+            variant="contained"
+            sx={{
+              background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #D04EFF 0%, #7A4CF6 100%)',
+              }
+            }}
+          >
+            {originalFields[newFieldIndex!] && originalFields[newFieldIndex!].name !== fields[newFieldIndex!]?.name 
+              ? 'Confirmar Cambio' 
+              : 'Establecer Valor'
+            }
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

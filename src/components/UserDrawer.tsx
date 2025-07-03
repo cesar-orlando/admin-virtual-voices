@@ -19,15 +19,39 @@ interface UserDrawerProps {
   mode?: 'create' | 'edit';
   statuses: string[];
   companyName: string;
+  currentUserRole: string;
 }
 
-export default function UserDrawer({ open, onClose, onSubmit, initialData, mode = 'create', statuses, companyName }: UserDrawerProps) {
+const ROLES = [
+  { value: 'Administrador', label: 'Administrador' },
+  { value: 'Gerente', label: 'Gerente' },
+  { value: 'Asesor', label: 'Asesor' },
+  { value: 'Marketing', label: 'Marketing' },
+];
+
+const STATUS_OPTIONS = [
+  { value: 'active', label: 'Activo' },
+  { value: 'inactive', label: 'Inactivo' },
+];
+
+export default function UserDrawer({ open, onClose, onSubmit, initialData, mode = 'create', statuses, companyName, currentUserRole }: UserDrawerProps) {
+  const mapStatusToValue = (status: string) => {
+    if (status === 'Activo') return 'active';
+    if (status === 'Inactivo') return 'inactive';
+    return status;
+  };
+  const mapStatusToLabel = (status: string) => {
+    if (status === 'active') return 'Activo';
+    if (status === 'inactive') return 'Inactivo';
+    return status;
+  };
+
   const [formData, setFormData] = useState({
     name: initialData?.name || '',
     email: initialData?.email || '',
     password: '',
     role: initialData?.role || '',
-    status: initialData?.status || statuses[0] || 'Activo'
+    status: mapStatusToValue(initialData?.status || STATUS_OPTIONS[0].value)
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
@@ -39,7 +63,7 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
         email: initialData.email || '',
         password: '',
         role: initialData.role || '',
-        status: initialData.status || statuses[0] || 'Activo'
+        status: mapStatusToValue(initialData.status || STATUS_OPTIONS[0].value)
       });
     } else {
       setFormData({
@@ -47,10 +71,10 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
         email: '',
         password: '',
         role: '',
-        status: statuses[0] || 'Activo'
+        status: STATUS_OPTIONS[0].value
       });
     }
-  }, [initialData, statuses]);
+  }, [initialData]);
 
   const handleDrawerClose = () => {
     setFormData({
@@ -58,7 +82,7 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
       email: '',
       password: '',
       role: '',
-      status: statuses[0] || 'Activo'
+      status: STATUS_OPTIONS[0].value
     });
     setErrors({});
     onClose();
@@ -89,18 +113,10 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted!', formData);
-    
-    if (!validateForm()) {
-      console.log('Validation failed:', errors);
-      return;
-    }
-    
+    if (!validateForm()) return;
     setIsSubmitting(true);
     try {
-      console.log('Calling onSubmit with data:', { ...formData, c_name: companyName });
-      await onSubmit({ ...formData, c_name: companyName });
-      console.log('onSubmit completed successfully');
+      await onSubmit({ ...formData, status: formData.status, c_name: companyName });
     } catch (error) {
       console.error('UserDrawer handleFormSubmit error:', error);
     } finally {
@@ -144,6 +160,18 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
             error={!!errors.email}
             helperText={errors.email}
           />
+          <FormControl fullWidth margin="normal" disabled={!(currentUserRole === 'admin' || currentUserRole === 'gerente')}>
+            <InputLabel>Rol</InputLabel>
+            <Select
+              value={formData.role}
+              label="Rol"
+              onChange={(e) => handleInputChange('role', e.target.value)}
+            >
+              {ROLES.map((role) => (
+                <MenuItem key={role.value} value={role.value}>{role.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           {mode === 'create' && (
             <TextField
               label="Contraseña"
@@ -160,34 +188,23 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
             <InputLabel>Estado</InputLabel>
             <Select
               value={formData.status}
-              onChange={(e) => handleInputChange('status', e.target.value)}
               label="Estado"
+              onChange={(e) => handleInputChange('status', e.target.value)}
             >
-              {statuses.map((status) => (
-                <MenuItem key={status} value={status}>
-                  {status}
-                </MenuItem>
+              {STATUS_OPTIONS.map((opt) => (
+                <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
               ))}
             </Select>
           </FormControl>
-          <TextField
-            label="Rol"
-            fullWidth
-            margin="normal"
-            value={formData.role}
-            onChange={(e) => handleInputChange('role', e.target.value)}
-            helperText="(Opcional, puedes dejarlo vacío o poner admin/user)"
-          />
           <Button
             type="submit"
             variant="contained"
             color="primary"
             fullWidth
-            onClick={() => console.log('Button clicked!')}
-            sx={{ mt: 2, borderRadius: 2, fontWeight: 600 }}
+            sx={{ mt: 2 }}
             disabled={isSubmitting}
           >
-            {isSubmitting ? (mode === 'edit' ? 'Guardando...' : 'Registrando...') : (mode === 'edit' ? 'Guardar cambios' : 'Registrar')}
+            {mode === 'edit' ? 'Guardar Cambios' : 'Registrar Usuario'}
           </Button>
         </form>
       </Box>

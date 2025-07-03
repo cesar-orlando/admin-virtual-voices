@@ -71,6 +71,8 @@ interface ImportReport {
   failed: number;
   total: number;
   errors: { index: number; error: string }[];
+  duplicatesRemoved: number;
+  duplicateFields: { fieldName: string; count: number }[];
 }
 
 // Utilidad para normalizar encabezados
@@ -102,6 +104,66 @@ function detectType(values: any[]): string {
   return 'text';
 }
 
+// Función para detectar registros duplicados basándose en campos específicos
+const detectAndRemoveDuplicates = (records: Record<string, any>[], fields: TableField[]): {
+  uniqueRecords: Record<string, any>[];
+  duplicatesRemoved: number;
+  duplicateFields: { fieldName: string; count: number }[];
+} => {
+  const duplicateFields: { fieldName: string; count: number }[] = [];
+  const seen = new Set<string>();
+  const uniqueRecords: Record<string, any>[] = [];
+  let duplicatesRemoved = 0;
+
+  // Identificar campos que podrían ser únicos (email, teléfono, etc.)
+  const potentialUniqueFields = fields.filter(field => 
+    field.type === 'email' || 
+    field.name.toLowerCase().includes('email') ||
+    field.name.toLowerCase().includes('telefono') ||
+    field.name.toLowerCase().includes('phone') ||
+    field.name.toLowerCase().includes('id') ||
+    field.name.toLowerCase().includes('codigo') ||
+    field.name.toLowerCase().includes('code')
+  );
+
+  // Si no hay campos potencialmente únicos, usar todos los campos para comparación
+  const fieldsToCheck = potentialUniqueFields.length > 0 ? potentialUniqueFields : fields;
+
+  records.forEach((record, index) => {
+    // Crear una clave única basada en los campos seleccionados
+    const key = fieldsToCheck.map(field => {
+      const value = record[field.name];
+      return value !== undefined && value !== null && value !== '' ? String(value).toLowerCase().trim() : '';
+    }).filter(Boolean).join('|');
+
+    if (key && seen.has(key)) {
+      duplicatesRemoved++;
+      
+      // Contar duplicados por campo
+      fieldsToCheck.forEach(field => {
+        const value = record[field.name];
+        if (value !== undefined && value !== null && value !== '') {
+          const existingField = duplicateFields.find(f => f.fieldName === field.label);
+          if (existingField) {
+            existingField.count++;
+          } else {
+            duplicateFields.push({ fieldName: field.label, count: 1 });
+          }
+        }
+      });
+    } else {
+      if (key) seen.add(key);
+      uniqueRecords.push(record);
+    }
+  });
+
+  return {
+    uniqueRecords,
+    duplicatesRemoved,
+    duplicateFields: duplicateFields.sort((a, b) => b.count - a.count)
+  };
+};
+
 export default function CreateTable() {
   const [activeStep, setActiveStep] = useState(0);
   const [tableName, setTableName] = useState('');
@@ -116,6 +178,12 @@ export default function CreateTable() {
   const [importReport, setImportReport] = useState<ImportReport | null>(null);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [selectOptionsInputs, setSelectOptionsInputs] = useState<{ [index: number]: string }>({});
+  const [duplicateReport, setDuplicateReport] = useState<{
+    duplicatesRemoved: number;
+    duplicateFields: { fieldName: string; count: number }[];
+    originalCount: number;
+    finalCount: number;
+  } | null>(null);
 
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -184,6 +252,7 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
     if (!file) return;
 
     setFormErrors({});
+    setDuplicateReport(null);
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
@@ -223,14 +292,29 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
         setFields(newFields);
 
         // Mapear los datos de los registros para usar los nombres de campo internos (slugs)
-        const recordsData: any[] = rows.slice(dataStart).map(row => {
+        const allRecordsData: any[] = rows.slice(dataStart).map(row => {
           const newRow: Record<string, any> = {};
           normalizedHeaders.forEach((name, i) => {
             newRow[name] = row[i];
           });
           return newRow;
         });
-        setImportedRecords(recordsData);
+
+        // Detectar y eliminar duplicados
+        const { uniqueRecords, duplicatesRemoved, duplicateFields } = detectAndRemoveDuplicates(allRecordsData, newFields);
+        
+        setImportedRecords(uniqueRecords);
+        
+        // Mostrar reporte de duplicados
+        if (duplicatesRemoved > 0) {
+          setDuplicateReport({
+            duplicatesRemoved,
+            duplicateFields,
+            originalCount: allRecordsData.length,
+            finalCount: uniqueRecords.length
+          });
+        }
+
         // Sugerir nombre de tabla basado en el nombre del archivo
         handleNameChange(file.name.replace(/\.(xlsx|xls|csv)$/, ''));
       } catch (err) {
@@ -277,6 +361,8 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
             failed: importResponse.summary.failed,
             total: importResponse.summary.total,
             errors: importResponse.errors || [],
+            duplicatesRemoved: duplicateReport?.duplicatesRemoved || 0,
+            duplicateFields: duplicateReport?.duplicateFields || []
           });
         } else {
           navigate('/tablas');
@@ -423,6 +509,47 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
         {importedRecords.length > 0 && (
           <Alert severity="info" sx={{ mb: 2 }}>
             Se importarán {importedRecords.length} registros junto con la tabla.
+            {duplicateReport && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="body2">
+                  <strong>Duplicados eliminados:</strong> {duplicateReport.duplicatesRemoved} de {duplicateReport.originalCount} registros originales
+                </Typography>
+              </Box>
+            )}
+          </Alert>
+        )}
+
+        {/* Reporte de duplicados */}
+        {duplicateReport && duplicateReport.duplicatesRemoved > 0 && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              📊 Reporte de Duplicados Eliminados
+            </Typography>
+            <Typography variant="body2" gutterBottom>
+              <strong>Total eliminados:</strong> {duplicateReport.duplicatesRemoved} registros duplicados
+            </Typography>
+            <Typography variant="body2" gutterBottom>
+              <strong>Registros únicos:</strong> {duplicateReport.finalCount} de {duplicateReport.originalCount} originales
+            </Typography>
+            
+            {duplicateReport.duplicateFields.length > 0 && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  Campos con más duplicados:
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                  {duplicateReport.duplicateFields.slice(0, 5).map((field, index) => (
+                    <Chip
+                      key={index}
+                      label={`${field.fieldName}: ${field.count}`}
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
           </Alert>
         )}
 
@@ -752,7 +879,46 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                 icon={<ErrorIcon />} 
                 label={`${importReport.failed} con errores`} 
                 color="error" 
+                sx={{ mr: 1 }}
               />
+              {importReport.duplicatesRemoved > 0 && (
+                <Chip 
+                  icon={<ErrorIcon />} 
+                  label={`${importReport.duplicatesRemoved} duplicados eliminados`} 
+                  color="warning" 
+                />
+              )}
+              
+              {/* Mostrar información de duplicados */}
+              {importReport.duplicatesRemoved > 0 && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'warning.50', borderRadius: 1 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    📊 Duplicados Eliminados
+                  </Typography>
+                  <Typography variant="body2" gutterBottom>
+                    Se eliminaron {importReport.duplicatesRemoved} registros duplicados antes de la importación.
+                  </Typography>
+                  
+                  {importReport.duplicateFields.length > 0 && (
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                        Campos con más duplicados:
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {importReport.duplicateFields.slice(0, 5).map((field, index) => (
+                          <Chip
+                            key={index}
+                            label={`${field.fieldName}: ${field.count}`}
+                            size="small"
+                            color="warning"
+                            variant="outlined"
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+                  )}
+                </Box>
+              )}
               
               {importReport.failed > 0 && (
                 <Box sx={{ mt: 3, maxHeight: 400, overflow: 'auto' }}>

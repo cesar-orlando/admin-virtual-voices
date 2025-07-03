@@ -154,10 +154,13 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
       label: 'Usuarios',
       icon: <PeopleIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/usuarios',
     },
+    ...(user.c_name === 'quicklearning' ? []: [
     {
       label: 'IA',
       icon: <SmartToyIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/ia',
     },
+  ] ),
+    ...(user.c_name === 'quicklearning' ? []: [
     {
       label: 'Herramientas',
       icon: <BuildIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/herramientas',
@@ -168,18 +171,22 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
         { label: 'Tester', icon: <PlayArrowIcon sx={{ fontSize: 20 }} />, path: '/herramientas/tester' },
       ],
     },
+  ] ),
+/*     Tenemos que ver que hacer con esta tarea que es asignar tareas y demás, estilo Jira.
     {
       label: 'Equipos',
       icon: <GroupIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/equipos',
-    },
+    }, */
+    ...(user.c_name === 'quicklearning' ? [] : [
     {
       label: 'Whatsapp',
       icon: <WhatsAppIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/whatsapp',
     },
+  ] ),
     // Solo agregar QuickLearning WA si es quicklearning
     ...(user.c_name === 'quicklearning' ? [
       {
-        label: 'QuickLearning WA',
+        label: 'Quick Whats',
         icon: <WhatsAppIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/quicklearning/whatsapp',
       },
     ] : []),

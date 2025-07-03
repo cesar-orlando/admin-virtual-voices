@@ -76,7 +76,7 @@ export default function Users() {
     message: '',
     severity: 'success'
   });
-  const [companyStatuses, setCompanyStatuses] = useState<string[]>(["Activo", "Inactivo"]);
+  const [companyStatuses, setCompanyStatuses] = useState<string[]>(["active", "inactive"]);
   const [metricsModalOpen, setMetricsModalOpen] = useState(false);
   const [selectedUserForMetrics, setSelectedUserForMetrics] = useState<User | null>(null);
 
@@ -94,7 +94,7 @@ export default function Users() {
   // Cargar statuses de la empresa al montar Users
   useEffect(() => {
     getCompanyConfig(user.c_name).then(data => {
-      setCompanyStatuses(data.statuses || ["Activo", "Inactivo"]);
+      setCompanyStatuses(data.statuses || ["active", "inactive"]);
     });
   }, [user.c_name]);
 
@@ -123,7 +123,7 @@ export default function Users() {
     setLoading(true);
     try {
       console.log('handleSubmit called with:', { userData, selectedUser });
-      
+      const token = localStorage.getItem('token') || undefined;
       if (selectedUser && selectedUser.id) {
         console.log('Editing user with ID:', selectedUser.id);
         // Actualizar usuario existente usando el servicio
@@ -134,13 +134,9 @@ export default function Users() {
           role: userData.role,
           status: userData.status,
           c_name: user.c_name
-        });
-        
+        }, token);
         console.log('Update result:', result);
-        
-        // Recargar la lista completa para asegurar datos actualizados
         await loadUsers();
-        
         setSnackbar({
           open: true,
           message: 'Usuario actualizado correctamente',
@@ -166,7 +162,7 @@ export default function Users() {
           name: newUser.name,
           email: newUser.email,
           role: newUser.role,
-          status: userData.status || statuses[0] || 'Activo',
+          status: userData.status || statuses[0] || 'active',
           lastLogin: '-',
         }]);
         setSnackbar({
@@ -199,7 +195,7 @@ export default function Users() {
       name: u.name || '-',
       email: u.email || '-',
       role: u.role || '-',
-      status: u.status || statuses[0] || 'Activo',
+      status: u.status || statuses[0] || 'active',
       lastLogin: u.lastLogin || '-',
     }));
     setUsers(safeUsers);
@@ -314,7 +310,7 @@ export default function Users() {
       label: 'Estado',
       minWidth: 130,
       format: (value: string) => {
-        const isActive = value === 'Activo';
+        const isActive = value === 'active';
         return (
           <Box
             component="span"
@@ -333,7 +329,7 @@ export default function Users() {
                 : '#EF4444',
             }}
           >
-            {value || 'Activo'}
+            {value || 'active'}
           </Box>
         );
       },
@@ -834,6 +830,7 @@ export default function Users() {
         onSubmit={(data) => handleSubmit({ ...data, c_name: user.c_name })}
         statuses={companyStatuses}
         companyName={user.c_name}
+        currentUserRole={user.role}
       />
 
       {/* Loading overlay que bloquea toda la interfaz */}

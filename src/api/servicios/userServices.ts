@@ -9,13 +9,13 @@ export const updateUser = async (userId: string, userData: {
   role?: string;
   status?: string;
   c_name: string;
-}) => {
-  try{
-  const response = await api.put<UserProfile>(`/users/${userId}`, userData);
-  return response.data;
-} catch (error) {
-  handleError(error as any);
-}
+}, token?: string) => {
+  try {
+    const response = await api.put(`/core/users/${userId}`, userData, token ? { headers: { Authorization: `Bearer ${token}` } } : {});
+    return response.data;
+  } catch (error) {
+    handleError(error as any);
+  }
 };
 
 export const fetchCompanyUsers = async (companySlug: string) => {

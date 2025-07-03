@@ -9,6 +9,7 @@ import {
   IconButton,
   InputAdornment,
   useMediaQuery,
+  Alert,
 } from "@mui/material";
 import { useAuth } from "../hooks/useAuth";
 import { useForm } from "react-hook-form";
@@ -17,7 +18,7 @@ import * as yup from "yup";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import BusinessIcon from "@mui/icons-material/Business";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import LogoVoice2 from '../assets/LogoVoice2.svg';
 import type { LoginRequest } from '../types';
@@ -56,6 +57,9 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const isMobile = useMediaQuery("(max-width:600px)");
   const [cardVisible, setCardVisible] = useState(false);
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const expired = params.get("expired");
 
   React.useEffect(() => {
     setTimeout(() => setCardVisible(true), 100); // Animación de entrada
@@ -202,6 +206,15 @@ const Login = () => {
               Sistema Multi-Empresa
             </Typography>
           </Box>
+
+          {/* Alerta de sesión expirada */}
+          {expired && (
+            <Box sx={{ mb: 2 }}>
+              <Alert severity="warning">
+                Tu sesión ha expirado. Por favor, inicia sesión de nuevo.
+              </Alert>
+            </Box>
+          )}
 
           {/* Quick access test accounts */}
           <Box sx={{ mb: 2 }}>

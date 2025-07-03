@@ -70,7 +70,9 @@ export const updateTable = async (tableId: string, tableData: UpdateTableRequest
 // Eliminar una tabla (soft delete)
 export const deleteTable = async (tableId: string, user: UserProfile) => {
   try {
-    const response = await api.delete(`/tables/${user.c_name}/${tableId}`);
+    const response = await api.delete(`/tables/${user.c_name}/${tableId}`, {
+      data: { deletedBy: user.email }
+    });
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -437,5 +439,27 @@ export const deleteFieldsFromRecord = async (
   } catch (error) {
     handleError(error as any);
     throw new Error('No se pudieron eliminar los campos del registro');
+  }
+};
+
+// Renombrar campo en todos los registros
+export const renameFieldInAllRecords = async (
+  tableSlug: string, 
+  oldFieldName: string,
+  newFieldName: string,
+  user: UserProfile
+) => {
+  try {
+    const response = await api.post(`/records/rename-field`, {
+      tableSlug,
+      c_name: user.c_name,
+      oldFieldName,
+      newFieldName,
+      updatedBy: user.id
+    });
+    return response.data;
+  } catch (error) {
+    handleError(error as any);
+    throw new Error('No se pudo renombrar el campo en todos los registros');
   }
 }; 
