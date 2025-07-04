@@ -116,7 +116,7 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
     if (!validateForm()) return;
     setIsSubmitting(true);
     try {
-      await onSubmit({ ...formData, status: formData.status, c_name: companyName });
+      await onSubmit({ ...formData, status: formData.status, companySlug: companyName });
     } catch (error) {
       console.error('UserDrawer handleFormSubmit error:', error);
     } finally {

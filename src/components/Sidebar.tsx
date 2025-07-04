@@ -69,10 +69,10 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
 
   // Cargar tablas dinámicas
   useEffect(() => {
-    if (user.c_name) {
+    if (user.companySlug) {
       loadTables()
     }
-  }, [user.c_name])
+  }, [user.companySlug])
 
   const loadTables = async () => {
     try {

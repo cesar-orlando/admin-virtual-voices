@@ -127,6 +127,30 @@ export interface WhatsAppSession extends BaseEntity {
   id: string
 }
 
+// Nuevos tipos para la API de usuarios de WhatsApp
+export interface WhatsAppUser extends BaseEntity {
+  name: string
+  phone: string
+  lastMessage?: WhatsAppMessage
+  tableSlug: string
+  botActive: boolean
+  totalMessages: number
+}
+
+export interface WhatsAppMessage extends BaseEntity {
+  body: string
+  direction: 'inbound' | 'outbound' | 'outbound-api'
+  respondedBy: 'user' | 'bot'
+  date: string
+}
+
+export interface WhatsAppUsersResponse {
+  success: boolean
+  usuarios: WhatsAppUser[]
+  total: number
+  tables: string[]
+}
+
 export const SessionStatus = {
   CONNECTED: 'connected',
   DISCONNECTED: 'disconnected',

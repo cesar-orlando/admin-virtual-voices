@@ -30,7 +30,7 @@ export const fetchCompanyUsers = async (companySlug: string) => {
 
 export const fetchClientData = async (user: UserProfile) => {
   try {
-    const response = await api.get(`/companies/${user.c_name}`);
+    const response = await api.get(`/companies/${user.companySlug}`);
     return response;
   } catch (error) {
     handleError(error as any);

@@ -110,7 +110,7 @@ export default function Layout() {
   useEffect(() => {
     if (companyConfigOpen) {
       setCompanyLoading(true);
-      getCompanyConfig(user.c_name)
+      getCompanyConfig(user.companySlug)
         .then(data => {
           console.log("data company", data)
           setCompanyLogo(data.logoUrl || '');
@@ -119,13 +119,13 @@ export default function Layout() {
         })
         .finally(() => setCompanyLoading(false));
     }
-  }, [companyConfigOpen, user.c_name]);
+  }, [companyConfigOpen, user.companySlug]);
 
   // Guardar cambios en la base de datos
   const handleSaveCompanyConfig = async () => {
     setCompanyLoading(true);
     try {
-      await updateCompanyConfig(user.c_name, {
+      await updateCompanyConfig(user.companySlug, {
         displayName: companyDisplayName,
         logoUrl: companyLogo,
         statuses: companyStatuses

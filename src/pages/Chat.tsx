@@ -32,14 +32,14 @@ import SearchIcon from '@mui/icons-material/Search'
 import ForumIcon from '@mui/icons-material/Forum'
 import AddIcon from '@mui/icons-material/Add'
 
-import { fetchMessages, sendMessages, fetchSessions } from '../api/servicios'
-import type { UserProfile, WhatsAppSession } from '../types'
+import { fetchWhatsAppUsers, fetchUserMessages, sendMessages, fetchSessions } from '../api/servicios'
+import type { UserProfile, WhatsAppSession, WhatsAppUser, WhatsAppMessage } from '../types'
 import io from 'socket.io-client'
 
 type Message = {
   id: string
   phone: string
-  messages: { body: string; direction: string }[]
+  messages: WhatsAppMessage[]
   session: { id: string }
   // add other properties if needed
 }
@@ -47,8 +47,9 @@ type Message = {
 export function ChatsTab() {
   const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
   const theme = useTheme()
-  const [conversations, setConversations] = useState<Message[]>([])
-  const [activeConversation, setActiveConversation] = useState<Message | null>(null)
+  const [conversations, setConversations] = useState<WhatsAppUser[]>([])
+  const [activeConversation, setActiveConversation] = useState<WhatsAppUser | null>(null)
+  const [activeMessages, setActiveMessages] = useState<WhatsAppMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [chatInput, setChatInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
@@ -67,40 +68,37 @@ export function ChatsTab() {
     const socket = io(import.meta.env.VITE_SOCKET_URL) // Use environment variable
 
     // Listen for new whatsapp-message events
-    socket.on(`whatsapp-message-${user.c_name}`, (newMessageData: Message) => {
+    socket.on(`whatsapp-message-${user.companySlug}`, (newMessageData: any) => {
+      // Update conversations when new messages arrive
       setConversations(prev => {
-        const existingConvoIndex = prev.findIndex(m => m.id === newMessageData.id)
-        let updatedConversations
-
+        const existingConvoIndex = prev.findIndex(m => m.phone === newMessageData.phone)
         if (existingConvoIndex !== -1) {
-          // Update existing conversation
-          updatedConversations = [...prev]
-          const existingConvo = updatedConversations[existingConvoIndex]
+          const updatedConversations = [...prev]
           updatedConversations[existingConvoIndex] = {
-            ...existingConvo,
-            messages: [...existingConvo.messages, ...newMessageData.messages],
+            ...updatedConversations[existingConvoIndex],
+            lastMessage: newMessageData.lastMessage,
+            totalMessages: updatedConversations[existingConvoIndex].totalMessages + 1,
+            updatedAt: new Date().toISOString()
           }
-        } else {
-          // Add new conversation
-          updatedConversations = [newMessageData, ...prev]
+          return updatedConversations
         }
-        return updatedConversations
+        return prev
       })
       
-      // Update active conversation if it's the one receiving a message
-      if(activeConversation && activeConversation.id === newMessageData.id) {
-        setActiveConversation(prev => prev ? ({ ...prev, messages: [...prev.messages, ...newMessageData.messages]}) : null)
+      // Update active messages if this conversation is open
+      if(activeConversation && activeConversation.phone === newMessageData.phone) {
+        setActiveMessages(prev => [...prev, newMessageData.lastMessage])
       }
     })
 
-    // Fetch initial messages and sessions
+    // Fetch initial data
     const loadData = async () => {
       try {
-        const [messagesData, sessionsData] = await Promise.all([
-          fetchMessages(user),
+        const [usersData, sessionsData] = await Promise.all([
+          fetchWhatsAppUsers(user, ['prospectos', 'clientes']),
           fetchSessions(user),
         ])
-        setConversations(messagesData)
+        setConversations(usersData)
         setSessions(sessionsData)
       } catch (error) {
         console.error("Failed to load initial data", error)
@@ -116,29 +114,63 @@ export function ChatsTab() {
     return () => {
       socket.disconnect()
     }
-  }, [user.c_name, user.id, activeConversation])
+  }, [user.companySlug, user.id])
 
+  // Load messages when active conversation changes
+  useEffect(() => {
+    if (activeConversation?.phone) {
+      const loadMessages = async () => {
+        try {
+          const messagesData = await fetchUserMessages(user, activeConversation.phone)
+          setActiveMessages(messagesData.chat?.messages || [])
+        } catch (error) {
+          console.error("Failed to load messages", error)
+          setSnackbar({ open: true, message: 'Error al cargar mensajes', severity: 'error' })
+        }
+      }
+      loadMessages()
+    } else {
+      setActiveMessages([])
+    }
+  }, [activeConversation?.phone])
+
+  // Scroll to bottom when messages change
   useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' })
     }
-  }, [activeConversation?.messages])
+  }, [activeMessages])
 
   async function handleSendMessage() {
-    if (!chatInput.trim() || !activeConversation) return
+    if (!chatInput.trim() || !activeConversation || !sessions.length) return
     const userMessage = chatInput
     setChatInput('')
-    
-    const newMessage = { body: userMessage, direction: 'outbound' }
+
+    // Asegúrate de que el número tenga @c.us
+    let phone = activeConversation.phone
+    if (!phone.endsWith('@c.us')) {
+      phone = phone + '@c.us'
+    }
+
+    const newMessage: WhatsAppMessage = {
+      _id: Date.now().toString(),
+      body: userMessage,
+      direction: 'outbound',
+      respondedBy: 'user',
+      date: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
 
     // Optimistically update the UI
-    const updatedMessages = [...activeConversation.messages, newMessage]
-    setActiveConversation({ ...activeConversation, messages: updatedMessages })
+    setActiveMessages(prev => [...prev, newMessage])
 
-    sendMessages(activeConversation.session.id, user, activeConversation.phone, userMessage)
+    // Usa la primera sesión disponible
+    const sessionId = sessions[0]._id || sessions[0].id
+    sendMessages(sessionId, user, phone, userMessage)
       .catch(() => {
         setSnackbar({ open: true, message: 'Error al enviar mensaje', severity: 'error' })
-        // Revert optimistic update if needed
+        // Si quieres, podrías quitar el mensaje optimista aquí
       })
   }
 
@@ -164,6 +196,7 @@ export function ChatsTab() {
   }
 
   const filteredConversations = conversations.filter(convo =>
+    convo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     convo.phone.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -255,20 +288,20 @@ export function ChatsTab() {
           <List sx={{ flex: 1, overflowY: 'auto', p: 1 }}>
             {filteredConversations.length > 0 ? filteredConversations.map(convo => (
               <ListItem 
-                key={convo.id}
+                key={convo._id}
                 button
-                selected={activeConversation?.id === convo.id}
+                selected={activeConversation?._id === convo._id}
                 onClick={() => setActiveConversation(convo)}
                 sx={{ borderRadius: 2, mb: 0.5 }}
               >
                 <ListItemAvatar>
                   <Avatar sx={{ backgroundColor: '#8B5CF6' }}>
-                    {convo.phone.substring(3, 5)}
+                    {convo.name.substring(0, 2).toUpperCase()}
                   </Avatar>
                 </ListItemAvatar>
                 <ListItemText
-                  primary={convo.phone.split('@')[0].slice(3)}
-                  secondary={convo.messages.length > 0 ? convo.messages[convo.messages.length - 1].body : 'Sin mensajes'}
+                  primary={convo.name}
+                  secondary={convo.lastMessage?.body || 'Sin mensajes'}
                   primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
                   secondaryTypographyProps={{ noWrap: true, fontStyle: 'italic' }}
                 />
@@ -286,13 +319,16 @@ export function ChatsTab() {
           {activeConversation ? (
             <>
               <Box sx={{ p: 2, display: 'flex', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}` }}>
-                <Avatar sx={{ backgroundColor: '#8B5CF6', mr: 2 }}>{activeConversation.phone.substring(3, 5)}</Avatar>
-                <Typography variant="h6" fontWeight={600}>{activeConversation.phone.split('@')[0].slice(3)}</Typography>
+                <Avatar sx={{ backgroundColor: '#8B5CF6', mr: 2 }}>{activeConversation.name.substring(0, 2).toUpperCase()}</Avatar>
+                <Typography variant="h6" fontWeight={600}>{activeConversation.name}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                  {activeConversation.phone}
+                </Typography>
               </Box>
               <Box sx={{ flex: 1, p: 3, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {activeConversation.messages.map((msg, idx) => (
+                {activeMessages.map((msg, idx) => (
                   <Box
-                    key={idx}
+                    key={msg._id || idx}
                     sx={{
                       alignSelf: msg.direction === 'inbound' ? 'flex-start' : 'flex-end',
                       maxWidth: '70%',
@@ -361,8 +397,8 @@ export function ChatsTab() {
                 onChange={e => setSelectedSessionId(e.target.value)}
               >
                 {sessions.map(session => (
-                  <MenuItem key={session._id} value={session._id}>
-                    {session.name || session._id}
+                  <MenuItem key={session._id || session.id} value={session._id || session.id}>
+                    {session.name || session._id || session.id}
                   </MenuItem>
                 ))}
               </Select>

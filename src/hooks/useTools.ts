@@ -17,7 +17,7 @@ import type {
 export const useTools = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const c_name = user?.c_name || '';
+  const c_name = user?.companySlug || '';
 
   // Query para listar herramientas
   const useToolsList = (params?: ToolListParams) => {
@@ -155,7 +155,7 @@ export const useTools = () => {
 export const useCategories = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const c_name = user?.c_name || '';
+  const c_name = user?.companySlug || '';
 
   // Query para listar categorías
   const useCategoriesList = () => {

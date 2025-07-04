@@ -6,7 +6,8 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
-console.log("API BASE URL:", import.meta.env.VITE_API_BASE_URL);
+console.log('VITE_SOCKET_URL:', import.meta.env.VITE_SOCKET_URL);
+console.log('VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
 
 
 // Interceptor para agregar el token automáticamente

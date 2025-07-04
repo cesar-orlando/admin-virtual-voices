@@ -25,16 +25,20 @@ export default function Whatsapp() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   useEffect(() => {
-    const socket = io(import.meta.env.VITE_SOCKET_URL);
+    console.log("Socket escuchando:", `whatsapp-qr-${user.companySlug}-${user.id}`);
+    console.log("user.companySlug:", user.companySlug, "user.id:", user.id);
+    console.log("import.meta.env.VITE_SOCKET_URL --->", import.meta.env.VITE_SOCKET_URL);
+    const socket = io("http://localhost:3001");
     
     // Escuchar el evento de QR
-    socket.on(`whatsapp-qr-${user.c_name}-${user.id}`, (data) => {
+    socket.on(`whatsapp-qr-${user.companySlug}-${user.id}`, (data) => {
+      console.log("QR recibido en frontend:", data);
       setQr(data);
       setQrLoading(false);
     });
 
     // Escuchar el estado de la conexión
-    socket.on(`whatsapp-status-${user.c_name}-${user.id}`, async (data) => {
+    socket.on(`whatsapp-status-${user.companySlug}-${user.id}`, async (data) => {
       const fetchedSessions = await fetchSessions(user);
       setSessions(fetchedSessions);
       switch(data.status) {
@@ -89,7 +93,7 @@ export default function Whatsapp() {
     return () => {
       socket.disconnect();
     };
-  }, [user.c_name, user.id]);
+  }, [user.companySlug, user.id]);
 
   // Modal QR: Solicitar y mostrar QR
   const handleRequestQr = async () => {
