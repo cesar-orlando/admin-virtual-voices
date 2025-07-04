@@ -11,6 +11,7 @@ import { requestNewQr, fetchSessions, fetchAllAiConfigs, updateSession, deleteSe
 import io from "socket.io-client";
 import type { UserProfile, WhatsAppSession, AIConfig } from '../types';
 import Loading from '../components/Loading';
+import Logo from '../assets/VirtualVoice.svg';
 
 const LOADING_MESSAGES = [
   "Inicializando sesión...",
@@ -217,59 +218,124 @@ export default function Whatsapp() {
             left: 0,
             width: '100vw',
             height: '100vh',
-            zIndex: 20000, // Más alto que cualquier modal de MUI
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            zIndex: 20000,
+            background: 'linear-gradient(135deg, #1e1e28 0%, #8B5CF6 100%)',
             backdropFilter: 'blur(10px)',
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Loading message={dynamicLoadingMsg + '.'.repeat(dotCount)} size={80} />
-          {loadingPercent > 0 ? (
-            <Box sx={{ width: '300px', mt: 4 }}>
-              <LinearProgress 
-                variant="determinate" 
-                value={loadingPercent} 
-                sx={{ 
-                  height: 12, 
-                  borderRadius: 6,
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  '& .MuiLinearProgress-bar': {
-                    background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                    borderRadius: 6,
-                  }
-                }} 
-              />
-              <Typography 
-                variant="body1" 
-                sx={{ 
-                  mt: 1, 
-                  color: 'white', 
+          <Box
+            sx={{
+              background: 'rgba(34, 34, 51, 0.92)',
+              borderRadius: 6,
+              boxShadow: '0 8px 40px 0 rgba(139,92,246,0.25)',
+              px: { xs: 3, sm: 6 },
+              py: { xs: 4, sm: 6 },
+              minWidth: 340,
+              maxWidth: '90vw',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              position: 'relative',
+            }}
+          >
+            <Box
+              component="img"
+              src={Logo}
+              alt="Virtual Voices Logo"
+              sx={{
+                width: 120,
+                height: 120,
+                mb: 2,
+                filter: 'drop-shadow(0 4px 24px #8B5CF6cc)',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+                p: 2,
+              }}
+            />
+            <Typography
+              variant="h4"
+              sx={{
+                color: '#fff',
+                fontWeight: 800,
+                fontFamily: 'Montserrat, Arial, sans-serif',
+                letterSpacing: 1,
+                mb: 1.5,
+                textAlign: 'center',
+                textShadow: '0 2px 12px #8B5CF655',
+                lineHeight: 1.2,
+              }}
+            >
+              {dynamicLoadingMsg}
+              <Box component="span" sx={{ color: '#8B5CF6', fontWeight: 900, fontSize: '1.5em', ml: 0.5, verticalAlign: 'middle', letterSpacing: 0 }}>
+                {'.'.repeat(dotCount)}
+              </Box>
+            </Typography>
+            {/* Barra de progreso justo debajo del mensaje */}
+            <Box sx={{ width: '100%', mt: 2 }}>
+              {loadingPercent > 0 ? (
+                <LinearProgress 
+                  variant="determinate" 
+                  value={loadingPercent} 
+                  sx={{
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+                    '& .MuiLinearProgress-bar': {
+                      background: 'linear-gradient(90deg, #E05EFF 0%, #8B5CF6 100%)',
+                      borderRadius: 5,
+                    }
+                  }}
+                />
+              ) : (
+                <LinearProgress 
+                  sx={{
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+                    '& .MuiLinearProgress-bar': {
+                      background: 'linear-gradient(90deg, #E05EFF 0%, #8B5CF6 100%)',
+                      borderRadius: 5,
+                    }
+                  }}
+                />
+              )}
+            </Box>
+            {/* Porcentaje visible y elegante */}
+            {loadingPercent > 0 && (
+              <Typography
+                variant="body1"
+                sx={{
+                  mt: 1.5,
+                  color: '#8B5CF6',
+                  fontWeight: 700,
+                  fontSize: '1.1em',
                   textAlign: 'center',
-                  fontWeight: 600,
-                  textShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                  letterSpacing: 1,
+                  textShadow: '0 2px 8px #1e1e28',
                 }}
               >
                 {loadingPercent}% completado
               </Typography>
-            </Box>
-          ) : (
-            <Box sx={{ width: '300px', mt: 4 }}>
-              <LinearProgress 
-                sx={{ 
-                  height: 12, 
-                  borderRadius: 6,
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  '& .MuiLinearProgress-bar': {
-                    background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                    borderRadius: 6,
-                  }
-                }} 
-              />
-            </Box>
-          )}
+            )}
+            {/* Mensaje motivacional extra */}
+            <Typography
+              variant="body2"
+              sx={{
+                mt: 2.5,
+                color: '#bdbdfc',
+                fontWeight: 400,
+                textAlign: 'center',
+                fontStyle: 'italic',
+                letterSpacing: 0.5,
+                opacity: 0.85,
+              }}
+            >
+              No cierres esta ventana, estamos preparando todo para ti 🚀
+            </Typography>
+          </Box>
         </Box>
       )}
 
