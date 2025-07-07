@@ -89,7 +89,7 @@ export interface QuickLearningLoginRequest extends LoginRequest {
 
 export interface QuickLearningRegisterRequest extends RegisterRequest {
   companySlug: 'quicklearning'
-  role: 'Admin' | 'Usuario'
+  role: 'Administrador' | 'Usuario'
 }
 
 // Company detection types

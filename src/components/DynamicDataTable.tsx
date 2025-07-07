@@ -30,6 +30,8 @@ import {
   FormControl,
   InputLabel,
   Select,
+  Tooltip,
+  TableSortLabel,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -42,6 +44,10 @@ import {
   MoreVert as MoreVertIcon,
   Visibility as ViewIcon,
   CalendarToday as CalendarIcon,
+  AttachFile as AttachFileIcon,
+  InsertDriveFile as InsertDriveFileIcon,
+  PictureAsPdf as PictureAsPdfIcon,
+  Movie as MovieIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
 import { useDebounce } from '../hooks/useDebounce';
@@ -89,8 +95,18 @@ export default function DynamicDataTable({
   const [endDate, setEndDate] = useState<string>('');
   const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
 
+  // File handling functions
+  const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
+  const [selectedFieldName, setSelectedFieldName] = useState('');
+  const [fileModalOpen, setFileModalOpen] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+
   const theme = useTheme();
   const { user } = useAuth();
+
+  // Sorting state
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   useEffect(() => {
     // Identificar los campos de fecha disponibles para filtrar
@@ -243,7 +259,17 @@ export default function DynamicDataTable({
     handleFilterClose();
   };
 
-  const formatFieldValue = (value: any, field: TableField): string => {
+  const handleFileClick = (files: any[], fieldName: string) => {
+    setSelectedFiles(files || []);
+    setSelectedFieldName(fieldName);
+    setFileModalOpen(true);
+    setGalleryIndex(0);
+  };
+
+  const handleGalleryPrev = () => setGalleryIndex((prev) => Math.max(prev - 1, 0));
+  const handleGalleryNext = () => setGalleryIndex((prev) => Math.min(prev + 1, selectedFiles.length - 1));
+
+  const formatFieldValue = (value: any, field: TableField): string | JSX.Element => {
     if (value === null || value === undefined) return '-';
 
     switch (field.type) {
@@ -270,6 +296,50 @@ export default function DynamicDataTable({
         }).format(value);
       case 'number':
         return new Intl.NumberFormat('es-MX').format(value);
+      case 'file':
+        // Manejar diferentes formatos de archivos
+        let files: any[] = [];
+        if (Array.isArray(value)) {
+          files = value;
+        } else if (typeof value === 'string') {
+          // Si es una cadena de URLs separadas por espacio
+          if (value.includes('http')) {
+            files = value.split(/\s+/).filter((url) => url.startsWith('http'));
+          } else {
+            files = [value];
+          }
+        } else if (value && typeof value === 'object') {
+          if (value.urls && Array.isArray(value.urls)) {
+            files = value.urls;
+          } else if (value.files && Array.isArray(value.files)) {
+            files = value.files;
+          } else {
+            files = Object.values(value).filter(v => typeof v === 'string' && v.startsWith('http'));
+          }
+        }
+        const validFiles = files.filter(file => typeof file === 'string' && file.startsWith('http'));
+        if (validFiles.length > 0) {
+          return (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                cursor: 'pointer',
+                '&:hover': {
+                  opacity: 0.8,
+                }
+              }}
+              onClick={() => handleFileClick(validFiles, field.name)}
+            >
+              <AttachFileIcon sx={{ fontSize: 16, color: theme.palette.primary.main }} />
+              <Typography variant="body2" sx={{ color: theme.palette.primary.main, fontWeight: 500 }}>
+                {validFiles.length} archivo{validFiles.length !== 1 ? 's' : ''}
+              </Typography>
+            </Box>
+          );
+        }
+        return '-';
       default:
         return String(value);
     }
@@ -286,6 +356,39 @@ export default function DynamicDataTable({
       default: return 'default';
     }
   };
+
+  const handleSort = (name: string) => {
+    if (sortBy === name) {
+      setSortDirection(prevDirection => prevDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(name);
+      setSortDirection('asc');
+    }
+    setPage(0);
+  };
+
+  // Antes del renderizado de las filas, ordena los records si sortBy está definido y es de tipo sortable
+  const sortableTypes = ['number', 'currency', 'date'];
+  const sortableField = table.fields.find(f => f.name === sortBy && sortableTypes.includes(f.type));
+  let sortedRecords = [...records];
+  if (sortableField && sortBy) {
+    sortedRecords.sort((a, b) => {
+      let aValue = a.data[sortBy];
+      let bValue = b.data[sortBy];
+      if (sortableField.type === 'currency' || sortableField.type === 'number') {
+        aValue = Number(String(aValue).replace(/[^\d.-]+/g, ''));
+        bValue = Number(String(bValue).replace(/[^\d.-]+/g, ''));
+        if (isNaN(aValue)) aValue = 0;
+        if (isNaN(bValue)) bValue = 0;
+      } else if (sortableField.type === 'date') {
+        aValue = new Date(aValue).getTime();
+        bValue = new Date(bValue).getTime();
+      }
+      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
 
   if (loading && records.length === 0) {
     return (
@@ -416,15 +519,39 @@ export default function DynamicDataTable({
           <Table stickyHeader>
             <TableHead>
               <TableRow>
-                <TableCell sx={{ width: '80px', fontWeight: 'bold' }}>ID</TableCell>
-                {table.fields.map((field) => (
-                  <TableCell key={field.name} sx={{ minWidth: field.width || 150, fontWeight: 'bold' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      {field.label}
-                      <Chip label={field.type} size="small" color={getFieldColor(field)} variant="outlined" />
-                    </Box>
-                  </TableCell>
-                ))}
+                {table.fields.map((field, idx) => {
+                  const isSortable = ['number', 'currency', 'date'].includes(field.type);
+                  return (
+                    <TableCell key={field.name} sx={{ minWidth: field.width || 150, fontWeight: 'bold', maxWidth: 220, p: 1 }}>
+                      <Tooltip title={field.label} placement="top" arrow>
+                        <Box sx={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          fontWeight: 600,
+                          fontSize: '0.95rem',
+                          lineHeight: 1.2,
+                          maxHeight: '2.6em',
+                          whiteSpace: 'normal',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                        }}>
+                          {isSortable ? (
+                            <TableSortLabel
+                              active={sortBy === field.name}
+                              direction={sortBy === field.name ? sortDirection : 'asc'}
+                              onClick={() => handleSort(field.name)}
+                            >
+                              {field.label}
+                            </TableSortLabel>
+                          ) : field.label}
+                        </Box>
+                      </Tooltip>
+                    </TableCell>
+                  );
+                })}
                 <TableCell sx={{ width: '50px' }} />
               </TableRow>
             </TableHead>
@@ -438,24 +565,47 @@ export default function DynamicDataTable({
                   </TableRow>
                 ))
               ) : (
-                records.map((record) => (
+                sortedRecords.map((record) => (
                   <TableRow hover role="checkbox" tabIndex={-1} key={record._id}>
-                    <TableCell>
-                      <Chip 
-                        label={record._id.slice(-6).toUpperCase()} 
-                        size="small"
-                        sx={{ 
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          color: theme.palette.mode === 'dark' ? '#E05EFF' : '#8B5CF6',
-                          backgroundColor: theme.palette.mode === 'dark' ? 'rgba(224, 94, 255, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-                        }}
-                        onClick={() => onRecordView?.(record)}
-                      />
-                    </TableCell>
-                    {table.fields.map((field) => (
-                      <TableCell key={field.name}>
-                        {formatFieldValue(record.data[field.name], field)}
+                    {table.fields.map((field, idx) => (
+                      <TableCell key={field.name} sx={{ maxWidth: 220, p: 1 }}>
+                        {idx === 0 ? (
+                          <Chip
+                            label={record.data[field.name] || '-'}
+                            size="small"
+                            sx={{
+                              fontWeight: 600,
+                              color: theme.palette.mode === 'dark' ? '#E05EFF' : '#8B5CF6',
+                              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(224, 94, 255, 0.1)' : 'rgba(139, 92, 246, 0.1)',
+                              fontSize: '0.95rem',
+                              px: 2,
+                              py: 0.5,
+                              borderRadius: 2,
+                              maxWidth: 180,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          />
+                        ) : field.type === 'text' ? (
+                          <Tooltip title={record.data[field.name] || ''} placement="top" arrow>
+                            <Box sx={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              display: 'flex',
+                              WebkitLineClamp: 2,
+                              WebkitBoxOrient: 'vertical',
+                              fontSize: '0.95rem',
+                              lineHeight: 1.2,
+                              maxHeight: '2.6em',
+                              whiteSpace: 'normal',
+                            }}>
+                              {record.data[field.name]}
+                            </Box>
+                          </Tooltip>
+                        ) : (
+                          formatFieldValue(record.data[field.name], field)
+                        )}
                       </TableCell>
                     ))}
                     <TableCell align="right">
@@ -556,6 +706,123 @@ export default function DynamicDataTable({
           <ListItemText>Eliminar</ListItemText>
         </MenuItem>
       </Menu>
+
+      {/* File Modal */}
+      <Dialog
+        open={fileModalOpen}
+        onClose={() => {
+          setFileModalOpen(false);
+          setSelectedFiles([]);
+          setSelectedFieldName('');
+        }}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, maxHeight: '80vh' } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, borderBottom: `1px solid ${theme.palette.divider}`, pb: 2 }}>
+          <AttachFileIcon sx={{ color: theme.palette.primary.main }} />
+          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+            Archivos - {selectedFieldName}
+          </Typography>
+          <Chip label={`${selectedFiles.length} archivo${selectedFiles.length !== 1 ? 's' : ''}`} color="primary" size="small" sx={{ ml: 'auto' }} />
+        </DialogTitle>
+        <DialogContent sx={{ p: 3 }}>
+          {selectedFiles.length === 0 ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <AttachFileIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h6" color="text.secondary">No hay archivos para mostrar</Typography>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+              {/* Galería principal */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                <Button onClick={handleGalleryPrev} disabled={galleryIndex === 0}>&lt;</Button>
+                {(() => {
+                  const fileUrl = selectedFiles[galleryIndex];
+                  const ext = fileUrl.split('.').pop()?.toLowerCase();
+                  if (["jpg","jpeg","png","gif","bmp","webp"].includes(ext)) {
+                    return <img src={fileUrl} alt="preview" style={{ maxHeight: 320, maxWidth: 480, borderRadius: 8, boxShadow: theme.shadows[3] }} />;
+                  } else if (["mp4","avi","mov","wmv","webm"].includes(ext)) {
+                    return <video src={fileUrl} controls style={{ maxHeight: 320, maxWidth: 480, borderRadius: 8, boxShadow: theme.shadows[3] }} />;
+                  } else if (ext === "pdf") {
+                    return <Button variant="outlined" startIcon={<PictureAsPdfIcon />} onClick={() => handleOpenFile({ url: fileUrl, name: extractFileNameFromUrl(fileUrl) })}>Ver PDF</Button>;
+                  } else {
+                    return <Button variant="outlined" startIcon={<InsertDriveFileIcon />} onClick={() => handleOpenFile({ url: fileUrl, name: extractFileNameFromUrl(fileUrl) })}>Abrir archivo</Button>;
+                  }
+                })()}
+                <Button onClick={handleGalleryNext} disabled={galleryIndex === selectedFiles.length - 1}>&gt;</Button>
+              </Box>
+              {/* Thumbnails */}
+              <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {selectedFiles.map((fileUrl, idx) => {
+                  const ext = fileUrl.split('.').pop()?.toLowerCase();
+                  return (
+                    <Box
+                      key={idx}
+                      sx={{
+                        border: idx === galleryIndex ? `2px solid ${theme.palette.primary.main}` : '2px solid transparent',
+                        borderRadius: 2,
+                        p: 0.5,
+                        cursor: 'pointer',
+                        background: idx === galleryIndex ? theme.palette.action.selected : 'transparent',
+                      }}
+                      onClick={() => setGalleryIndex(idx)}
+                    >
+                      { ["jpg","jpeg","png","gif","bmp","webp"].includes(ext) ? (
+                        <img src={fileUrl} alt="thumb" style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 4 }} />
+                      ) : ["mp4","avi","mov","wmv","webm"].includes(ext) ? (
+                        <Box sx={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#eee', borderRadius: 4 }}>
+                          <MovieIcon sx={{ fontSize: 32, color: theme.palette.primary.main }} />
+                        </Box>
+                      ) : ext === "pdf" ? (
+                        <Box sx={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#eee', borderRadius: 4 }}>
+                          <PictureAsPdfIcon sx={{ fontSize: 32, color: theme.palette.primary.main }} />
+                        </Box>
+                      ) : (
+                        <Box sx={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#eee', borderRadius: 4 }}>
+                          <InsertDriveFileIcon sx={{ fontSize: 32, color: theme.palette.primary.main }} />
+                        </Box>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 0 }}>
+          <Button onClick={() => {
+            setFileModalOpen(false);
+            setSelectedFiles([]);
+            setSelectedFieldName('');
+          }} variant="outlined">Cerrar</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
-} 
+}
+
+function extractFileNameFromUrl(url: string): string {
+  try {
+    const urlParts = url.split('/');
+    const fileName = urlParts[urlParts.length - 1];
+    const cleanFileName = fileName.split('?')[0];
+    if (!cleanFileName.includes('.')) {
+      const pathParts = url.split('/');
+      for (let i = pathParts.length - 1; i >= 0; i--) {
+        if (pathParts[i].includes('.')) {
+          return pathParts[i].split('?')[0];
+        }
+      }
+    }
+    return cleanFileName || 'Archivo';
+  } catch (error) {
+    return 'Archivo';
+  }
+}
+
+const handleOpenFile = (fileInfo: { name: string; url: string; size?: number }) => {
+  if (fileInfo.url) {
+    window.open(fileInfo.url, '_blank');
+  }
+}; 

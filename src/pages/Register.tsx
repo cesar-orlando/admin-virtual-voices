@@ -79,7 +79,7 @@ const Register = () => {
   } = useForm<RegisterFormsInputs>({
     resolver: yupResolver(validation),
     defaultValues: {
-      role: "Usuario",
+      role: "Administrador",
       companySlug: ""
     }
   });
@@ -268,7 +268,6 @@ const Register = () => {
               </InputLabel>
               <Select
                 labelId="role-selector-label"
-                {...register("role")}
                 value={watchedRole}
                 label="Rol de usuario"
                 onChange={(e) => setValue("role", e.target.value)}
@@ -286,12 +285,8 @@ const Register = () => {
                   }
                 }}
               >
-                <MenuItem key="Usuario" value="Usuario">
-                  Usuario
-                </MenuItem>
-                <MenuItem key="Administrador" value="Administrador">
-                  Administrador
-                </MenuItem>
+                <MenuItem value="Administrador">Administrador</MenuItem>
+                <MenuItem value="">Usuario</MenuItem>
               </Select>
               {errors.role && (
                 <Typography variant="caption" sx={{ color: '#f44336', mt: 0.5, px: 1 }}>

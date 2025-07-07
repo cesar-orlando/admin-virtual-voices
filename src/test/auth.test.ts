@@ -113,7 +113,6 @@ describe('Multi-Company Authentication System', () => {
         password: 'NewPassword123!',
         role: 'Usuario' as const,
         companySlug: 'quicklearning' as const,
-        c_name: 'quicklearning'
       };
 
       const result = await quickLearningRegisterAPI(registerData);
@@ -124,7 +123,6 @@ describe('Multi-Company Authentication System', () => {
         password: 'NewPassword123!',
         role: 'Usuario',
         companySlug: 'quicklearning',
-        c_name: 'quicklearning'
       });
 
       expect(result.data.companySlug).toBe('quicklearning');
@@ -186,7 +184,6 @@ describe('Multi-Company Authentication System', () => {
         email: 'test@example.com',
         password: 'password123456',
         role: 'Usuario',
-        c_name: 'test',
         companySlug: 'test'
       };
 
@@ -197,7 +194,6 @@ describe('Multi-Company Authentication System', () => {
         email: 'test@example.com',
         password: 'password123456',
         role: 'Usuario',
-        c_name: 'test',
         companySlug: 'test'
       });
 

@@ -35,8 +35,10 @@ import {
   Assessment,
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, LabelList, Legend, Pie as PieCell } from 'recharts';
+import { useAuth } from '../hooks/useAuth';
 
-// Mock data para las métricas
+// Mock data para las métricas - COMENTADO PARA USAR DATOS REALES
+/*
 const mockMetricsData = {
   overview: {
     totalProspects: 1247,
@@ -82,8 +84,10 @@ const mockMetricsData = {
     customerSatisfaction: 4.6,
   },
 };
+*/
 
-// Mock data para medios de contacto
+// Mock data para medios de contacto - COMENTADO PARA USAR DATOS REALES
+/*
 const contactChannels = [
   { channel: 'GOOGLE', prospects: 15350, inscritos: 970 },
   { channel: 'FACEBOOK', prospects: 6120, inscritos: 498 },
@@ -106,8 +110,10 @@ const contactChannels = [
   { channel: 'DIGITAL 99.1', prospects: 1, inscritos: 0 },
   { channel: 'MAS 94.1 (PUEBLA)', prospects: 1, inscritos: 0 },
 ];
+*/
 
-// Mock data para pie chart de inscripción por medio (por ciclo)
+// Mock data para pie chart de inscripción por medio (por ciclo) - COMENTADO PARA USAR DATOS REALES
+/*
 const pieContactCycle2506 = [
   { name: 'SUCURSALES', value: 48, color: '#FFC300' },
   { name: 'GOOGLE', value: 34.2, color: '#FF5733' },
@@ -118,8 +124,10 @@ const pieContactCycle2406 = [
   { name: 'GOOGLE', value: 23, color: '#FF5733' },
   { name: 'META', value: 18.4, color: '#3498DB' },
 ];
+*/
 
-// Mock data para pie chart de tipo de curso (por ciclo)
+// Mock data para pie chart de tipo de curso (por ciclo) - COMENTADO PARA USAR DATOS REALES
+/*
 const pieTipoCurso2506 = [
   { name: 'PRESENCIAL', value: 70.5, color: '#1A237E' },
   { name: 'AVIRTUAL', value: 15.3, color: '#1976D2' },
@@ -130,8 +138,10 @@ const pieTipoCurso2406 = [
   { name: 'ONLINE', value: 16, color: '#64B5F6' },
   { name: 'AVIRTUAL', value: 14.3, color: '#1976D2' },
 ];
+*/
 
-// Mock data para total ganados por semana y por ciclo
+// Mock data para total ganados por semana y por ciclo - COMENTADO PARA USAR DATOS REALES
+/*
 const weeklyEarnings = [
   { week: 'Semana 1', total: 12000 },
   { week: 'Semana 2', total: 18500 },
@@ -142,6 +152,17 @@ const cycleEarnings = [
   { cycle: 'Ciclo 2506', total: 65700 },
   { cycle: 'Ciclo 2406', total: 61200 },
 ];
+*/
+
+// Mock data para Milkasa - COMENTADO PARA USAR DATOS REALES
+/*
+const mockMilkasaMetrics = {
+  totalProspects: 1247,
+  totalProperties: 87,
+  prospectsChange: 12.5,
+  propertiesChange: 3.2,
+};
+*/
 
 // Paleta de colores vibrantes para los segmentos
 const donutColors = ['#8B5CF6', '#10B981', '#F59E0B', '#3B82F6', '#EF4444', '#6366F1', '#F472B6'];
@@ -328,27 +349,31 @@ const StatusTimeCard = ({ status, time, color }: { status: string; time: number;
 const Metrics = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState(mockMetricsData);
+  const [loading, setLoading] = useState(false);
+  // const [data, setData] = useState(mockMetricsData); // COMENTADO PARA USAR DATOS REALES
+  const { currentCompany } = useAuth();
+
+  // Detectar si es grupo-milkasa
+  const isMilkasa = currentCompany?.slug === 'grupo-milkasa';
 
   useEffect(() => {
-    // Simular carga de datos
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 1500);
-
-    return () => clearTimeout(timer);
+    // TODO: Cargar datos reales desde API
+    // const timer = setTimeout(() => {
+    //   setLoading(false);
+    // }, 1500);
+    // return () => clearTimeout(timer);
   }, []);
 
   const handleRefresh = () => {
     setLoading(true);
+    // TODO: Recargar datos reales desde API
     setTimeout(() => {
       setLoading(false);
     }, 1000);
   };
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '100vh' }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
@@ -382,654 +407,115 @@ const Metrics = () => {
             </IconButton>
           </Tooltip>
         </Box>
-        
-{/*         <Alert 
-          severity="info" 
-          sx={{ 
-            background: theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.05)',
-            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)'}`,
-            '& .MuiAlert-icon': { color: theme.palette.primary.main }
-          }}
-        >
-          <Typography variant="body2">
-            <strong>Datos de ejemplo:</strong> Esta es una demostración con datos mock. En producción, estos datos se obtendrían de tu API real.
+      </Box>
+
+      {/* Mensaje de Bienvenida */}
+      <Card sx={{ 
+        mb: 4,
+        background: theme.palette.mode === 'dark' 
+          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%)'
+          : 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.02) 100%)',
+        border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)'}`,
+      }}>
+        <CardContent sx={{ textAlign: 'center', py: 4 }}>
+          <Analytics sx={{ fontSize: 64, color: theme.palette.primary.main, mb: 2 }} />
+          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: theme.palette.primary.main }}>
+            Dashboard de Métricas
           </Typography>
-        </Alert> */}
-      </Box>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+            Próximamente: Centro de análisis y seguimiento de tu negocio
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Estamos trabajando para traerte métricas detalladas y análisis avanzados
+          </Typography>
+        </CardContent>
+      </Card>
 
-      {/* Métricas principales */}
+      {/* Métricas principales - COMENTADAS PARA USAR DATOS REALES */}
+      {/*
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid item xs={12} sm={6} md={3}>
-          <MetricCard
-            title="Total Prospectos"
-            value={data.overview.totalProspects}
-            change={data.overview.prospectsChange}
-            icon={<People />}
-            color="#8B5CF6"
-            subtitle="Leads generados este mes"
-            loading={loading}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <MetricCard
-            title="Clientes Activos"
-            value={data.overview.totalClients}
-            change={data.overview.clientsChange}
-            icon={<Business />}
-            color="#10B981"
-            subtitle="Clientes convertidos"
-            loading={loading}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <MetricCard
-            title="Ventas Realizadas"
-            value={data.overview.totalSales}
-            change={data.overview.salesChange}
-            icon={<ShoppingCart />}
-            color="#F59E0B"
-            subtitle="Transacciones completadas"
-            loading={loading}
-          />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <MetricCard
-            title="Sin Contestar"
-            value={data.overview.unansweredMessages}
-            change={data.overview.messagesChange}
-            icon={<Message />}
-            color="#EF4444"
-            subtitle="Mensajes pendientes"
-            loading={loading}
-          />
-        </Grid>
+        {isMilkasa ? (
+          <>
+            <Grid item xs={12} sm={6} md={6}>
+              <MetricCard
+                title="Total Prospectos"
+                value={mockMilkasaMetrics.totalProspects}
+                change={mockMilkasaMetrics.prospectsChange}
+                icon={<People />}
+                color="#8B5CF6"
+                subtitle="Prospectos registrados este mes"
+                loading={loading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={6}>
+              <MetricCard
+                title="Total Propiedades"
+                value={mockMilkasaMetrics.totalProperties}
+                change={mockMilkasaMetrics.propertiesChange}
+                icon={<Business />}
+                color="#10B981"
+                subtitle="Propiedades activas en inventario"
+                loading={loading}
+              />
+            </Grid>
+          </>
+        ) : (
+          <>
+            <Grid item xs={12} sm={6} md={3}>
+              <MetricCard
+                title="Total Prospectos"
+                value={data.overview.totalProspects}
+                change={data.overview.prospectsChange}
+                icon={<People />}
+                color="#8B5CF6"
+                subtitle="Leads generados este mes"
+                loading={loading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <MetricCard
+                title="Clientes Activos"
+                value={data.overview.totalClients}
+                change={data.overview.clientsChange}
+                icon={<Business />}
+                color="#10B981"
+                subtitle="Clientes convertidos"
+                loading={loading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <MetricCard
+                title="Ventas Realizadas"
+                value={data.overview.totalSales}
+                change={data.overview.salesChange}
+                icon={<ShoppingCart />}
+                color="#F59E0B"
+                subtitle="Transacciones completadas"
+                loading={loading}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <MetricCard
+                title="Sin Contestar"
+                value={data.overview.unansweredMessages}
+                change={data.overview.messagesChange}
+                icon={<Message />}
+                color="#EF4444"
+                subtitle="Mensajes pendientes"
+                loading={loading}
+              />
+            </Grid>
+          </>
+        )}
       </Grid>
+      */}
 
-      {/* Gráficos y métricas detalladas */}
+      {/* Gráficos y métricas detalladas - COMENTADAS PARA USAR DATOS REALES */}
+      {/*
       <Grid container spacing={3}>
-        {/* Gráfico de tendencias semanales */}
-        <Grid item xs={12} lg={8}>
-          <Card sx={{ 
-            height: '100%',
-            background: theme.palette.mode === 'dark' 
-              ? 'rgba(30,30,40,0.9)' 
-              : 'rgba(255,255,255,0.9)',
-            backdropFilter: 'blur(10px)',
-            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-          }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                Tendencias Semanales
-              </Typography>
-              {loading ? (
-                <Skeleton variant="rectangular" height={300} />
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={data.weeklyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={theme.palette.mode === 'dark' ? '#374151' : '#E5E7EB'} />
-                    <XAxis 
-                      dataKey="day" 
-                      stroke={theme.palette.text.secondary}
-                      fontSize={12}
-                    />
-                    <YAxis 
-                      stroke={theme.palette.text.secondary}
-                      fontSize={12}
-                    />
-                    <RechartsTooltip 
-                      contentStyle={{
-                        background: theme.palette.mode === 'dark' ? '#1F2937' : '#fff',
-                        border: `1px solid ${theme.palette.mode === 'dark' ? '#374151' : '#E5E7EB'}`,
-                        borderRadius: 8,
-                      }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="prospects" 
-                      stroke="#8B5CF6" 
-                      strokeWidth={3}
-                      dot={{ fill: '#8B5CF6', strokeWidth: 2, r: 4 }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="clients" 
-                      stroke="#10B981" 
-                      strokeWidth={3}
-                      dot={{ fill: '#10B981', strokeWidth: 2, r: 4 }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="sales" 
-                      stroke="#F59E0B" 
-                      strokeWidth={3}
-                      dot={{ fill: '#F59E0B', strokeWidth: 2, r: 4 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Distribución de estados */}
-        <Grid item xs={12} lg={4}>
-          <Card sx={{ 
-            height: '100%',
-            background: theme.palette.mode === 'dark' 
-              ? 'rgba(30,30,40,0.9)' 
-              : 'rgba(255,255,255,0.9)',
-            backdropFilter: 'blur(10px)',
-            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-          }}>
-            <CardContent>
-              <Typography variant="h6" sx={{ fontWeight: 600, mb: 3 }}>
-                Distribución de Estados
-              </Typography>
-              {loading ? (
-                <Skeleton variant="rectangular" height={300} />
-              ) : (
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={data.statusDistribution}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={100}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {data.statusDistribution.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <RechartsTooltip 
-                      contentStyle={{
-                        background: theme.palette.mode === 'dark' ? '#1F2937' : '#fff',
-                        border: `1px solid ${theme.palette.mode === 'dark' ? '#374151' : '#E5E7EB'}`,
-                        borderRadius: 8,
-                      }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-              
-              {/* Leyenda */}
-              <Box sx={{ mt: 2 }}>
-                {data.statusDistribution.map((item, index) => (
-                  <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <Box sx={{ 
-                      width: 12, 
-                      height: 12, 
-                      borderRadius: '50%', 
-                      bgcolor: item.color 
-                    }} />
-                    <Typography variant="body2" sx={{ flex: 1 }}>
-                      {item.name}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {item.value}%
-                    </Typography>
-                  </Box>
-                ))}
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Tiempos de respuesta por estado */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            height: '100%',
-            background: theme.palette.mode === 'dark' 
-              ? 'rgba(30,30,40,0.9)' 
-              : 'rgba(255,255,255,0.9)',
-            backdropFilter: 'blur(10px)',
-            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-          }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                <Timer sx={{ color: '#8B5CF6' }} />
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  Tiempos de Respuesta por Estado
-                </Typography>
-              </Box>
-              
-              {loading ? (
-                <Box sx={{ space: 2 }}>
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <Skeleton key={i} variant="rectangular" height={40} sx={{ mb: 1 }} />
-                  ))}
-                </Box>
-              ) : (
-                <Box sx={{ space: 2 }}>
-                  {data.responseTimes.statusResponseTimes.map((item, index) => (
-                    <StatusTimeCard 
-                      key={index}
-                      status={item.status}
-                      time={item.time}
-                      color={item.color}
-                    />
-                  ))}
-                </Box>
-              )}
-              
-              <Divider sx={{ my: 2 }} />
-              
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Speed sx={{ color: '#10B981' }} />
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Tiempo promedio de respuesta
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#10B981' }}>
-                    {data.responseTimes.averageResponseTime} minutos
-                  </Typography>
-                </Box>
-              </Box>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* Métricas de rendimiento */}
-        <Grid item xs={12} md={6}>
-          <Card sx={{ 
-            height: '100%',
-            background: theme.palette.mode === 'dark' 
-              ? 'rgba(30,30,40,0.9)' 
-              : 'rgba(255,255,255,0.9)',
-            backdropFilter: 'blur(10px)',
-            border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)'}`,
-          }}>
-            <CardContent>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-                <Assessment sx={{ color: '#8B5CF6' }} />
-                <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                  Métricas de Rendimiento
-                </Typography>
-              </Box>
-              
-              {loading ? (
-                <Box sx={{ space: 2 }}>
-                  {[1, 2, 3, 4].map((i) => (
-                    <Skeleton key={i} variant="rectangular" height={60} sx={{ mb: 2 }} />
-                  ))}
-                </Box>
-              ) : (
-                <Box sx={{ space: 2 }}>
-                  <Box sx={{ mb: 3 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Tasa de Conversión
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {data.performanceMetrics.conversionRate}%
-                      </Typography>
-                    </Box>
-                    <LinearProgress 
-                      variant="determinate" 
-                      value={data.performanceMetrics.conversionRate} 
-                      sx={{ 
-                        height: 8, 
-                        borderRadius: 4,
-                        bgcolor: theme.palette.mode === 'dark' ? '#374151' : '#E5E7EB',
-                        '& .MuiLinearProgress-bar': {
-                          bgcolor: '#10B981',
-                          borderRadius: 4,
-                        }
-                      }} 
-                    />
-                  </Box>
-                  
-                  <Box sx={{ mb: 3 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Ticket Promedio
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        ${data.performanceMetrics.averageDealSize.toLocaleString()}
-                      </Typography>
-                    </Box>
-                    <LinearProgress 
-                      variant="determinate" 
-                      value={(data.performanceMetrics.averageDealSize / 5000) * 100} 
-                      sx={{ 
-                        height: 8, 
-                        borderRadius: 4,
-                        bgcolor: theme.palette.mode === 'dark' ? '#374151' : '#E5E7EB',
-                        '& .MuiLinearProgress-bar': {
-                          bgcolor: '#F59E0B',
-                          borderRadius: 4,
-                        }
-                      }} 
-                    />
-                  </Box>
-                  
-                  <Box sx={{ mb: 3 }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Ciclo de Ventas (días)
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {data.performanceMetrics.salesCycle}
-                      </Typography>
-                    </Box>
-                    <LinearProgress 
-                      variant="determinate" 
-                      value={(data.performanceMetrics.salesCycle / 30) * 100} 
-                      sx={{ 
-                        height: 8, 
-                        borderRadius: 4,
-                        bgcolor: theme.palette.mode === 'dark' ? '#374151' : '#E5E7EB',
-                        '& .MuiLinearProgress-bar': {
-                          bgcolor: '#8B5CF6',
-                          borderRadius: 4,
-                        }
-                      }} 
-                    />
-                  </Box>
-                  
-                  <Box>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                      <Typography variant="body2" color="text.secondary">
-                        Satisfacción del Cliente
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {data.performanceMetrics.customerSatisfaction}/5
-                      </Typography>
-                    </Box>
-                    <LinearProgress 
-                      variant="determinate" 
-                      value={(data.performanceMetrics.customerSatisfaction / 5) * 100} 
-                      sx={{ 
-                        height: 8, 
-                        borderRadius: 4,
-                        bgcolor: theme.palette.mode === 'dark' ? '#374151' : '#E5E7EB',
-                        '& .MuiLinearProgress-bar': {
-                          bgcolor: '#EF4444',
-                          borderRadius: 4,
-                        }
-                      }} 
-                    />
-                  </Box>
-                </Box>
-              )}
-            </CardContent>
-          </Card>
-        </Grid>
+        // ... resto de los gráficos comentados
       </Grid>
-
-      {/* Medios de Contacto: Prospectos e Inscritos (Barras vibrantes y alineadas) */}
-      <Box sx={{ mt: 6 }}>
-        <Typography variant="h5" sx={{ fontWeight: 900, mb: 2, color: '#1A237E', letterSpacing: 1, textAlign: 'left' }}>
-          Medios de Contacto
-        </Typography>
-        <Grid container spacing={4} alignItems="stretch">
-          <Grid item xs={12} md={6}>
-            <Card sx={{ p: 4, borderRadius: 6, boxShadow: '0 8px 32px #8B5CF622', background: 'white', minHeight: 420, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <Typography variant="h6" sx={{ mb: 2, color: '#8B5CF6', fontWeight: 900, fontSize: 22, textAlign: 'left' }}>
-                Prospectos
-              </Typography>
-              <ResponsiveContainer width="100%" height={420}>
-                <BarChart
-                  layout="vertical"
-                  data={contactChannels}
-                  margin={{ top: 10, right: 40, left: 80, bottom: 10 }}
-                  barCategoryGap={16}
-                >
-                  <XAxis type="number" axisLine={false} tickLine={false} fontSize={16} tick={{ fill: '#8B5CF6', fontWeight: 900 }} tickFormatter={v => typeof v === 'number' ? v.toLocaleString() : ''} />
-                  <YAxis dataKey="channel" type="category" width={120} axisLine={false} tickLine={false} fontSize={16} tick={{ fill: '#8B5CF6', fontWeight: 900 }} />
-                  <Bar dataKey="prospects" radius={[20, 20, 20, 20]} barSize={26} isAnimationActive>
-                    <LabelList dataKey="prospects" position="right" style={{ fill: '#8B5CF6', fontWeight: 900, fontSize: 22 }} formatter={v => typeof v === 'number' ? v.toLocaleString() : ''} />
-                    {contactChannels.map((entry, index) => (
-                      <Cell key={`cell-prospects-${index}`} fill={index < 5 ? donutColors[index % donutColors.length] : pastelColors[index % pastelColors.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ p: 4, borderRadius: 6, boxShadow: '0 8px 32px #10B98122', background: 'white', minHeight: 420, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <Typography variant="h6" sx={{ mb: 2, color: '#10B981', fontWeight: 900, fontSize: 22, textAlign: 'left' }}>
-                Inscritos
-              </Typography>
-              <ResponsiveContainer width="100%" height={420}>
-                <BarChart
-                  layout="vertical"
-                  data={contactChannels}
-                  margin={{ top: 10, right: 40, left: 80, bottom: 10 }}
-                  barCategoryGap={16}
-                >
-                  <XAxis type="number" axisLine={false} tickLine={false} fontSize={16} tick={{ fill: '#10B981', fontWeight: 900 }} tickFormatter={v => typeof v === 'number' ? v.toLocaleString() : ''} />
-                  <YAxis dataKey="channel" type="category" width={120} axisLine={false} tickLine={false} fontSize={16} tick={{ fill: '#10B981', fontWeight: 900 }} />
-                  <Bar dataKey="inscritos" radius={[20, 20, 20, 20]} barSize={26} isAnimationActive>
-                    <LabelList dataKey="inscritos" position="right" style={{ fill: '#10B981', fontWeight: 900, fontSize: 22 }} formatter={v => typeof v === 'number' ? v.toLocaleString() : ''} />
-                    {contactChannels.map((entry, index) => (
-                      <Cell key={`cell-inscritos-${index}`} fill={index < 5 ? donutColors[index % donutColors.length] : pastelColors[index % pastelColors.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
-
-      {/* Medios de Contacto Por Inscripción (Donut charts vibrantes y alineados) */}
-      <Box sx={{ mt: 6 }}>
-        <Typography variant="h5" sx={{ fontWeight: 900, mb: 2, color: '#1A237E', letterSpacing: 1, textAlign: 'left' }}>
-          Medios de Contacto Por Inscripción
-        </Typography>
-        <Grid container spacing={4} alignItems="stretch">
-          <Grid item xs={12} md={6}>
-            <Card sx={{ p: 4, borderRadius: 6, boxShadow: '0 8px 32px #FFC30022', background: 'white', minHeight: 420, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 900, color: '#FFC300', fontSize: 22, textAlign: 'left' }}>
-                Ciclo 2506
-              </Typography>
-              <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
-                  <Pie
-                    data={pieContactCycle2506}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={110}
-                    innerRadius={70}
-                    label={renderDonutLabelVibrant}
-                    labelLine={false}
-                    stroke="#fff"
-                    strokeWidth={4}
-                    isAnimationActive
-                  >
-                    {pieContactCycle2506.map((entry, index) => (
-                      <Cell key={`cell-pie2506-${index}`} fill={donutColors[index % donutColors.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 2 }}>
-                {pieContactCycle2506.map((item, idx) => (
-                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ width: 18, height: 18, borderRadius: '50%', bgcolor: donutColors[idx % donutColors.length] }} />
-                    <Typography sx={{ fontWeight: 800, color: donutColors[idx % donutColors.length], fontSize: 17 }}>{item.name}</Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ p: 4, borderRadius: 6, boxShadow: '0 8px 32px #FF573322', background: 'white', minHeight: 420, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 900, color: '#FF5733', fontSize: 22, textAlign: 'left' }}>
-                Ciclo 2406
-              </Typography>
-              <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
-                  <Pie
-                    data={pieContactCycle2406}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={110}
-                    innerRadius={70}
-                    label={renderDonutLabelVibrant}
-                    labelLine={false}
-                    stroke="#fff"
-                    strokeWidth={4}
-                    isAnimationActive
-                  >
-                    {pieContactCycle2406.map((entry, index) => (
-                      <Cell key={`cell-pie2406-${index}`} fill={donutColors[index % donutColors.length]} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, mt: 2 }}>
-                {pieContactCycle2406.map((item, idx) => (
-                  <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Box sx={{ width: 18, height: 18, borderRadius: '50%', bgcolor: donutColors[idx % donutColors.length] }} />
-                    <Typography sx={{ fontWeight: 800, color: donutColors[idx % donutColors.length], fontSize: 17 }}>{item.name}</Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
-
-      {/* Pie charts premium de tipo de curso */}
-      <Box sx={{ mt: 6 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, color: '#1A237E', letterSpacing: 1 }}>
-          Inscripciones por Tipo de Curso
-        </Typography>
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ p: 3, borderRadius: 4, boxShadow: '0 8px 32px #1A237E33', backdropFilter: 'blur(8px)', background: 'rgba(255,255,255,0.92)' }}>
-              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700, color: '#1A237E' }}>
-                Ciclo 2506
-              </Typography>
-              <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
-                  <Pie
-                    data={pieTipoCurso2506}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={110}
-                    innerRadius={60}
-                    label={({ percent, name }) => percent !== undefined ? `${name}: ${(percent * 100).toFixed(1)}%` : ''}
-                    labelLine={false}
-                    stroke="#fff"
-                    strokeWidth={3}
-                    isAnimationActive
-                  >
-                    {pieTipoCurso2506.map((entry, index) => (
-                      <PieCell key={`cell-tipo2506-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Legend verticalAlign="bottom" iconType="circle" formatter={(value: string) => <span style={{ fontWeight: 600, color: '#333' }}>{value}</span>} />
-                  <RechartsTooltip formatter={v => `${v}%`} contentStyle={{ background: '#fff', borderRadius: 8, boxShadow: '0 2px 8px #1A237E33' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ p: 3, borderRadius: 4, boxShadow: '0 8px 32px #1976D233', backdropFilter: 'blur(8px)', background: 'rgba(255,255,255,0.92)' }}>
-              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700, color: '#1976D2' }}>
-                Ciclo 2406
-              </Typography>
-              <ResponsiveContainer width="100%" height={320}>
-                <PieChart>
-                  <Pie
-                    data={pieTipoCurso2406}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={110}
-                    innerRadius={60}
-                    label={({ percent, name }) => percent !== undefined ? `${name}: ${(percent * 100).toFixed(1)}%` : ''}
-                    labelLine={false}
-                    stroke="#fff"
-                    strokeWidth={3}
-                    isAnimationActive
-                  >
-                    {pieTipoCurso2406.map((entry, index) => (
-                      <PieCell key={`cell-tipo2406-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Legend verticalAlign="bottom" iconType="circle" formatter={(value: string) => <span style={{ fontWeight: 600, color: '#333' }}>{value}</span>} />
-                  <RechartsTooltip formatter={v => `${v}%`} contentStyle={{ background: '#fff', borderRadius: 8, boxShadow: '0 2px 8px #1976D233' }} />
-                </PieChart>
-              </ResponsiveContainer>
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
-
-      {/* Total ganados por semana y por ciclo (premium) */}
-      <Box sx={{ mt: 6 }}>
-        <Typography variant="h5" sx={{ fontWeight: 800, mb: 2, color: '#1A237E', letterSpacing: 1 }}>
-          Total Ganados
-        </Typography>
-        <Grid container spacing={4}>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ p: 3, borderRadius: 4, boxShadow: '0 8px 32px #8B5CF633', backdropFilter: 'blur(8px)', background: 'rgba(255,255,255,0.92)' }}>
-              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700, color: '#8B5CF6' }}>
-                Por Semana
-              </Typography>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={weeklyEarnings}>
-                  <XAxis dataKey="week" axisLine={false} tickLine={false} fontSize={15} tick={{ fill: '#8B5CF6', fontWeight: 700 }} />
-                  <YAxis axisLine={false} tickLine={false} fontSize={15} tick={{ fill: '#8B5CF6', fontWeight: 700 }} tickFormatter={v => typeof v === 'number' ? `$${v / 1000}k` : ''} />
-                  <Bar dataKey="total" radius={[12, 12, 12, 12]} fill="#8B5CF6" barSize={32} isAnimationActive>
-                    <LabelList dataKey="total" position="top" style={{ fill: '#8B5CF6', fontWeight: 800, fontSize: 18 }} formatter={v => typeof v === 'number' ? `$${v.toLocaleString()}` : ''} />
-                    {weeklyEarnings.map((entry, index) => (
-                      <Cell key={`cell-weekly-${index}`} fill="url(#weeklyGradient)" />
-                    ))}
-                  </Bar>
-                  <defs>
-                    <linearGradient id="weeklyGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8B5CF6" />
-                      <stop offset="100%" stopColor="#3B82F6" />
-                    </linearGradient>
-                  </defs>
-                  <RechartsTooltip formatter={v => `$${v.toLocaleString()}`} contentStyle={{ background: '#fff', borderRadius: 8, boxShadow: '0 2px 8px #8B5CF633' }} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Card sx={{ p: 3, borderRadius: 4, boxShadow: '0 8px 32px #10B98133', backdropFilter: 'blur(8px)', background: 'rgba(255,255,255,0.92)' }}>
-              <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700, color: '#10B981' }}>
-                Por Ciclo
-              </Typography>
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={cycleEarnings}>
-                  <XAxis dataKey="cycle" axisLine={false} tickLine={false} fontSize={15} tick={{ fill: '#10B981', fontWeight: 700 }} />
-                  <YAxis axisLine={false} tickLine={false} fontSize={15} tick={{ fill: '#10B981', fontWeight: 700 }} tickFormatter={v => typeof v === 'number' ? `$${v / 1000}k` : ''} />
-                  <Bar dataKey="total" radius={[12, 12, 12, 12]} fill="#10B981" barSize={32} isAnimationActive>
-                    <LabelList dataKey="total" position="top" style={{ fill: '#10B981', fontWeight: 800, fontSize: 18 }} formatter={v => typeof v === 'number' ? `$${v.toLocaleString()}` : ''} />
-                    {cycleEarnings.map((entry, index) => (
-                      <Cell key={`cell-cycle-${index}`} fill="url(#cycleGradient)" />
-                    ))}
-                  </Bar>
-                  <defs>
-                    <linearGradient id="cycleGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10B981" />
-                      <stop offset="100%" stopColor="#3B82F6" />
-                    </linearGradient>
-                  </defs>
-                  <RechartsTooltip formatter={v => `$${v.toLocaleString()}`} contentStyle={{ background: '#fff', borderRadius: 8, boxShadow: '0 2px 8px #10B98133' }} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-          </Grid>
-        </Grid>
-      </Box>
+      */}
     </Box>
   );
 };

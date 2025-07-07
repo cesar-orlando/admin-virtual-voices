@@ -15,7 +15,7 @@ export function UsersTab() {
 
     useEffect(() => {
     const loadData = async () => {
-        const fetchedCompanyUsers = await fetchCompanyUsers(user.c_name);
+        const fetchedCompanyUsers = await fetchCompanyUsers(user.c_name || '');
         setUsers(fetchedCompanyUsers);
     };
 

@@ -88,7 +88,7 @@ export default function UserProfile() {
         password: user.password,
         role: user.role,
         status: user.status,
-        c_name: user.company
+        c_name: user.company || ''
       });
       setEdit(false);
       setSnackbar({ open: true, message: "Perfil actualizado correctamente", severity: "success" });
