@@ -43,7 +43,7 @@ export default function Whatsapp() {
   const dotInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const socket = io("http://localhost:3001");
+    const socket = io(import.meta.env.VITE_API_BASE_URL);
     
     // Evento QR: mostrar QR y abrir modal
     socket.on(`whatsapp-qr-${user.companySlug}-${user.id}`, (data) => {
