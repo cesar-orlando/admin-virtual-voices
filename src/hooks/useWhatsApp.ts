@@ -41,8 +41,26 @@ export function useWhatsApp(user: UserProfile): UseWhatsAppReturn {
     const socketUrl = import.meta.env.VITE_SOCKET_URL;
     const socketInstance = io(socketUrl)
 
+    console.log('useWhatsApp - Socket URL:', socketUrl);
+    console.log('useWhatsApp - User companySlug:', user.companySlug);
+    console.log('useWhatsApp - User id:', user.id);
+    console.log('useWhatsApp - Listening for QR event:', `whatsapp-qr-${user.companySlug}-${user.id}`);
+
+    // Debug: eventos de conexión
+    socketInstance.on('connect', () => {
+      console.log('useWhatsApp - Socket connected successfully');
+    });
+    
+    socketInstance.on('connect_error', (error) => {
+      console.error('useWhatsApp - Socket connection error:', error);
+    });
+    
+    socketInstance.on('disconnect', (reason) => {
+      console.log('useWhatsApp - Socket disconnected:', reason);
+    });
+
     // Escuchar eventos de QR específicos para el usuario
-    const qrEventName = `whatsapp-qr-${user.c_name}-${user.id}`
+    const qrEventName = `whatsapp-qr-${user.companySlug}-${user.id}`
     socketInstance.on(qrEventName, (data: WhatsAppSocketData) => {
       if (data.qr) {
         setQrCode(data.qr)
@@ -66,7 +84,7 @@ export function useWhatsApp(user: UserProfile): UseWhatsAppReturn {
     return () => {
       socketInstance.disconnect()
     }
-  }, [user.c_name, user.id])
+  }, [user.companySlug, user.id])
 
   // Cargar sesiones al inicializar
   useEffect(() => {
