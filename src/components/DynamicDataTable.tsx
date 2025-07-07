@@ -272,6 +272,9 @@ export default function DynamicDataTable({
   const formatFieldValue = (value: any, field: TableField): string | JSX.Element => {
     if (value === null || value === undefined) return '-';
 
+    // Detectar si el campo es un teléfono por el nombre
+    const isPhoneField = /telefono|teléfono|phone|celular|numero|número/i.test(field.name);
+
     switch (field.type) {
       case 'date': {
         const date = new Date(value);
@@ -295,7 +298,8 @@ export default function DynamicDataTable({
           currency: 'MXN'
         }).format(value);
       case 'number':
-        return new Intl.NumberFormat('es-MX').format(value);
+        // Mostrar todos los números sin formato, solo como string
+        return String(value);
       case 'file':
         // Manejar diferentes formatos de archivos
         let files: any[] = [];
