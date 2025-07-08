@@ -95,20 +95,6 @@ export const getTwilioHistory = async (params?: TwilioHistoryRequest): Promise<T
 };
 
 /**
- * Obtener estadísticas del dashboard de Quick Learning
- * @returns Estadísticas del dashboard
- */
-export const getQuickLearningDashboardStats = async (): Promise<QuickLearningDashboardStats> => {
-  try {
-    const response = await api.get('/quicklearning/dashboard/stats');
-    return response.data;
-  } catch (error: any) {
-    handleError(error);
-    throw new Error('Error al obtener las estadísticas del dashboard');
-  }
-};
-
-/**
  * Habilitar/deshabilitar IA para un chat específico
  * @param phone - Número de teléfono del chat
  * @param enabled - Si la IA debe estar habilitada
@@ -201,11 +187,22 @@ export const updateChatStatus = async (phone: string, status: "active" | "inacti
 
 /**
  * Obtener lista de prospectos/clientes con su último mensaje
- * @returns Lista de prospectos/clientes
+ * @param cursor - Cursor para paginación
+ * @param limit - Límite de resultados por página
+ * @returns Lista de prospectos/clientes con información de paginación
  */
-export const getQuickLearningProspects = async () => {
+export const getQuickLearningProspects = async (cursor?: string | null, limit: number = 20) => {
   try {
-    const response = await api.get('/quicklearning/twilio/usuarios?companySlug=quicklearning&tableSlugs=prospectos,clientes');
+    const queryParams = new URLSearchParams();
+    queryParams.append('companySlug', 'quicklearning');
+    queryParams.append('tableSlugs', 'prospectos,clientes');
+    queryParams.append('limit', limit.toString());
+    
+    if (cursor) {
+      queryParams.append('cursor', cursor);
+    }
+    
+    const response = await api.get(`/quicklearning/twilio/usuarios?${queryParams.toString()}`);
     return response.data;
   } catch (error: any) {
     handleError(error);

@@ -31,6 +31,7 @@ import BuildIcon from '@mui/icons-material/Build'
 import DashboardCustomizeIcon from '@mui/icons-material/DashboardCustomize'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import AnalyticsIcon from '@mui/icons-material/Analytics'
+import SettingsIcon from '@mui/icons-material/Settings'
 import { useAuth } from '../hooks/useAuth'
 import { getTables } from '../api/servicios'
 import type { DynamicTable } from '../types'
@@ -154,13 +155,13 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
       label: 'Usuarios',
       icon: <PeopleIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/usuarios',
     },
-    ...(user.c_name === 'quicklearning' ? []: [
+    ...(user.companySlug === 'quicklearning' ? []: [
     {
       label: 'IA',
       icon: <SmartToyIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/ia',
     },
   ] ),
-    ...(user.c_name === 'quicklearning' ? []: [
+    ...(user.companySlug === 'quicklearning' ? []: [
     {
       label: 'Herramientas',
       icon: <BuildIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/herramientas',
@@ -177,14 +178,14 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
       label: 'Equipos',
       icon: <GroupIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/equipos',
     }, */
-    ...(user.c_name === 'quicklearning' ? [] : [
+    ...(user.companySlug === 'quicklearning' ? [] : [
     {
       label: 'Whatsapp',
       icon: <WhatsAppIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/whatsapp',
     },
   ] ),
     // Solo agregar QuickLearning WA si es quicklearning
-    ...(user.c_name === 'quicklearning' ? [
+    ...(user.companySlug === 'quicklearning' ? [
       {
         label: 'Quick Whats',
         icon: <WhatsAppIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/quicklearning/whatsapp',
@@ -194,6 +195,13 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
       label: 'Chats',
       icon: <ChatIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/chats',
     },
+    // Botón de debug para Quick Learning
+    ...(user.companySlug === 'quicklearning' ? [
+      {
+        label: 'Debug Quick',
+        icon: <SettingsIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/quicklearning/whatsapp',
+      },
+    ] : []),
   ];
 
   const allNavItems = [...mainNavItems, tablesNavItem]
