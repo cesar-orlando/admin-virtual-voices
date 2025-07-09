@@ -66,6 +66,7 @@ interface DynamicDataTableProps {
   onRecordView?: (record: DynamicRecord) => void;
   onRecordCreate?: () => void;
   refreshTrigger?: number;
+  onImportExcel?: () => void; // NUEVO: handler para importar Excel
 }
 
 export default function DynamicDataTable({ 
@@ -73,7 +74,8 @@ export default function DynamicDataTable({
   onRecordEdit, 
   onRecordView, 
   onRecordCreate,
-  refreshTrigger = 0 
+  refreshTrigger = 0,
+  onImportExcel
 }: DynamicDataTableProps) {
   const [records, setRecords] = useState<DynamicRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -107,6 +109,8 @@ export default function DynamicDataTable({
   // Sorting state
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
 
   useEffect(() => {
     // Identificar los campos de fecha disponibles para filtrar
@@ -478,14 +482,31 @@ export default function DynamicDataTable({
           >
             Filtros
           </Button>
+          {/* Botón de acciones Importar/Exportar */}
           <Button
             variant="outlined"
-            startIcon={<ExportIcon />}
-            onClick={handleExportData}
+            startIcon={<MoreVertIcon />}
             sx={{ borderRadius: 2 }}
+            onClick={e => setActionsAnchorEl(e.currentTarget)}
           >
-            Exportar
+            Acciones
           </Button>
+          <Menu
+            anchorEl={actionsAnchorEl}
+            open={Boolean(actionsAnchorEl)}
+            onClose={() => setActionsAnchorEl(null)}
+          >
+            {/*
+            <MenuItem onClick={() => { setActionsAnchorEl(null); onImportExcel && onImportExcel(); }}>
+              <ListItemIcon><ImportIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Importar Excel</ListItemText>
+            </MenuItem>
+            */}
+            <MenuItem onClick={() => { setActionsAnchorEl(null); handleExportData(); }}>
+              <ListItemIcon><ExportIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Exportar</ListItemText>
+            </MenuItem>
+          </Menu>
           {onRecordCreate && (
              <Button
               variant="contained"

@@ -882,26 +882,25 @@ const QuickLearningDashboard: React.FC = () => {
       )}
 
       {/* Dialog para mostrar información del cliente */}
-      <Dialog open={openClientInfo} onClose={() => setOpenClientInfo(false)} maxWidth="xs" fullWidth>
+      <Dialog open={openClientInfo} onClose={() => setOpenClientInfo(false)} maxWidth="sm" fullWidth>
         <DialogTitle>Información del Cliente</DialogTitle>
         <DialogContent>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, py: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Avatar sx={{ width: 56, height: 56, bgcolor: theme.palette.success.main, color: theme.palette.getContrastText(theme.palette.success.main), fontWeight: 700 }}>
-                <PersonIcon fontSize="large" />
-              </Avatar>
-              <Box>
-                <Typography variant="h6" fontWeight={700}>{selectedProspect?.name || selectedProspect?.phone}</Typography>
-                <Typography variant="body2" color="text.secondary">{selectedProspect?.phone}</Typography>
+          {selectedProspect && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, py: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ width: 56, height: 56, bgcolor: theme.palette.success.main, color: theme.palette.getContrastText(theme.palette.success.main), fontWeight: 700 }}>
+                  <PersonIcon fontSize="large" />
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" fontWeight={700}>{selectedProspect?.name || selectedProspect?.phone}</Typography>
+                  <Typography variant="body2" color="text.secondary">{selectedProspect?.phone}</Typography>
+                </Box>
               </Box>
+              <Divider sx={{ my: 1 }} />
+              {/* Campos editables principales */}
+              <EditableClientFields prospect={selectedProspect} onSave={data => console.log(data)} onCancel={() => setOpenClientInfo(false)} />
             </Box>
-            <Divider sx={{ my: 1 }} />
-            <Typography variant="body2"><b>Tabla:</b> {selectedProspect?.tableSlug || 'N/A'}</Typography>
-            {selectedProspect?.linkedTable?.refModel && (
-              <Typography variant="body2"><b>Modelo:</b> {selectedProspect.linkedTable.refModel}</Typography>
-            )}
-            {/* Agrega aquí más campos si existen en selectedProspect */}
-          </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenClientInfo(false)}>Cerrar</Button>
@@ -927,3 +926,158 @@ const QuickLearningDashboard: React.FC = () => {
 };
 
 export default QuickLearningDashboard;
+
+// Componente para renderizar y editar todos los campos del prospecto
+const EditableClientFields = ({ prospect, onSave, onCancel }: { prospect: any, onSave: (data: any) => void, onCancel: () => void }) => {
+  const [editData, setEditData] = React.useState<any>(() => ({ ...prospect, customFields: Array.isArray(prospect.customFields) ? [...prospect.customFields] : [] }));
+
+  // Helper para actualizar campos principales
+  const handleFieldChange = (field: string, value: any) => {
+    setEditData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  // Helper para actualizar customFields
+  const handleCustomFieldChange = (key: string, value: any) => {
+    setEditData((prev: any) => ({
+      ...prev,
+      customFields: (prev.customFields as any[]).map((f: any) => f.key === key ? { ...f, value } : f)
+    }));
+  };
+
+  // Campos principales a mostrar/editar
+  const mainFields = [
+    { key: 'name', label: 'Nombre', type: 'text' },
+    { key: 'phone', label: 'Teléfono', type: 'text' },
+    { key: 'email', label: 'Email', type: 'text' },
+    { key: 'city', label: 'Ciudad', type: 'text' },
+    { key: 'status', label: 'Estatus', type: 'text' },
+    { key: 'stage', label: 'Etapa', type: 'select', options: ['prospecto', 'interesado', 'inscrito'] },
+    { key: 'tableSlug', label: 'Tabla', type: 'text' },
+    { key: 'tags', label: 'Tags', type: 'tags' },
+  ];
+
+  // Renderiza campos principales
+  const renderMainFields = () => (
+    <Box sx={{
+      display: 'grid',
+      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+      gap: 2,
+      bgcolor: 'background.paper',
+      borderRadius: 2,
+      p: 2,
+      boxShadow: 1,
+      mb: 2
+    }}>
+      {mainFields.map(field => {
+        if (field.key === 'tags') {
+          return (
+            <FormControl key={field.key} fullWidth sx={{ mb: 0 }}>
+              <InputLabel shrink>{field.label}</InputLabel>
+              <TextField
+                value={editData.tags ? editData.tags.join(', ') : ''}
+                onChange={e => handleFieldChange('tags', e.target.value.split(',').map((t: string) => t.trim()).filter(Boolean))}
+                placeholder="Separados por coma"
+                fullWidth
+                size="small"
+                sx={{ bgcolor: 'background.default', borderRadius: 2 }}
+              />
+            </FormControl>
+          );
+        }
+        if (field.type === 'select') {
+          return (
+            <FormControl key={field.key} fullWidth sx={{ mb: 0 }}>
+              <InputLabel>{field.label}</InputLabel>
+              <Select
+                value={editData[field.key] || ''}
+                label={field.label}
+                onChange={e => handleFieldChange(field.key, e.target.value)}
+                size="small"
+                sx={{ bgcolor: 'background.default', borderRadius: 2 }}
+              >
+                {(field.options || []).map((opt: string) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+              </Select>
+            </FormControl>
+          );
+        }
+        return (
+          <TextField
+            key={field.key}
+            label={field.label}
+            value={editData[field.key] || ''}
+            onChange={e => handleFieldChange(field.key, e.target.value)}
+            fullWidth
+            size="small"
+            sx={{ bgcolor: 'background.default', borderRadius: 2 }}
+          />
+        );
+      })}
+    </Box>
+  );
+
+  // Renderiza customFields
+  const renderCustomFields = () => (
+    <Box sx={{ mt: 1, bgcolor: 'background.paper', borderRadius: 2, p: 2, boxShadow: 1 }}>
+      <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700, color: 'primary.main', letterSpacing: 1 }}>Campos Personalizados</Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+        {editData.customFields.map((f: any) => (
+          <TextField
+            key={f.key}
+            label={f.key}
+            value={f.value || ''}
+            onChange={e => handleCustomFieldChange(f.key, e.target.value)}
+            fullWidth
+            size="small"
+            sx={{ bgcolor: 'background.default', borderRadius: 2 }}
+          />
+        ))}
+      </Box>
+    </Box>
+  );
+
+  // Renderiza metadata si existe
+  const renderMetadata = () => editData.metadata ? (
+    <Box sx={{ mt: 2, bgcolor: 'background.paper', borderRadius: 2, p: 2, boxShadow: 1 }}>
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'primary.main', letterSpacing: 1 }}>Metadata</Typography>
+      <TextField
+        label="Metadata (JSON)"
+        value={JSON.stringify(editData.metadata, null, 2)}
+        onChange={e => {
+          try {
+            const val = JSON.parse(e.target.value);
+            handleFieldChange('metadata', val);
+          } catch {
+            // No actualiza si no es JSON válido
+          }
+        }}
+        fullWidth
+        size="small"
+        multiline
+        minRows={2}
+        sx={{ mb: 1, bgcolor: 'background.default', borderRadius: 2 }}
+      />
+    </Box>
+  ) : null;
+
+  // Renderiza fecha de creación
+  const renderCreatedAt = () => editData.createdAt ? (
+    <Box sx={{ mt: 2, textAlign: 'right' }}>
+      <Divider sx={{ my: 1 }} />
+      <Typography variant="body2" color="text.secondary"><b>Fecha de creación:</b> {new Date(editData.createdAt).toLocaleString('es-MX')}</Typography>
+    </Box>
+  ) : null;
+
+  return (
+    <Box>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 1, letterSpacing: 1 }}>Datos Principales</Typography>
+      {renderMainFields()}
+      {renderCustomFields()}
+      {renderMetadata()}
+      {renderCreatedAt()}
+      <Box sx={{ display: 'flex', gap: 2, mt: 4, justifyContent: 'flex-end' }}>
+        <Button onClick={onCancel} sx={{ fontWeight: 700, color: 'text.secondary' }}>Cancelar</Button>
+        <Button variant="contained" color="primary" onClick={() => onSave(editData)} sx={{ fontWeight: 700, px: 4, boxShadow: 2 }}>Guardar Cambios</Button>
+      </Box>
+    </Box>
+  );
+};

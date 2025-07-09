@@ -69,7 +69,7 @@ export default function AiConfig() {
       setIsLoading(false)
     }
     loadData()
-  }, [user.c_name, user.id])
+  }, [user.companySlug, user.id])
 
   const handleSelectChange = (event: any) => {
     setIsNew(false)
