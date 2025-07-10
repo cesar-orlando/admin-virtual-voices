@@ -29,6 +29,7 @@ import {
 } from '../api/servicios';
 import { fetchCompanyUsers } from '../api/servicios/userServices';
 import type { DynamicTable, TableField, CreateRecordRequest, UpdateRecordRequest, DynamicRecord } from '../types';
+import FileDropzone from '../components/FileDropzone';
 
 export default function RecordForm() {
   const [table, setTable] = useState<DynamicTable | null>(null);
@@ -71,7 +72,13 @@ export default function RecordForm() {
       } else {
         const defaultData: Record<string, any> = {};
         tableData.fields.forEach((field: TableField) => {
-          defaultData[field.name] = field.defaultValue ?? (field.type === 'boolean' ? false : '');
+          if (field.type === 'file') {
+            defaultData[field.name] = field.defaultValue ?? [];
+          } else if (field.type === 'boolean') {
+            defaultData[field.name] = field.defaultValue ?? false;
+          } else {
+            defaultData[field.name] = field.defaultValue ?? '';
+          }
         });
         setFormData(defaultData);
       }
@@ -193,6 +200,16 @@ export default function RecordForm() {
               ))}
             </Select>
           </FormControl>
+        );
+      case 'file':
+        return (
+          <FileDropzone
+            value={Array.isArray(value) ? value : (value ? [value] : [])}
+            onChange={(urls) => handleInputChange(field.name, urls)}
+            label={field.label}
+            required={field.required}
+            maxFiles={10}
+          />
         );
       default:
         return null;

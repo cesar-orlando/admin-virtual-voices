@@ -467,7 +467,7 @@ const Metrics = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { currentCompany, user } = useAuth();
-  const isQuickLearning = currentCompany?.slug === 'quicklearning';
+  const isQuickLearning = user?.companySlug === 'quicklearning';
 
   // Estado para el ciclo seleccionado
   const [selectedCycle, setSelectedCycle] = useState(getCurrentCycle());
@@ -659,20 +659,51 @@ const Metrics = () => {
   // Para otras empresas, dejar mensaje de "Próximamente"
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
-      <Card sx={{ mb: 4, background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%)' : 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.02) 100%)', border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)'}` }}>
-        <CardContent sx={{ textAlign: 'center', py: 4 }}>
-          <Analytics sx={{ fontSize: 64, color: theme.palette.primary.main, mb: 2 }} />
-          <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: theme.palette.primary.main }}>
-            Dashboard de Métricas
-          </Typography>
-          <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
+      <Typography variant="h3" sx={{ fontWeight: 800, color: '#222', mb: 1 }}>
+        Dashboard de Métricas
+      </Typography>
+      <Typography variant="subtitle1" sx={{ color: '#6C63FF', mb: 4 }}>
+        Análisis completo del rendimiento de tu negocio
+      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+        <Paper elevation={0} sx={{
+          p: { xs: 3, md: 6 },
+          borderRadius: 4,
+          background: 'linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%)',
+          border: '1.5px solid #d1d5db',
+          width: '100%',
+          maxWidth: 700,
+          textAlign: 'center',
+          boxShadow: '0 4px 32px #6C63FF10',
+        }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 2 }}>
+            <Box sx={{
+              bgcolor: '#6C63FF',
+              color: '#fff',
+              width: 56,
+              height: 56,
+              borderRadius: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mb: 2,
+              fontSize: 36,
+              boxShadow: '0 2px 12px #6C63FF30',
+            }}>
+              <span role="img" aria-label="metrics">📊</span>
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: '#6C63FF', mb: 1 }}>
+              Dashboard de Métricas
+            </Typography>
+          </Box>
+          <Typography variant="body1" sx={{ color: '#6C63FF', fontWeight: 600, mb: 1 }}>
             Próximamente: Centro de análisis y seguimiento de tu negocio
           </Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: '#6C63FF', opacity: 0.8 }}>
             Estamos trabajando para traerte métricas detalladas y análisis avanzados
           </Typography>
-        </CardContent>
-      </Card>
+        </Paper>
+      </Box>
     </Box>
   );
 };

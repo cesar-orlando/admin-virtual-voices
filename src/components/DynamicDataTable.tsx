@@ -392,19 +392,34 @@ export default function DynamicDataTable({
                   alignItems: 'center',
                   gap: 1,
                   cursor: 'pointer',
+                  p: 0.5,
+                  borderRadius: 1,
+                  bgcolor: 'rgba(25, 118, 210, 0.1)',
+                  border: '1px solid rgba(25, 118, 210, 0.2)',
+                  transition: 'all 0.2s ease-in-out',
                   '&:hover': {
-                    opacity: 0.8,
+                    bgcolor: 'rgba(25, 118, 210, 0.15)',
+                    borderColor: theme.palette.primary.main,
+                    transform: 'translateY(-1px)',
+                    boxShadow: 1,
                   }
                 }}
                 onClick={() => handleFileClick(validFiles, field.name)}
               >
-                <AttachFileIcon sx={{ fontSize: 16, color: theme.palette.primary.main }} />
-                <Typography variant="body2" sx={{ color: theme.palette.primary.main, fontWeight: 500 }}>
+                <AttachFileIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    color: theme.palette.primary.main, 
+                    fontWeight: 600,
+                    fontSize: '0.75rem',
+                  }}
+                >
                   {validFiles.length} archivo{validFiles.length !== 1 ? 's' : ''}
                 </Typography>
               </Box>
             ),
-            tooltip: validFiles.length > 0 ? `Archivos: ${validFiles.join(', ')}` : undefined
+            tooltip: validFiles.length > 0 ? `Ver ${validFiles.length} archivo${validFiles.length !== 1 ? 's' : ''}` : undefined
           };
         }
         return { content: '-' };

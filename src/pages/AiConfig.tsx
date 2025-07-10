@@ -34,6 +34,45 @@ import DeleteIcon from '@mui/icons-material/Delete'
 import ChatIcon from '@mui/icons-material/Chat'
 import PhoneIcon from '@mui/icons-material/Phone'
 import Loading from '../components/Loading'
+import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
+
+// Componente para previsualizar archivos
+function FilePreview({ url }: { url: string }) {
+  if (!url) return null;
+  const ext = url.split('.').pop()?.toLowerCase() || '';
+  if (/(jpg|jpeg|png|gif|webp)$/i.test(ext)) {
+    return (
+      <Box sx={{ mt: 1, mb: 1 }}>
+        <img src={url} alt="preview" style={{ maxWidth: 220, maxHeight: 180, borderRadius: 8, boxShadow: '0 1px 4px rgba(0,0,0,0.10)', objectFit: 'cover', display: 'block' }} />
+      </Box>
+    );
+  }
+  if (/(mp4|webm|ogg|mov)$/i.test(ext)) {
+    return (
+      <Box sx={{ mt: 1, mb: 1 }}>
+        <video src={url} controls style={{ maxWidth: 220, maxHeight: 180, borderRadius: 8, background: '#000' }} />
+      </Box>
+    );
+  }
+  if (/^https?:\/\//.test(url)) {
+    return (
+      <Box sx={{ mt: 1, mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+        <InsertDriveFileIcon color="action" />
+        <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: '#8B5CF6', fontWeight: 600 }}>
+          Archivo
+        </a>
+      </Box>
+    );
+  }
+  return null;
+}
+
+// Helper para extraer URLs de un texto
+function extractUrls(text: string): string[] {
+  if (!text) return [];
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return text.match(urlRegex) || [];
+}
 
 export default function AiConfig() {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
@@ -543,6 +582,9 @@ export default function AiConfig() {
                         },
                       }}
                     />
+                    {extractUrls(aiConfig.welcomeMessage || '').map((url, idx) => (
+                      <FilePreview url={url} key={idx} />
+                    ))}
                     <FormControl fullWidth>
                       <InputLabel
                         sx={{
@@ -695,6 +737,9 @@ export default function AiConfig() {
                         },
                       }}
                     />
+                    {extractUrls(aiConfig.customPrompt || '').map((url, idx) => (
+                      <FilePreview url={url} key={idx} />
+                    ))}
                     <Button
                       type="submit"
                       variant="contained"
@@ -849,6 +894,10 @@ export default function AiConfig() {
                 }}
               >
                 {msg.text}
+                {/* Previsualización de archivos si hay URLs en el mensaje */}
+                {extractUrls(msg.text).map((url, i) => (
+                  <FilePreview url={url} key={i} />
+                ))}
               </Box>
             ))}
           </Box>
