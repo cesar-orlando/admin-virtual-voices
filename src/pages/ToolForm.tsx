@@ -390,7 +390,7 @@ const ToolForm: React.FC = () => {
     try {
       let payload: any = {
         ...data,
-        c_name: user?.c_name,
+        c_name: user?.companySlug,
         functionType: functionType || undefined,
       };
       if (!payload.config.authConfig) payload.config.authConfig = {};
