@@ -110,47 +110,19 @@ const detectAndRemoveDuplicates = (records: Record<string, any>[], fields: Table
   duplicatesRemoved: number;
   duplicateFields: { fieldName: string; count: number }[];
 } => {
-  const duplicateFields: { fieldName: string; count: number }[] = [];
   const seen = new Set<string>();
   const uniqueRecords: Record<string, any>[] = [];
   let duplicatesRemoved = 0;
 
-  // Identificar campos que podrían ser únicos (email, teléfono, etc.)
-  const potentialUniqueFields = fields.filter(field => 
-    field.type === 'email' || 
-    field.name.toLowerCase().includes('email') ||
-    field.name.toLowerCase().includes('telefono') ||
-    field.name.toLowerCase().includes('phone') ||
-    field.name.toLowerCase().includes('id') ||
-    field.name.toLowerCase().includes('codigo') ||
-    field.name.toLowerCase().includes('code')
-  );
-
-  // Si no hay campos potencialmente únicos, usar todos los campos para comparación
-  const fieldsToCheck = potentialUniqueFields.length > 0 ? potentialUniqueFields : fields;
-
-  records.forEach((record, index) => {
-    // Crear una clave única basada en los campos seleccionados
-    const key = fieldsToCheck.map(field => {
+  records.forEach((record) => {
+    // Crea una clave única usando TODOS los campos
+    const key = fields.map(field => {
       const value = record[field.name];
       return value !== undefined && value !== null && value !== '' ? String(value).toLowerCase().trim() : '';
-    }).filter(Boolean).join('|');
+    }).join('|');
 
     if (key && seen.has(key)) {
       duplicatesRemoved++;
-      
-      // Contar duplicados por campo
-      fieldsToCheck.forEach(field => {
-        const value = record[field.name];
-        if (value !== undefined && value !== null && value !== '') {
-          const existingField = duplicateFields.find(f => f.fieldName === field.label);
-          if (existingField) {
-            existingField.count++;
-          } else {
-            duplicateFields.push({ fieldName: field.label, count: 1 });
-          }
-        }
-      });
     } else {
       if (key) seen.add(key);
       uniqueRecords.push(record);
@@ -160,7 +132,7 @@ const detectAndRemoveDuplicates = (records: Record<string, any>[], fields: Table
   return {
     uniqueRecords,
     duplicatesRemoved,
-    duplicateFields: duplicateFields.sort((a, b) => b.count - a.count)
+    duplicateFields: [] // Opcional: puedes eliminar este reporte o ajustarlo si quieres
   };
 };
 

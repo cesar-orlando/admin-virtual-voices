@@ -33,7 +33,13 @@ function ProtectedRoute({ children }: React.PropsWithChildren) {
 
 function QuickLearningProtectedRoute({ children }: React.PropsWithChildren) {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
-  if (user.c_name !== 'quicklearning') return <Navigate to="/" replace />
+  console.log('QuickLearningProtectedRoute - User:', user)
+  console.log('QuickLearningProtectedRoute - companySlug:', user.companySlug)
+  if (user.companySlug !== 'quicklearning') {
+    console.log('QuickLearningProtectedRoute - Redirecting to /')
+    return <Navigate to="/" replace />
+  }
+  console.log('QuickLearningProtectedRoute - Rendering children')
   return <>{children}</>
 }
 

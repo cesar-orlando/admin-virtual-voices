@@ -31,6 +31,7 @@ import BuildIcon from '@mui/icons-material/Build'
 import DashboardCustomizeIcon from '@mui/icons-material/DashboardCustomize'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import AnalyticsIcon from '@mui/icons-material/Analytics'
+import SettingsIcon from '@mui/icons-material/Settings'
 import { useAuth } from '../hooks/useAuth'
 import { getTables } from '../api/servicios'
 import type { DynamicTable } from '../types'
@@ -142,59 +143,94 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
 
   // Construir el menú principal dinámicamente según la empresa
   const mainNavItems: NavItem[] = [
-/*     {
+    /*     {
       label: 'Dashboard',
       icon: <DashboardIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/',
     }, */
     {
       label: 'Dashboard',
-      icon: <AnalyticsIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/',
+      icon: <AnalyticsIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
+      path: '/',
     },
     {
       label: 'Usuarios',
-      icon: <PeopleIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/usuarios',
+      icon: <PeopleIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
+      path: '/usuarios',
     },
-    ...(user.c_name === 'quicklearning' ? []: [
-    {
-      label: 'IA',
-      icon: <SmartToyIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/ia',
-    },
-  ] ),
-    ...(user.c_name === 'quicklearning' ? []: [
-    {
-      label: 'Herramientas',
-      icon: <BuildIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/herramientas',
-      children: [
-        { label: 'Dashboard', icon: <DashboardCustomizeIcon sx={{ fontSize: 20 }} />, path: '/herramientas-dashboard' },
-        { label: 'Gestionar Herramientas', icon: <BuildIcon sx={{ fontSize: 20 }} />, path: '/herramientas' },
-        { label: 'Nueva Herramienta', icon: <AddIcon sx={{ fontSize: 20 }} />, path: '/herramientas/nueva' },
-        { label: 'Tester', icon: <PlayArrowIcon sx={{ fontSize: 20 }} />, path: '/herramientas/tester' },
-      ],
-    },
-  ] ),
-/*     Tenemos que ver que hacer con esta tarea que es asignar tareas y demás, estilo Jira.
+    ...(user.companySlug === 'quicklearning'
+      ? []
+      : [
+          {
+            label: 'IA',
+            icon: <SmartToyIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
+            path: '/ia',
+          },
+        ]),
+    ...(user.companySlug === 'quicklearning'
+      ? []
+      : [
+          {
+            label: 'Herramientas',
+            icon: <BuildIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
+            path: '/herramientas',
+            children: [
+              {
+                label: 'Dashboard',
+                icon: <DashboardCustomizeIcon sx={{ fontSize: 20 }} />,
+                path: '/herramientas-dashboard',
+              },
+              {
+                label: 'Gestionar Herramientas',
+                icon: <BuildIcon sx={{ fontSize: 20 }} />,
+                path: '/herramientas',
+              },
+              {
+                label: 'Nueva Herramienta',
+                icon: <AddIcon sx={{ fontSize: 20 }} />,
+                path: '/herramientas/nueva',
+              },
+              {
+                label: 'Tester',
+                icon: <PlayArrowIcon sx={{ fontSize: 20 }} />,
+                path: '/herramientas/tester',
+              },
+            ],
+          },
+        ]),
+    /*     Tenemos que ver que hacer con esta tarea que es asignar tareas y demás, estilo Jira.
     {
       label: 'Equipos',
       icon: <GroupIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/equipos',
     }, */
-    ...(user.c_name === 'quicklearning' ? [] : [
-    {
-      label: 'Whatsapp',
-      icon: <WhatsAppIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/whatsapp',
-    },
-  ] ),
+    ...(user.companySlug === 'quicklearning'
+      ? []
+      : [
+          {
+            label: 'Whatsapp',
+            icon: <WhatsAppIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
+            path: '/whatsapp',
+          },
+        ]),
     // Solo agregar QuickLearning WA si es quicklearning
-    ...(user.c_name === 'quicklearning' ? [
-      {
-        label: 'Quick Whats',
-        icon: <WhatsAppIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/quicklearning/whatsapp',
-      },
-    ] : []),
-    {
-      label: 'Chats',
-      icon: <ChatIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/chats',
-    },
-  ];
+    ...(user.companySlug === 'quicklearning'
+      ? [
+          {
+            label: 'Quick Whats',
+            icon: <WhatsAppIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
+            path: '/quicklearning/whatsapp',
+          },
+        ]
+      : []),
+    ...(user.companySlug === 'quicklearning'
+      ? []
+      : [
+          {
+            label: 'Chats',
+            icon: <ChatIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
+            path: '/chats',
+          },
+        ]),
+  ]
 
   const allNavItems = [...mainNavItems, tablesNavItem]
 

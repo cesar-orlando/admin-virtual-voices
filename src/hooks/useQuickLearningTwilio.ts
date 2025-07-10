@@ -4,7 +4,6 @@ import {
   sendTwilioTemplate, 
   getTwilioStatus, 
   getTwilioHistory,
-  getQuickLearningDashboardStats,
   toggleChatAI,
   assignChatAdvisor,
   getChatByPhone,
@@ -19,7 +18,6 @@ import type {
   TwilioStatus, 
   TwilioHistoryRequest, 
   TwilioHistoryResponse,
-  QuickLearningDashboardStats,
   QuickLearningChat,
   TwilioMessage
 } from '../types/quicklearning';
@@ -28,7 +26,6 @@ interface UseQuickLearningTwilioReturn {
   // State
   status: TwilioStatus | null;
   history: TwilioHistoryResponse | null;
-  dashboardStats: QuickLearningDashboardStats | null;
   activeChats: QuickLearningChat[];
   currentChat: QuickLearningChat | null;
   isLoading: boolean;
@@ -43,12 +40,15 @@ interface UseQuickLearningTwilioReturn {
   errorProspects: string | null;
   errorChatHistory: string | null;
   
+  // Paginación
+  hasMoreProspects: boolean;
+  isLoadingMoreProspects: boolean;
+  
   // Actions
   sendMessage: (request: TwilioSendRequest) => Promise<any>;
   sendTemplate: (request: TwilioTemplateRequest) => Promise<any>;
   refreshStatus: () => Promise<void>;
   loadHistory: (params?: TwilioHistoryRequest) => Promise<void>;
-  refreshDashboardStats: () => Promise<void>;
   loadActiveChats: () => Promise<void>;
   loadChatByPhone: (phone: string) => Promise<void>;
   toggleAI: (phone: string, enabled: boolean) => Promise<void>;
@@ -63,14 +63,15 @@ interface UseQuickLearningTwilioReturn {
   getChatStatusColor: (status: string) => string;
   
   // Prospects
-  loadProspects: () => Promise<void>;
+  loadProspects: (cursor?: string | null) => Promise<void>;
+  loadMoreProspects: () => Promise<void>;
   selectProspect: (prospect: any) => Promise<void>;
 }
 
 export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
+  console.log('useQuickLearningTwilio - Hook initialized')
   const [status, setStatus] = useState<TwilioStatus | null>(null);
   const [history, setHistory] = useState<TwilioHistoryResponse | null>(null);
-  const [dashboardStats, setDashboardStats] = useState<QuickLearningDashboardStats | null>(null);
   const [activeChats, setActiveChats] = useState<QuickLearningChat[]>([]);
   const [currentChat, setCurrentChat] = useState<QuickLearningChat | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -84,6 +85,11 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
   const [isLoadingChatHistory, setIsLoadingChatHistory] = useState(false);
   const [errorProspects, setErrorProspects] = useState<string | null>(null);
   const [errorChatHistory, setErrorChatHistory] = useState<string | null>(null);
+  
+  // Paginación
+  const [hasMoreProspects, setHasMoreProspects] = useState(true);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [isLoadingMoreProspects, setIsLoadingMoreProspects] = useState(false);
 
   // Utilidad para formatear números de teléfono
   const formatPhoneNumber = useCallback((phone: string): string => {
@@ -202,20 +208,6 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
       setHistory(historyData);
     } catch (err: any) {
       setError(err.message || 'Error al cargar historial');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Obtener estadísticas del dashboard
-  const refreshDashboardStats = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const stats = await getQuickLearningDashboardStats();
-      setDashboardStats(stats);
-    } catch (err: any) {
-      setError(err.message || 'Error al obtener estadísticas');
     } finally {
       setIsLoading(false);
     }
@@ -348,7 +340,6 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     const loadInitialData = async () => {
       await Promise.allSettled([
         refreshStatus(),
-        refreshDashboardStats(),
         loadActiveChats()
       ]);
     };
@@ -372,29 +363,116 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     return () => clearInterval(interval);
   }, []);
 
+  // Cargar prospectos al inicializar
+  useEffect(() => {
+    console.log('useEffect: Loading prospects on mount');
+    loadProspects();
+  }, []);
+
   // Cargar lista de prospectos
-  const loadProspects = useCallback(async () => {
-    setIsLoadingProspects(true);
+  const loadProspects = useCallback(async (cursor?: string | null) => {
+    console.log('loadProspects called with cursor:', cursor);
+    if (cursor) {
+      setIsLoadingMoreProspects(true);
+    } else {
+      setIsLoadingProspects(true);
+    }
     setErrorProspects(null);
+    
     try {
-      const data = await getQuickLearningProspects();
-      setProspects(data);
+      console.log('Calling getQuickLearningProspects...');
+      const data = await getQuickLearningProspects(cursor);
+      console.log('getQuickLearningProspects response:', data);
+      // Validación defensiva para soportar ambas respuestas
+      if (!data || !data.usuarios) {
+        setErrorProspects('Respuesta inesperada del servidor.');
+        setIsLoadingProspects(false);
+        setIsLoadingMoreProspects(false);
+        return;
+      }
+
+      // Transformar los datos para que coincidan con la estructura esperada por el componente
+      const transformedUsuarios = data.usuarios.map((usuario: any) => ({
+        _id: usuario._id,
+        data: {
+          nombre: usuario.name || usuario.phone || 'Sin nombre',
+          telefono: usuario.phone,
+          ultimo_mensaje: usuario.lastMessage?.body || 'Sin mensajes',
+          email: usuario.email,
+          ciudad: usuario.ciudad,
+          curso: usuario.curso,
+          asesor: usuario.asesor,
+          status: usuario.status,
+          stage: usuario.stage
+        },
+        tableSlug: usuario.tableSlug,
+        linkedTable: {
+          refModel: usuario.tableSlug,
+          refId: usuario._id
+        },
+        phone: usuario.phone,
+        aiEnabled: usuario.aiEnabled || false,
+        createdAt: usuario.createdAt,
+        updatedAt: usuario.updatedAt,
+        lastMessageDate: usuario.lastMessageDate
+      }));
+
+      console.log('Transformed usuarios:', transformedUsuarios);
+
+      // Si tiene pagination, úsalo
+      if (data.pagination) {
+        if (cursor) {
+          setProspects(prev => [...prev, ...transformedUsuarios]);
+        } else {
+          setProspects(transformedUsuarios);
+        }
+        setHasMoreProspects(!!data.pagination.hasMore);
+        setNextCursor(data.pagination.nextCursor ?? null);
+      } else {
+        // Si no tiene pagination, calcula hasMore de forma defensiva
+        const total = data.total ?? data.usuarios.length;
+        const limit = data.limit ?? 20;
+        if (cursor) {
+          setProspects(prev => [...prev, ...transformedUsuarios]);
+        } else {
+          setProspects(transformedUsuarios);
+        }
+        setHasMoreProspects(data.usuarios.length >= limit && data.usuarios.length < total);
+        setNextCursor(null); // No hay paginación real
+      }
     } catch (err: any) {
       setErrorProspects(err.message || 'Error al cargar prospectos');
     } finally {
-      setIsLoadingProspects(false);
+      if (cursor) {
+        setIsLoadingMoreProspects(false);
+      } else {
+        setIsLoadingProspects(false);
+      }
     }
   }, []);
 
-  // Seleccionar prospecto y cargar historial
+  // Cargar más prospectos (infinite scroll)
+  const loadMoreProspects = useCallback(async () => {
+    if (hasMoreProspects && !isLoadingMoreProspects && nextCursor) {
+      await loadProspects(nextCursor);
+    }
+  }, [hasMoreProspects, isLoadingMoreProspects, nextCursor]);
+
+  // En selectProspect, usa prospect.data.telefono para obtener el historial:
   const selectProspect = useCallback(async (prospect: any) => {
+    console.log('selectProspect called with:', prospect);
     setSelectedProspect(prospect);
     setIsLoadingChatHistory(true);
     setErrorChatHistory(null);
     try {
-      const data = await getQuickLearningChatHistory(prospect.phone);
+      const phone = prospect.data?.telefono || prospect.phone;
+      if (!phone) throw new Error('El prospecto no tiene número de teléfono');
+      console.log('Loading chat history for phone:', phone);
+      const data = await getQuickLearningChatHistory(phone);
+      console.log('Chat history response:', data);
       setChatHistory(Array.isArray(data) ? data : []);
     } catch (err: any) {
+      console.error('Error loading chat history:', err);
       setErrorChatHistory(err.message || 'Error al cargar historial de chat');
       setChatHistory([]);
     } finally {
@@ -406,7 +484,6 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     // State
     status,
     history,
-    dashboardStats,
     activeChats,
     currentChat,
     isLoading,
@@ -421,12 +498,15 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     errorProspects,
     errorChatHistory,
     
+    // Paginación
+    hasMoreProspects,
+    isLoadingMoreProspects,
+    
     // Actions
     sendMessage,
     sendTemplate,
     refreshStatus,
     loadHistory,
-    refreshDashboardStats,
     loadActiveChats,
     loadChatByPhone,
     toggleAI,
@@ -442,6 +522,7 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     
     // Prospects
     loadProspects,
+    loadMoreProspects,
     selectProspect
   };
 }

@@ -7,7 +7,6 @@ import {
   CardContent,
   Typography,
   Button,
-  Chip,
   Avatar,
   IconButton,
   Dialog,
@@ -54,16 +53,38 @@ import {
   Refresh as RefreshIcon,
   Add as AddIcon,
   FilterList as FilterListIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  AccessTime as AccessTimeIcon,
+  KeyboardArrowDown as KeyboardArrowDownIcon,
+  Launch as LaunchIcon,
+  PictureAsPdf as PictureAsPdfIcon,
+  Audiotrack as AudiotrackIcon,
+  Movie as MovieIcon
 } from '@mui/icons-material';
 import { useQuickLearningTwilio } from '../hooks/useQuickLearningTwilio';
 import type { TwilioSendRequest, TwilioTemplateRequest } from '../types/quicklearning';
 
 const QuickLearningDashboard: React.FC = () => {
+  console.log('QuickLearningDashboard - Component rendering')
+  
+  // Debug user state
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const token = localStorage.getItem('token');
+    const currentCompany = JSON.parse(localStorage.getItem('currentCompany') || '{}');
+    
+    console.log('=== DEBUG USER STATE ===');
+    console.log('User from localStorage:', user);
+    console.log('Token from localStorage:', token);
+    console.log('CurrentCompany from localStorage:', currentCompany);
+    console.log('Is Quick Learning user:', user.companySlug === 'quicklearning');
+    console.log('Current pathname:', window.location.pathname);
+    console.log('=== END DEBUG ===');
+  }, []);
+  
   const theme = useTheme();
   const {
     status,
-    dashboardStats,
     activeChats,
     currentChat,
     isLoading,
@@ -83,11 +104,14 @@ const QuickLearningDashboard: React.FC = () => {
     selectedProspect,
     chatHistory,
     loadProspects,
+    loadMoreProspects,
     selectProspect,
     isLoadingProspects,
+    isLoadingMoreProspects,
     isLoadingChatHistory,
     errorProspects,
     errorChatHistory,
+    hasMoreProspects,
   } = useQuickLearningTwilio();
 
   // State para modales y formularios
@@ -121,21 +145,191 @@ const QuickLearningDashboard: React.FC = () => {
   // Estado local para historial mostrado
   const [chatHistoryLocal, setChatHistoryLocal] = useState<any[]>([]);
 
+  // Estado para controlar si mostrar botón de scroll al final
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+
+  // 1. Agrega un estado para controlar el Dialog de info del cliente
+  const [openClientInfo, setOpenClientInfo] = useState(false);
+
+  // 1. Estados para el modal de imagen
+  const [openImageModal, setOpenImageModal] = useState(false);
+  const [modalImageUrl, setModalImageUrl] = useState<string | null>(null);
+
+  // Función helper para formatear fechas
+  const formatMessageDate = useCallback((dateString: string) => {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+    
+    // Si es hoy, mostrar solo hora
+    if (date.toDateString() === now.toDateString()) {
+      return date.toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+    
+    // Si es ayer, mostrar "Ayer" + hora
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return `Ayer ${date.toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })}`;
+    }
+    
+    // Si es esta semana, mostrar día + hora
+    if (diffInHours < 168) { // 7 días
+      return date.toLocaleDateString('es-ES', {
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+    
+    // Si es más antiguo, mostrar fecha completa
+    return date.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+  }, []);
+
+  // Función helper para formatear fechas de manera compacta (para lista de prospectos)
+  const formatCompactDate = useCallback((dateString: string) => {
+    if (!dateString) return '';
+    
+    const date = new Date(dateString);
+    const now = new Date();
+    
+    // Si es hoy, mostrar solo hora
+    if (date.toDateString() === now.toDateString()) {
+      return date.toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+    
+    // Si es ayer, mostrar "Ayer"
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+      return 'Ayer';
+    }
+    
+    // Si es esta semana, mostrar día
+    const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffInDays < 7) {
+      return date.toLocaleDateString('es-ES', { weekday: 'short' });
+    }
+    
+    // Si es más antiguo, mostrar fecha corta
+    return date.toLocaleDateString('es-ES', {
+      month: '2-digit',
+      day: '2-digit'
+    });
+  }, []);
+
+  // Función para hacer scroll al final del chat
+  const scrollToBottom = useCallback(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'end',
+        inline: 'nearest'
+      });
+    }
+  }, []);
+
   // Sincroniza chatHistoryLocal con chatHistory global al seleccionar prospecto
   useEffect(() => {
     setChatHistoryLocal(chatHistory);
   }, [chatHistory]);
 
+  // Agregar mensajes de prueba para verificar el formato de fechas
+  useEffect(() => {
+    if (chatHistoryLocal.length === 0 && selectedProspect) {
+      const testMessages = [
+        {
+          _id: 'test-1',
+          body: 'Mensaje de prueba - Hace 5 minutos',
+          direction: 'inbound' as const,
+          dateCreated: new Date(Date.now() - 5 * 60 * 1000).toISOString()
+        },
+        {
+          _id: 'test-2',
+          body: 'Mensaje de prueba - Ayer',
+          direction: 'outbound' as const,
+          dateCreated: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        },
+        {
+          _id: 'test-3',
+          body: 'Mensaje de prueba - Hace 3 días',
+          direction: 'inbound' as const,
+          dateCreated: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
+        },
+        {
+          _id: 'test-4',
+          body: 'Mensaje de prueba - Hace 1 semana',
+          direction: 'outbound' as const,
+          dateCreated: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        }
+      ];
+      setChatHistoryLocal(testMessages);
+    }
+  }, [chatHistoryLocal.length, selectedProspect]);
+
   useEffect(() => {
     loadProspects();
   }, [loadProspects]);
 
-  // Auto-scroll al último mensaje (solo cuando cambia el historial, no el input)
+  // Auto-scroll al último mensaje
   useEffect(() => {
-    if (messagesEndRef.current && chatHistory.length > 0) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    // Scroll inmediato cuando cambia el prospecto o se cargan mensajes
+    if (chatHistoryLocal.length > 0) {
+      // Pequeño delay para asegurar que el DOM se haya renderizado
+      setTimeout(scrollToBottom, 100);
+      setShowScrollToBottom(false); // Ocultar botón cuando se hace auto-scroll
     }
-  }, [chatHistory.length, selectedProspect?._id]);
+  }, [chatHistoryLocal.length, selectedProspect?._id, scrollToBottom]);
+
+  // Detectar scroll del usuario para mostrar/ocultar botón de scroll al final
+  useEffect(() => {
+    const chatContainer = document.querySelector('[data-chat-container]');
+    if (!chatContainer) return;
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainer as HTMLElement;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShowScrollToBottom(!isNearBottom);
+    };
+
+    chatContainer.addEventListener('scroll', handleScroll);
+    return () => chatContainer.removeEventListener('scroll', handleScroll);
+  }, [selectedProspect]);
+
+  // Infinite scroll para la lista de prospectos
+  useEffect(() => {
+    const prospectsContainer = document.querySelector('[data-prospects-container]');
+    if (!prospectsContainer) return;
+
+    const handleProspectsScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = prospectsContainer as HTMLElement;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 50;
+      
+      if (isNearBottom && hasMoreProspects && !isLoadingMoreProspects) {
+        loadMoreProspects();
+      }
+    };
+
+    prospectsContainer.addEventListener('scroll', handleProspectsScroll);
+    return () => prospectsContainer.removeEventListener('scroll', handleProspectsScroll);
+  }, [hasMoreProspects, isLoadingMoreProspects, loadMoreProspects]);
 
   // Handler optimizado para el input
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,6 +350,10 @@ const QuickLearningDashboard: React.FC = () => {
       };
       setChatHistoryLocal(prev => [...prev, newMsg]);
       setMessageInputValue('');
+      
+      // Scroll al final después de agregar el mensaje
+      setTimeout(scrollToBottom, 50);
+      
       await sendMessage({ phone: selectedProspect.phone, message: newMsg.body });
       // Fetch en background (no bloquea input)
       selectProspect(selectedProspect);
@@ -164,7 +362,7 @@ const QuickLearningDashboard: React.FC = () => {
     } finally {
       setIsSendingMessage(false);
     }
-  }, [selectedProspect, messageInputValue, sendMessage, selectProspect]);
+  }, [selectedProspect, messageInputValue, sendMessage, selectProspect, scrollToBottom]);
 
   const handleInputKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -174,10 +372,13 @@ const QuickLearningDashboard: React.FC = () => {
   }, [handleSendMessageInput]);
 
   // Filtro memoizado de prospectos
-  const filteredProspects = React.useMemo(() =>
-    prospects.filter(p => p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || p.phone?.includes(searchTerm)),
-    [prospects, searchTerm]
-  );
+  const filteredProspects = React.useMemo(() => {
+    if (!searchTerm.trim()) return prospects;
+    return prospects.filter(p =>
+      p.data?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.data?.telefono?.includes(searchTerm)
+    );
+  }, [prospects, searchTerm]);
 
   // Handlers para modales
   const handleSendMessage = useCallback(async () => {
@@ -274,10 +475,10 @@ const QuickLearningDashboard: React.FC = () => {
               <WhatsAppIcon fontSize="large" />
             </Avatar>
             <Box>
-              <Typography variant="h4" fontWeight={700} color="primary" sx={{ letterSpacing: 1 }}>
+              <Typography variant="h6" fontWeight={700} color="primary" sx={{ letterSpacing: 1 }}>
                 Quick Learning WhatsApp
               </Typography>
-              <Typography variant="subtitle1" color="text.secondary" sx={{ fontWeight: 500 }}>
+              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 Dashboard de NatalIA - IA Conversacional
               </Typography>
             </Box>
@@ -304,9 +505,9 @@ const QuickLearningDashboard: React.FC = () => {
         <Card sx={{ width: 340, minWidth: 340, maxWidth: 340, height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, boxShadow: 2, borderRadius: 2, bgcolor: theme.palette.background.paper, ml: 0, mr: 0 }}>
           <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
             <TextField size="small" placeholder="Buscar prospecto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} InputProps={{ startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} /> }} sx={{ flex: 1, fontSize: 15, bgcolor: theme.palette.background.default, borderRadius: 2 }} inputProps={{ style: { color: theme.palette.text.primary } }} />
-            <IconButton onClick={loadProspects} disabled={isLoadingProspects}><RefreshIcon fontSize="small" sx={{ color: theme.palette.text.secondary }} /></IconButton>
+            <IconButton onClick={() => loadProspects()} disabled={isLoadingProspects}><RefreshIcon fontSize="small" sx={{ color: theme.palette.text.secondary }} /></IconButton>
           </Box>
-          <Box sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 0.5, bgcolor: theme.palette.background.paper }}>
+          <Box data-prospects-container sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 0.5, bgcolor: theme.palette.background.paper }}>
             {errorProspects && <Alert severity="error">{errorProspects}</Alert>}
             {isLoadingProspects ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 120 }}><CircularProgress size={28} /></Box>
@@ -315,13 +516,17 @@ const QuickLearningDashboard: React.FC = () => {
             ) : (
               <List>
                 {filteredProspects.map(prospect => (
-                  <ListItem key={prospect._id} button selected={selectedProspect?._id === prospect._id} onClick={() => selectProspect(prospect)}
+                  <ListItem
+                    key={prospect._id}
+                    button
+                    selected={selectedProspect?._id === prospect._id}
+                    onClick={() => selectProspect(prospect)}
                     sx={{
                       borderRadius: 2,
                       mb: 0.5,
                       px: 1,
-                      py: 0.5,
-                      minHeight: 48,
+                      py: 1.5, // más espacio vertical
+                      minHeight: 56, // más alto
                       background: selectedProspect?._id === prospect._id ? (theme.palette.mode === 'dark' ? theme.palette.action.selected : theme.palette.action.selected) : 'transparent',
                       boxShadow: selectedProspect?._id === prospect._id ? 2 : 0,
                       transition: 'background 0.2s, box-shadow 0.2s',
@@ -331,13 +536,50 @@ const QuickLearningDashboard: React.FC = () => {
                       }
                     }}
                   >
-                    <ListItemAvatar><Avatar sx={{ bgcolor: theme.palette.success.main, width: 32, height: 32, color: theme.palette.getContrastText(theme.palette.success.main) }}><PersonIcon fontSize="small" /></Avatar></ListItemAvatar>
+                    <ListItemAvatar>
+                      <Avatar sx={{ bgcolor: theme.palette.success.main, width: 32, height: 32, color: theme.palette.getContrastText(theme.palette.success.main) }}>
+                        <PersonIcon fontSize="small" />
+                      </Avatar>
+                    </ListItemAvatar>
                     <ListItemText
-                      primary={<Typography fontWeight={700} fontSize={15} noWrap color={theme.palette.text.primary}>{prospect.name || prospect.phone}</Typography>}
-                      secondary={<>
-                        <Typography variant="caption" color="text.secondary" fontSize={13} noWrap>{prospect.phone}</Typography>
-                        {prospect.lastMessage && (<Typography variant="body2" color="text.secondary" noWrap fontSize={13}>{prospect.lastMessage.body}</Typography>)}
-                      </>}
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography
+                            component="span"
+                            fontWeight={700}
+                            fontSize={15}
+                            noWrap
+                            color={theme.palette.text.primary}
+                            sx={{ flex: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                          >
+                            {prospect.data?.nombre ? prospect.data.nombre.trim() : (prospect.data?.telefono || '-')}
+                          </Typography>
+                        </Box>
+                      }
+                      secondary={
+                        <>
+                          <Typography
+                            component="div"
+                            fontSize={13}
+                            color="text.secondary"
+                            noWrap
+                            sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                          >
+                            {prospect.data?.telefono || ''}
+                          </Typography>
+                          {prospect.data.ultimo_mensaje && (
+                            <Typography
+                              component="div"
+                              fontSize={13}
+                              color="text.secondary"
+                              noWrap
+                              sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                            >
+                              {prospect.data?.ultimo_mensaje}
+                            </Typography>
+                          )}
+                        </>
+                      }
                     />
                     <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
                       <Typography
@@ -375,6 +617,25 @@ const QuickLearningDashboard: React.FC = () => {
                     </Box>
                   </ListItem>
                 ))}
+                
+                {/* Indicador de carga para infinite scroll */}
+                {isLoadingMoreProspects && (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 2 }}>
+                    <CircularProgress size={24} />
+                    <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                      Cargando más prospectos...
+                    </Typography>
+                  </Box>
+                )}
+                
+                {/* Indicador de fin de lista */}
+                {!hasMoreProspects && prospects.length > 0 && (
+                  <Box sx={{ textAlign: 'center', py: 2 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      No hay más prospectos para cargar
+                    </Typography>
+                  </Box>
+                )}
               </List>
             )}
           </Box>
@@ -384,61 +645,181 @@ const QuickLearningDashboard: React.FC = () => {
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, p: 0 }}>
             {!selectedProspect ? (
               <Box sx={{ textAlign: 'center', color: 'text.secondary', mt: 8 }}><WhatsAppIcon sx={{ fontSize: 64, mb: 2 }} /><Typography variant="h6">Selecciona un prospecto para ver la conversación</Typography></Box>
-            ) : isLoadingChatHistory ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}><CircularProgress /></Box>
-            ) : errorChatHistory ? (
-              <Alert severity="error">{errorChatHistory}</Alert>
             ) : (
-              <Box sx={{ flex: 1, overflowY: 'auto', px: 2, py: 2, minHeight: 0, bgcolor: theme.palette.background.default, borderRadius: 2 }}>
-                {chatHistoryLocal.length === 0 ? (
-                  <Typography color="text.secondary">No hay mensajes</Typography>
-                ) : (
-                  chatHistoryLocal.map((msg, idx) => (
-                    <Box key={msg._id || idx} sx={{ display: 'flex', flexDirection: msg.direction === 'inbound' ? 'row' : 'row-reverse', alignItems: 'flex-end', mb: 2 }}>
-                      <Avatar sx={{ bgcolor: msg.direction === 'inbound' ? (theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200]) : theme.palette.success.main, width: 44, height: 44, color: theme.palette.getContrastText(msg.direction === 'inbound' ? (theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200]) : theme.palette.success.main) }}>{msg.direction === 'inbound' ? <PersonIcon fontSize="large" /> : <AIIcon fontSize="large" />}</Avatar>
-                      <Box sx={{
-                        maxWidth: '70%',
-                        bgcolor: msg.direction === 'inbound'
-                          ? (theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.grey[100])
-                          : (theme.palette.mode === 'dark' ? theme.palette.success.dark : theme.palette.success.main),
-                        color: theme.palette.text.primary,
-                        borderRadius: 2,
-                        p: 2,
-                        mx: 2,
-                        boxShadow: 2
-                      }}>
-                        <Typography variant="body1" fontSize={17}>{msg.body}</Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ float: 'right', fontSize: 14 }}>{msg.dateCreated ? new Date(msg.dateCreated).toLocaleTimeString() : ''}</Typography>
-                      </Box>
+              <>
+                {selectedProspect && (
+                  <Box
+                    sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 3, py: 2, cursor: 'pointer', borderBottom: '1px solid', borderColor: 'divider', mb: 1 }}
+                    onClick={() => setOpenClientInfo(true)}
+                  >
+                    <Avatar sx={{ width: 48, height: 48, bgcolor: theme.palette.success.main, color: theme.palette.getContrastText(theme.palette.success.main), fontWeight: 700 }}>
+                      <PersonIcon fontSize="large" />
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h6" fontWeight={700}>{selectedProspect.data?.nombre ? selectedProspect.data.nombre.trim() : (selectedProspect.data?.telefono || '-')}</Typography>
+                      <Typography variant="body2" color="text.secondary">{selectedProspect.data?.telefono || '-'}</Typography>
                     </Box>
-                  ))
+                  </Box>
                 )}
-                <div ref={messagesEndRef} />
-              </Box>
-            )}
-            {/* Input de mensaje */}
-            {selectedProspect && (
-              <MessageInput
-                value={messageInputValue}
-                setValue={setMessageInputValue}
-                onSend={async (text) => {
-                  setIsSendingMessage(true);
-                  const newMsg = {
-                    _id: `local-${Date.now()}`,
-                    body: text,
-                    direction: 'outbound',
-                    dateCreated: new Date().toISOString(),
-                  };
-                  setChatHistoryLocal(prev => [...prev, newMsg]);
-                  try {
-                    await sendMessage({ phone: selectedProspect.phone, message: text });
-                    setMessageInputValue('');
-                  } finally {
-                    setIsSendingMessage(false);
-                  }
-                }}
-                disabled={isSendingMessage || isLoadingChatHistory}
-              />
+                {isLoadingChatHistory ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}><CircularProgress /></Box>
+                ) : errorChatHistory ? (
+                  <Alert severity="error">{errorChatHistory}</Alert>
+                ) : (
+                  <Box 
+                    data-chat-container
+                    sx={{ 
+                      flex: 1, 
+                      overflowY: 'auto', 
+                      px: 2, 
+                      py: 2, 
+                      minHeight: 0, 
+                      bgcolor: theme.palette.background.default, 
+                      borderRadius: 2,
+                      position: 'relative'
+                    }}
+                  >
+                    {chatHistoryLocal.length === 0 ? (
+                      <Typography color="text.secondary">No hay mensajes</Typography>
+                    ) : (
+                      chatHistoryLocal.map((msg, idx) => {
+                        const body = msg.body || '';
+                        const mediaUrl = msg.mediaUrl || '';
+                        let content = null;
+
+                        if (body.startsWith('🖼️ El usuario compartió una imagen:') && body.includes('https://')) {
+                          const url = body.replace('🖼️ El usuario compartió una imagen:', '').trim();
+                          content = (
+                            <img
+                              src={url}
+                              alt="Imagen recibida"
+                              style={{ maxWidth: 200, maxHeight: 350, width: '100%', height: 'auto', borderRadius: 16, boxShadow: '0 1px 4px rgba(0,0,0,0.10)', objectFit: 'cover', display: 'block', cursor: 'pointer' }}
+                              onClick={() => { setModalImageUrl(url); setOpenImageModal(true); }}
+                              onError={e => (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150'}
+                            />
+                          );
+                        } else if (body.startsWith('🎥 El usuario compartió un video:') && body.includes('https://')) {
+                          const url = body.replace('🎥 El usuario compartió un video:', '').trim();
+                          content = (
+                            <video controls style={{ maxWidth: '100%', borderRadius: 8, border: '1px solid rgba(0,0,0,0.08)' }}>
+                              <source src={url} />
+                              Tu navegador no puede reproducir el video.
+                            </video>
+                          );
+                        } else if (body.startsWith('🎙️ Transcripción del audio:') && mediaUrl) {
+                          content = (
+                            <Box>
+                              <audio controls style={{ width: '100%', marginBottom: 4 }}>
+                                <source src={mediaUrl} />
+                                Tu navegador no soporta el elemento de audio.
+                              </audio>
+                              <Typography variant="body2">{body}</Typography>
+                            </Box>
+                          );
+                        } else if (body.startsWith('📍 El usuario compartió su ubicación:') && body.includes('https://')) {
+                          const url = body.replace('📍 El usuario compartió su ubicación:', '').trim();
+                          content = (
+                            <a href={url} target="_blank" rel="noopener noreferrer" style={{ color: theme.palette.primary.main, textDecoration: 'underline' }}>
+                              Ver ubicación en el mapa
+                            </a>
+                          );
+                        } else if (body.startsWith('Aquí tienes la información para realizar tu pago a Quick Learning')) {
+                          content = (
+                            <>
+                              <Typography variant="body2">{body}</Typography>
+                              <Box sx={{ mt: 1, display: 'flex', justifyContent: 'center' }}>
+                                <img
+                                  src="https://realstate-virtual-voices.s3.us-east-2.amazonaws.com/Iztacalco.jpeg"
+                                  alt="Método de pago"
+                                  style={{ maxWidth: 220, borderRadius: 8, border: '1px solid rgba(255,255,255,0.2)', background: '#fff' }}
+                                />
+                              </Box>
+                            </>
+                          );
+                        } else {
+                          content = <Typography variant="body1" fontSize={17}>{body}</Typography>;
+                        }
+
+                        return (
+                          <Box key={msg._id || idx} sx={{ display: 'flex', flexDirection: msg.direction === 'inbound' ? 'row' : 'row-reverse', alignItems: 'flex-end', mb: 2 }}>
+                            <Avatar sx={{ bgcolor: msg.direction === 'inbound' ? (theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200]) : theme.palette.success.main, width: 44, height: 44, color: theme.palette.getContrastText(msg.direction === 'inbound' ? (theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200]) : theme.palette.success.main) }}>{msg.direction === 'inbound' ? <PersonIcon fontSize="large" /> : <AIIcon fontSize="large" />}</Avatar>
+                            <Box sx={{
+                              maxWidth: '70%',
+                              bgcolor: msg.direction === 'inbound'
+                                ? (theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.grey[100])
+                                : (theme.palette.mode === 'dark' ? theme.palette.success.dark : theme.palette.success.main),
+                              color: theme.palette.text.primary,
+                              borderRadius: msg.direction === 'inbound' ? '18px 18px 18px 6px' : '18px 18px 6px 18px',
+                              p: 2,
+                              mx: 2,
+                              boxShadow: 2
+                            }}>
+                              {content}
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, float: 'right' }}>
+                                <AccessTimeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                                <Typography variant="caption" color="text.secondary" fontSize={14}>
+                                  {formatMessageDate(msg.dateCreated)}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                        );
+                      })
+                    )}
+                    <div ref={messagesEndRef} />
+                    
+                    {/* Botón de scroll al final */}
+                    {showScrollToBottom && (
+                      <IconButton
+                        onClick={scrollToBottom}
+                        sx={{
+                          position: 'absolute',
+                          bottom: 16,
+                          right: 16,
+                          bgcolor: theme.palette.primary.main,
+                          color: 'white',
+                          boxShadow: 3,
+                          '&:hover': {
+                            bgcolor: theme.palette.primary.dark,
+                            transform: 'scale(1.1)'
+                          },
+                          transition: 'all 0.2s ease-in-out'
+                        }}
+                      >
+                        <KeyboardArrowDownIcon />
+                      </IconButton>
+                    )}
+                  </Box>
+                )}
+                {/* Input de mensaje */}
+                {selectedProspect && (
+                  <MessageInput
+                    value={messageInputValue}
+                    setValue={setMessageInputValue}
+                    onSend={async (text) => {
+                      setIsSendingMessage(true);
+                      const newMsg = {
+                        _id: `local-${Date.now()}`,
+                        body: text,
+                        direction: 'outbound',
+                        dateCreated: new Date().toISOString(),
+                      };
+                      setChatHistoryLocal(prev => [...prev, newMsg]);
+                      
+                      // Scroll al final después de agregar el mensaje
+                      setTimeout(scrollToBottom, 50);
+                      
+                      try {
+                        await sendMessage({ phone: selectedProspect.phone, message: text });
+                        setMessageInputValue('');
+                      } finally {
+                        setIsSendingMessage(false);
+                      }
+                    }}
+                    disabled={isSendingMessage || isLoadingChatHistory}
+                  />
+                )}
+              </>
             )}
           </Box>
         </Card>
@@ -526,8 +907,204 @@ const QuickLearningDashboard: React.FC = () => {
           </Paper>
         </Box>
       )}
+
+      {/* Dialog para mostrar información del cliente */}
+      <Dialog open={openClientInfo} onClose={() => setOpenClientInfo(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Información del Cliente</DialogTitle>
+        <DialogContent>
+          {selectedProspect && (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, py: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ width: 56, height: 56, bgcolor: theme.palette.success.main, color: theme.palette.getContrastText(theme.palette.success.main), fontWeight: 700 }}>
+                  <PersonIcon fontSize="large" />
+                </Avatar>
+                <Box>
+                  <Typography variant="h6" fontWeight={700}>{selectedProspect.data?.nombre ? selectedProspect.data.nombre.trim() : (selectedProspect.data?.telefono || '-')}</Typography>
+                  <Typography variant="body2" color="text.secondary">{selectedProspect.data?.telefono || '-'}</Typography>
+                </Box>
+              </Box>
+              <Divider sx={{ my: 1 }} />
+              {/* Campos editables principales */}
+              <EditableClientFields prospect={selectedProspect} onSave={data => console.log(data)} onCancel={() => setOpenClientInfo(false)} />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenClientInfo(false)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Dialog para mostrar la imagen en grande */}
+      <Dialog open={openImageModal} onClose={() => setOpenImageModal(false)} maxWidth="md" fullWidth>
+        <Box sx={{ bgcolor: "#111", display: "flex", justifyContent: "center", alignItems: "center", minHeight: "60vh", p: 2 }}>
+          <img
+            src={modalImageUrl || ""}
+            alt="Vista previa"
+            style={{ maxWidth: "90vw", maxHeight: "80vh", borderRadius: 16, boxShadow: "0 2px 12px rgba(0,0,0,0.5)" }}
+            onError={e => (e.target as HTMLImageElement).src = 'https://via.placeholder.com/300'}
+          />
+        </Box>
+        <DialogActions>
+          <Button onClick={() => setOpenImageModal(false)} color="primary" variant="contained">Cerrar</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
 
 export default QuickLearningDashboard;
+
+// Componente para renderizar y editar todos los campos del prospecto
+const EditableClientFields = ({ prospect, onSave, onCancel }: { prospect: any, onSave: (data: any) => void, onCancel: () => void }) => {
+  const [editData, setEditData] = React.useState<any>(() => ({ ...prospect, customFields: Array.isArray(prospect.customFields) ? [...prospect.customFields] : [] }));
+
+  // Helper para actualizar campos principales
+  const handleFieldChange = (field: string, value: any) => {
+    setEditData((prev: any) => ({ ...prev, [field]: value }));
+  };
+
+  // Helper para actualizar customFields
+  const handleCustomFieldChange = (key: string, value: any) => {
+    setEditData((prev: any) => ({
+      ...prev,
+      customFields: (prev.customFields as any[]).map((f: any) => f.key === key ? { ...f, value } : f)
+    }));
+  };
+
+  // Campos principales a mostrar/editar
+  const mainFields = [
+    { key: 'name', label: 'Nombre', type: 'text' },
+    { key: 'phone', label: 'Teléfono', type: 'text' },
+    { key: 'email', label: 'Email', type: 'text' },
+    { key: 'city', label: 'Ciudad', type: 'text' },
+    { key: 'status', label: 'Estatus', type: 'text' },
+    { key: 'stage', label: 'Etapa', type: 'select', options: ['prospecto', 'interesado', 'inscrito'] },
+    { key: 'tableSlug', label: 'Tabla', type: 'text' },
+    { key: 'tags', label: 'Tags', type: 'tags' },
+  ];
+
+  // Renderiza campos principales
+  const renderMainFields = () => (
+    <Box sx={{
+      display: 'grid',
+      gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+      gap: 2,
+      bgcolor: 'background.paper',
+      borderRadius: 2,
+      p: 2,
+      boxShadow: 1,
+      mb: 2
+    }}>
+      {mainFields.map(field => {
+        if (field.key === 'tags') {
+          return (
+            <FormControl key={field.key} fullWidth sx={{ mb: 0 }}>
+              <InputLabel shrink>{field.label}</InputLabel>
+              <TextField
+                value={editData.tags ? editData.tags.join(', ') : ''}
+                onChange={e => handleFieldChange('tags', e.target.value.split(',').map((t: string) => t.trim()).filter(Boolean))}
+                placeholder="Separados por coma"
+                fullWidth
+                size="small"
+                sx={{ bgcolor: 'background.default', borderRadius: 2 }}
+              />
+            </FormControl>
+          );
+        }
+        if (field.type === 'select') {
+          return (
+            <FormControl key={field.key} fullWidth sx={{ mb: 0 }}>
+              <InputLabel>{field.label}</InputLabel>
+              <Select
+                value={editData[field.key] || ''}
+                label={field.label}
+                onChange={e => handleFieldChange(field.key, e.target.value)}
+                size="small"
+                sx={{ bgcolor: 'background.default', borderRadius: 2 }}
+              >
+                {(field.options || []).map((opt: string) => <MenuItem key={opt} value={opt}>{opt}</MenuItem>)}
+              </Select>
+            </FormControl>
+          );
+        }
+        return (
+          <TextField
+            key={field.key}
+            label={field.label}
+            value={editData[field.key] || ''}
+            onChange={e => handleFieldChange(field.key, e.target.value)}
+            fullWidth
+            size="small"
+            sx={{ bgcolor: 'background.default', borderRadius: 2 }}
+          />
+        );
+      })}
+    </Box>
+  );
+
+  // Renderiza customFields
+  const renderCustomFields = () => (
+    <Box sx={{ mt: 1, bgcolor: 'background.paper', borderRadius: 2, p: 2, boxShadow: 1 }}>
+      <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700, color: 'primary.main', letterSpacing: 1 }}>Campos Personalizados</Typography>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+        {editData.customFields.map((f: any) => (
+          <TextField
+            key={f.key}
+            label={f.key}
+            value={f.value || ''}
+            onChange={e => handleCustomFieldChange(f.key, e.target.value)}
+            fullWidth
+            size="small"
+            sx={{ bgcolor: 'background.default', borderRadius: 2 }}
+          />
+        ))}
+      </Box>
+    </Box>
+  );
+
+  // Renderiza metadata si existe
+  const renderMetadata = () => editData.metadata ? (
+    <Box sx={{ mt: 2, bgcolor: 'background.paper', borderRadius: 2, p: 2, boxShadow: 1 }}>
+      <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700, color: 'primary.main', letterSpacing: 1 }}>Metadata</Typography>
+      <TextField
+        label="Metadata (JSON)"
+        value={JSON.stringify(editData.metadata, null, 2)}
+        onChange={e => {
+          try {
+            const val = JSON.parse(e.target.value);
+            handleFieldChange('metadata', val);
+          } catch {
+            // No actualiza si no es JSON válido
+          }
+        }}
+        fullWidth
+        size="small"
+        multiline
+        minRows={2}
+        sx={{ mb: 1, bgcolor: 'background.default', borderRadius: 2 }}
+      />
+    </Box>
+  ) : null;
+
+  // Renderiza fecha de creación
+  const renderCreatedAt = () => editData.createdAt ? (
+    <Box sx={{ mt: 2, textAlign: 'right' }}>
+      <Divider sx={{ my: 1 }} />
+      <Typography variant="body2" color="text.secondary"><b>Fecha de creación:</b> {new Date(editData.createdAt).toLocaleString('es-MX')}</Typography>
+    </Box>
+  ) : null;
+
+  return (
+    <Box>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: 'primary.main', mb: 1, letterSpacing: 1 }}>Datos Principales</Typography>
+      {renderMainFields()}
+      {renderCustomFields()}
+      {renderMetadata()}
+      {renderCreatedAt()}
+      <Box sx={{ display: 'flex', gap: 2, mt: 4, justifyContent: 'flex-end' }}>
+        <Button onClick={onCancel} sx={{ fontWeight: 700, color: 'text.secondary' }}>Cancelar</Button>
+        <Button variant="contained" color="primary" onClick={() => onSave(editData)} sx={{ fontWeight: 700, px: 4, boxShadow: 2 }}>Guardar Cambios</Button>
+      </Box>
+    </Box>
+  );
+};
