@@ -187,7 +187,7 @@ export default function TableRecords() {
           : 'rgba(255,255,255,0.96)',
       }}
     >
-      {/*
+      
       <Button
         variant="outlined"
         startIcon={<UploadFileIcon />}
@@ -202,13 +202,14 @@ export default function TableRecords() {
         tableFields={table ? (table.fields as any[]).map(f => ({ key: f.key, label: f.label, required: f.required })) : []}
         onImport={handleImportExcel}
       />
-      */}
+     
       {/* Tabla dinámica */}
       <DynamicDataTable
         table={table}
         onRecordEdit={handleRecordEdit}
         onRecordView={handleRecordView}
         refreshTrigger={refreshTrigger}
+        visibleFields={table.slug === 'asesor' ? ['nombre', 'apellido'] : undefined}
       />
 
       {/* Botón de nuevo registro (igual que antes) */}

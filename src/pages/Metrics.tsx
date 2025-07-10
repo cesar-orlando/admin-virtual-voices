@@ -16,6 +16,10 @@ import {
   useMediaQuery,
   Skeleton,
   Alert,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -36,6 +40,7 @@ import {
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, LabelList, Legend, Pie as PieCell } from 'recharts';
 import { useAuth } from '../hooks/useAuth';
+import { getTableStats } from '../api/servicios/dynamicTableServices';
 
 // Mock data para las métricas - COMENTADO PARA USAR DATOS REALES
 /*
@@ -164,6 +169,45 @@ const mockMilkasaMetrics = {
 };
 */
 
+// Definición de ciclos
+const CYCLES = [
+  { id: "2505", label: "2505", start: "2025-04-28", end: "2025-05-25" },
+  { id: "2506", label: "2506", start: "2025-05-26", end: "2025-06-22" },
+  { id: "2507", label: "2507", start: "2025-06-23", end: "2025-07-20" },
+  { id: "2508", label: "2508", start: "2025-07-21", end: "2025-08-24" },
+  { id: "2509", label: "2509", start: "2025-08-25", end: "2025-09-21" },
+  { id: "2510", label: "2510", start: "2025-09-22", end: "2025-10-19" },
+  { id: "2511", label: "2511", start: "2025-10-20", end: "2025-11-16" },
+  { id: "2512", label: "2512", start: "2025-11-17", end: "2025-12-14" },
+  { id: "2601", label: "2601", start: "2025-12-15", end: "2026-01-25" },
+];
+
+// Función para obtener el ciclo actual basado en la fecha
+const getCurrentCycle = () => {
+  const today = new Date();
+  const currentCycle = CYCLES.find(cycle => {
+    const startDate = new Date(cycle.start);
+    const endDate = new Date(cycle.end);
+    return today >= startDate && today <= endDate;
+  });
+  return currentCycle || CYCLES[CYCLES.length - 1]; // Si no encuentra, devuelve el último
+};
+
+// Mock data para QuickLearning - COMENTADO PARA USAR DATOS REALES
+const quickLearningMetrics = {
+  alumnos: 12,
+  clientes: 0,
+  prospectos: 0,
+  sinInteraccion: 469,
+};
+
+const quickLearningDonutData = [
+  { name: 'Alumnos', value: quickLearningMetrics.alumnos, color: '#3B82F6' },
+  { name: 'Clientes', value: quickLearningMetrics.clientes, color: '#10B981' },
+  { name: 'Prospectos', value: quickLearningMetrics.prospectos, color: '#F59E0B' },
+  { name: 'Sin interacción', value: quickLearningMetrics.sinInteraccion, color: '#EF4444' },
+];
+
 // Paleta de colores vibrantes para los segmentos
 const donutColors = ['#8B5CF6', '#10B981', '#F59E0B', '#3B82F6', '#EF4444', '#6366F1', '#F472B6'];
 const pastelColors = ['#E0E7FF', '#D1FAE5', '#FEF3C7', '#DBEAFE', '#FECACA', '#DDD6FE', '#FCE7F3'];
@@ -178,6 +222,32 @@ const renderDonutLabelVibrant = ({ cx, cy, midAngle, innerRadius, outerRadius, p
     <text x={x} y={y} fill={donutColors[index % donutColors.length]} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={18} fontWeight={700}>
       {`${name}: ${(percent * 100).toFixed(1)}%`}
     </text>
+  );
+};
+
+// Etiqueta simple y legible para la dona (dentro del anillo, color y sombra)
+const renderDonutLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, value, name, fill }: any) => {
+  if (!value || value === 0) return null;
+  const RADIAN = Math.PI / 180;
+  const radius = innerRadius + (outerRadius - innerRadius) * 0.7;
+  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+  return (
+    <g>
+      <rect x={x - 22} y={y - 16} width={44} height={28} rx={8} fill="#fff" opacity={0.85} />
+      <text
+        x={x}
+        y={y}
+        fill={fill}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontWeight={800}
+        fontSize={18}
+        style={{ filter: 'drop-shadow(0 1px 2px #0002)' }}
+      >
+        {`${percent > 0 ? (percent * 100).toFixed(1) : 0}%`}
+      </text>
+    </g>
   );
 };
 
@@ -346,77 +416,250 @@ const StatusTimeCard = ({ status, time, color }: { status: string; time: number;
   );
 };
 
+const QuickLearningCard = ({ title, value, icon, color, loading = false }: { title: string; value: number; icon: React.ReactNode; color: string; loading?: boolean }) => (
+  <Card sx={{
+    minWidth: 220,
+    minHeight: 120,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    boxShadow: 3,
+    borderRadius: 4,
+    border: `2px solid ${color}30`,
+    background: `${color}05`,
+    transition: 'transform 0.2s',
+    '&:hover': { transform: 'scale(1.04)', boxShadow: `0 8px 32px ${color}20` },
+    p: 2,
+  }}>
+    <Avatar sx={{ bgcolor: `${color}15`, color, width: 48, height: 48, mb: 1 }}>{icon}</Avatar>
+    {loading ? (
+      <Skeleton variant="text" width={60} height={36} sx={{ mb: 0.5 }} />
+    ) : (
+      <Typography variant="h5" sx={{ fontWeight: 700, color: '#222', fontSize: '2.2rem', mb: 0.5 }}>{value}</Typography>
+    )}
+    <Typography variant="body1" sx={{ color: color, fontWeight: 600, fontSize: '1.1rem', letterSpacing: 0.5 }}>{title}</Typography>
+  </Card>
+);
+
+const QuickLearningDonut = ({ data }: { data: { name: string; value: number; color: string }[] }) => (
+  <PieChart width={320} height={220}>
+    <Pie
+      data={data}
+      cx={120}
+      cy={110}
+      innerRadius={55}
+      outerRadius={85}
+      paddingAngle={2}
+      dataKey="value"
+      isAnimationActive
+      label={renderDonutLabel}
+      labelLine={false}
+    >
+      {data.map((entry, idx) => (
+        <Cell key={`cell-${idx}`} fill={entry.color} />
+      ))}
+    </Pie>
+  </PieChart>
+);
+
 const Metrics = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const { currentCompany, user } = useAuth();
+  const isQuickLearning = currentCompany?.slug === 'quicklearning';
+
+  // Estado para el ciclo seleccionado
+  const [selectedCycle, setSelectedCycle] = useState(getCurrentCycle());
+
+  // Estado para los totales
+  const [alumnos, setAlumnos] = useState<number>(0);
+  const [sinContestar, setSinContestar] = useState<number>(0);
   const [loading, setLoading] = useState(false);
-  // const [data, setData] = useState(mockMetricsData); // COMENTADO PARA USAR DATOS REALES
-  const { currentCompany } = useAuth();
 
-  // Detectar si es grupo-milkasa
-  const isMilkasa = currentCompany?.slug === 'grupo-milkasa';
-
+  // Cargar datos reales al montar y cuando cambie el ciclo
   useEffect(() => {
-    // TODO: Cargar datos reales desde API
-    // const timer = setTimeout(() => {
-    //   setLoading(false);
-    // }, 1500);
-    // return () => clearTimeout(timer);
-  }, []);
-
-  const handleRefresh = () => {
+    if (!isQuickLearning || !user) return;
     setLoading(true);
-    // TODO: Recargar datos reales desde API
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
-  };
+    
+    // Por ahora usamos datos totales, pero aquí podrías implementar filtros por ciclo
+    console.log(`Cargando datos para el ciclo: ${selectedCycle.label} (${selectedCycle.start} - ${selectedCycle.end})`);
+    
+    Promise.all([
+      getTableStats('alumnos', user),
+      getTableStats('sin_contestar', user)
+    ]).then(([alumnosStats, sinContestarStats]) => {
+      setAlumnos(alumnosStats?.totalRecords || 0);
+      setSinContestar(sinContestarStats?.totalRecords || 0);
+    }).catch(error => {
+      console.error('Error loading data:', error);
+      setAlumnos(0);
+      setSinContestar(0);
+    }).finally(() => setLoading(false));
+  }, [isQuickLearning, user, selectedCycle]);
 
-  return (
-    <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+  // Orden y datos de las cards
+  const total = alumnos + sinContestar;
+  const metrics = [
+    { title: 'Prospectos', value: 0, color: '#F59E0B', icon: <Assessment /> },
+    { title: 'Sin contestar', value: sinContestar, color: '#EF4444', icon: <Cancel /> },
+    { title: 'Nuevo ingreso', value: 0, color: '#10B981', icon: <CheckCircle /> },
+    { title: 'Alumnos', value: alumnos, color: '#3B82F6', icon: <People /> },
+  ];
+
+  // Calcular porcentajes
+  const donutData = metrics.map(m => ({
+    name: m.title,
+    value: total > 0 ? Math.round((m.value / total) * 100) : 0,
+    color: m.color
+  }));
+
+  if (isQuickLearning) {
+    return (
+      <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
+        <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
           <Box>
-            <Typography 
-              variant="h4" 
-              sx={{ 
-                fontWeight: 700, 
-                color: theme.palette.mode === 'dark' ? '#fff' : '#1F2937',
-                mb: 0.5
-              }}
-            >
-              Dashboard de Métricas
+            <Typography variant="h4" sx={{ fontWeight: 700, color: theme.palette.primary.main, mb: 0.5 }}>
+              Dashboard de QuickLearning
             </Typography>
             <Typography variant="body1" color="text.secondary">
-              Análisis completo del rendimiento de tu negocio
+              Resumen de interacción y actividad del ciclo
             </Typography>
           </Box>
-          <Tooltip title="Actualizar datos">
-            <IconButton 
-              onClick={handleRefresh}
-              disabled={loading}
-              sx={{ 
-                bgcolor: theme.palette.primary.main,
-                color: '#fff',
-                '&:hover': { bgcolor: theme.palette.primary.dark },
-                '&:disabled': { bgcolor: theme.palette.action.disabled }
-              }}
-            >
-              <Refresh />
-            </IconButton>
-          </Tooltip>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* Selector de Ciclo */}
+            <FormControl size="small" sx={{ minWidth: 120 }}>
+              <InputLabel>Ciclo</InputLabel>
+              <Select
+                value={selectedCycle.id}
+                label="Ciclo"
+                onChange={(e) => {
+                  const cycle = CYCLES.find(c => c.id === e.target.value);
+                  if (cycle) setSelectedCycle(cycle);
+                }}
+                sx={{ 
+                  bgcolor: theme.palette.background.paper,
+                  '& .MuiSelect-select': { fontWeight: 600 }
+                }}
+              >
+                {CYCLES.map((cycle) => (
+                  <MenuItem key={cycle.id} value={cycle.id}>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        Ciclo {cycle.label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {new Date(cycle.start).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })} - {new Date(cycle.end).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}
+                      </Typography>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <Tooltip title="Actualizar datos">
+              <IconButton 
+                onClick={() => window.location.reload()} 
+                disabled={loading} 
+                sx={{ 
+                  bgcolor: theme.palette.primary.main, 
+                  color: '#fff', 
+                  '&:hover': { bgcolor: theme.palette.primary.dark } 
+                }}
+              >
+                <Refresh />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
+        {/* Total de ciclo arriba */}
+        <Card sx={{ mb: 4, p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: 2, borderRadius: 4 }}>
+          <Typography variant="h6" sx={{ color: '#EF4444', fontWeight: 700, mb: 1 }}>
+            Total general del ciclo {selectedCycle.label}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            {new Date(selectedCycle.start).toLocaleDateString('es-ES', { 
+              day: '2-digit', 
+              month: 'long', 
+              year: 'numeric' 
+            })} - {new Date(selectedCycle.end).toLocaleDateString('es-ES', { 
+              day: '2-digit', 
+              month: 'long', 
+              year: 'numeric' 
+            })}
+          </Typography>
+          <Typography variant="h2" sx={{ fontWeight: 900, color: '#222', mb: 2, letterSpacing: 1 }}>
+            {total}
+          </Typography>
+          {selectedCycle.id === getCurrentCycle().id && (
+            <Chip 
+              label="Ciclo Actual" 
+              color="success" 
+              size="small" 
+              sx={{ fontWeight: 600 }}
+            />
+          )}
+        </Card>
+        {/* Cards de métricas */}
+        <Grid container spacing={3} sx={{ mb: 2 }}>
+          {metrics.map((m, idx) => (
+            <Grid item xs={12} sm={6} md={3} key={m.title}>
+              <QuickLearningCard title={m.title} value={loading ? 0 : m.value} icon={m.icon} color={m.color} loading={loading} />
+            </Grid>
+          ))}
+        </Grid>
+        {/* Gráfica de dona con porcentajes */}
+        <Grid container spacing={3} alignItems="center">
+          <Grid item xs={12} md={6}>
+            <Card sx={{ p: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: 2, borderRadius: 4 }}>
+              <Typography variant="h6" sx={{ color: '#EF4444', fontWeight: 700, mb: 1 }}>
+                Distribución porcentual
+              </Typography>
+              <PieChart width={320} height={220}>
+                <Pie
+                  data={donutData}
+                  cx={120}
+                  cy={110}
+                  innerRadius={55}
+                  outerRadius={85}
+                  paddingAngle={2}
+                  dataKey="value"
+                  isAnimationActive
+                  label={renderDonutLabel}
+                  labelLine={false}
+                >
+                  {donutData.map((entry, idx) => (
+                    <Cell key={`cell-${idx}`} fill={entry.color} />
+                  ))}
+                </Pie>
+              </PieChart>
+              <Typography variant="body2" sx={{ color: '#EF4444', fontWeight: 600, mt: 1 }}>
+                porcentaje
+              </Typography>
+            </Card>
+          </Grid>
+          <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', pl: { md: 6, xs: 0 }, mt: { xs: 3, md: 0 } }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 2, color: '#222' }}>
+                Leyenda
+              </Typography>
+              {donutData.map((item) => (
+                <Box key={item.name} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                  <Box sx={{ width: 18, height: 18, borderRadius: '50%', bgcolor: item.color, mr: 1.5 }} />
+                  <Typography variant="body1" sx={{ color: item.color, fontWeight: 600 }}>{item.name} ({item.value}%)</Typography>
+                </Box>
+              ))}
+            </Box>
+          </Grid>
+        </Grid>
       </Box>
+    );
+  }
 
-      {/* Mensaje de Bienvenida */}
-      <Card sx={{ 
-        mb: 4,
-        background: theme.palette.mode === 'dark' 
-          ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%)'
-          : 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.02) 100%)',
-        border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)'}`,
-      }}>
+  // Para otras empresas, dejar mensaje de "Próximamente"
+  return (
+    <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
+      <Card sx={{ mb: 4, background: theme.palette.mode === 'dark' ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.05) 100%)' : 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(59, 130, 246, 0.02) 100%)', border: `1px solid ${theme.palette.mode === 'dark' ? 'rgba(59, 130, 246, 0.3)' : 'rgba(59, 130, 246, 0.2)'}` }}>
         <CardContent sx={{ textAlign: 'center', py: 4 }}>
           <Analytics sx={{ fontSize: 64, color: theme.palette.primary.main, mb: 2 }} />
           <Typography variant="h5" sx={{ fontWeight: 700, mb: 2, color: theme.palette.primary.main }}>
@@ -430,92 +673,6 @@ const Metrics = () => {
           </Typography>
         </CardContent>
       </Card>
-
-      {/* Métricas principales - COMENTADAS PARA USAR DATOS REALES */}
-      {/*
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        {isMilkasa ? (
-          <>
-            <Grid item xs={12} sm={6} md={6}>
-              <MetricCard
-                title="Total Prospectos"
-                value={mockMilkasaMetrics.totalProspects}
-                change={mockMilkasaMetrics.prospectsChange}
-                icon={<People />}
-                color="#8B5CF6"
-                subtitle="Prospectos registrados este mes"
-                loading={loading}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={6}>
-              <MetricCard
-                title="Total Propiedades"
-                value={mockMilkasaMetrics.totalProperties}
-                change={mockMilkasaMetrics.propertiesChange}
-                icon={<Business />}
-                color="#10B981"
-                subtitle="Propiedades activas en inventario"
-                loading={loading}
-              />
-            </Grid>
-          </>
-        ) : (
-          <>
-            <Grid item xs={12} sm={6} md={3}>
-              <MetricCard
-                title="Total Prospectos"
-                value={data.overview.totalProspects}
-                change={data.overview.prospectsChange}
-                icon={<People />}
-                color="#8B5CF6"
-                subtitle="Leads generados este mes"
-                loading={loading}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <MetricCard
-                title="Clientes Activos"
-                value={data.overview.totalClients}
-                change={data.overview.clientsChange}
-                icon={<Business />}
-                color="#10B981"
-                subtitle="Clientes convertidos"
-                loading={loading}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <MetricCard
-                title="Ventas Realizadas"
-                value={data.overview.totalSales}
-                change={data.overview.salesChange}
-                icon={<ShoppingCart />}
-                color="#F59E0B"
-                subtitle="Transacciones completadas"
-                loading={loading}
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <MetricCard
-                title="Sin Contestar"
-                value={data.overview.unansweredMessages}
-                change={data.overview.messagesChange}
-                icon={<Message />}
-                color="#EF4444"
-                subtitle="Mensajes pendientes"
-                loading={loading}
-              />
-            </Grid>
-          </>
-        )}
-      </Grid>
-      */}
-
-      {/* Gráficos y métricas detalladas - COMENTADAS PARA USAR DATOS REALES */}
-      {/*
-      <Grid container spacing={3}>
-        // ... resto de los gráficos comentados
-      </Grid>
-      */}
     </Box>
   );
 };

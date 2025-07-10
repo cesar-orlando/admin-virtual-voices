@@ -7,7 +7,6 @@ import {
   CardContent,
   Typography,
   Button,
-  Chip,
   Avatar,
   IconButton,
   Dialog,
@@ -373,10 +372,13 @@ const QuickLearningDashboard: React.FC = () => {
   }, [handleSendMessageInput]);
 
   // Filtro memoizado de prospectos
-  const filteredProspects = React.useMemo(() =>
-    prospects.filter(p => p.name?.toLowerCase().includes(searchTerm.toLowerCase()) || p.phone?.includes(searchTerm)),
-    [prospects, searchTerm]
-  );
+  const filteredProspects = React.useMemo(() => {
+    if (!searchTerm.trim()) return prospects;
+    return prospects.filter(p =>
+      p.data?.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.data?.telefono?.includes(searchTerm)
+    );
+  }, [prospects, searchTerm]);
 
   // Handlers para modales
   const handleSendMessage = useCallback(async () => {
@@ -514,13 +516,17 @@ const QuickLearningDashboard: React.FC = () => {
             ) : (
               <List>
                 {filteredProspects.map(prospect => (
-                  <ListItem key={prospect._id} button selected={selectedProspect?._id === prospect._id} onClick={() => selectProspect(prospect)}
+                  <ListItem
+                    key={prospect._id}
+                    button
+                    selected={selectedProspect?._id === prospect._id}
+                    onClick={() => selectProspect(prospect)}
                     sx={{
                       borderRadius: 2,
                       mb: 0.5,
                       px: 1,
-                      py: 0.5,
-                      minHeight: 48,
+                      py: 1.5, // más espacio vertical
+                      minHeight: 56, // más alto
                       background: selectedProspect?._id === prospect._id ? (theme.palette.mode === 'dark' ? theme.palette.action.selected : theme.palette.action.selected) : 'transparent',
                       boxShadow: selectedProspect?._id === prospect._id ? 2 : 0,
                       transition: 'background 0.2s, box-shadow 0.2s',
@@ -530,26 +536,47 @@ const QuickLearningDashboard: React.FC = () => {
                       }
                     }}
                   >
-                    <ListItemAvatar><Avatar sx={{ bgcolor: theme.palette.success.main, width: 32, height: 32, color: theme.palette.getContrastText(theme.palette.success.main) }}><PersonIcon fontSize="small" /></Avatar></ListItemAvatar>
+                    <ListItemAvatar>
+                      <Avatar sx={{ bgcolor: theme.palette.success.main, width: 32, height: 32, color: theme.palette.getContrastText(theme.palette.success.main) }}>
+                        <PersonIcon fontSize="small" />
+                      </Avatar>
+                    </ListItemAvatar>
                     <ListItemText
-                      primary={<Typography component="span" fontWeight={700} fontSize={15} noWrap color={theme.palette.text.primary}>{prospect.name || prospect.phone}</Typography>}
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography
+                            component="span"
+                            fontWeight={700}
+                            fontSize={15}
+                            noWrap
+                            color={theme.palette.text.primary}
+                            sx={{ flex: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                          >
+                            {prospect.data?.nombre ? prospect.data.nombre.trim() : (prospect.data?.telefono || '-')}
+                          </Typography>
+                        </Box>
+                      }
                       secondary={
                         <>
-                          <Typography component="div" variant="caption" color="text.secondary" fontSize={13} noWrap>{prospect.phone}</Typography>
-                          {prospect.lastMessage && (
-                            <>
-                              <Typography component="div" variant="body2" color="text.secondary" noWrap fontSize={13} sx={{ mb: 0.5 }}>
-                                {prospect.lastMessage.body}
-                              </Typography>
-                              {prospect.lastMessage.dateCreated && (
-                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <AccessTimeIcon sx={{ fontSize: 12, color: 'text.secondary' }} />
-                                  <Typography component="div" variant="caption" color="text.secondary" fontSize={11}>
-                                    {formatCompactDate(prospect.lastMessage.dateCreated)}
-                                  </Typography>
-                                </Box>
-                              )}
-                            </>
+                          <Typography
+                            component="div"
+                            fontSize={13}
+                            color="text.secondary"
+                            noWrap
+                            sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                          >
+                            {prospect.data?.telefono || ''}
+                          </Typography>
+                          {prospect.data.ultimo_mensaje && (
+                            <Typography
+                              component="div"
+                              fontSize={13}
+                              color="text.secondary"
+                              noWrap
+                              sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                            >
+                              {prospect.data?.ultimo_mensaje}
+                            </Typography>
                           )}
                         </>
                       }
@@ -629,8 +656,8 @@ const QuickLearningDashboard: React.FC = () => {
                       <PersonIcon fontSize="large" />
                     </Avatar>
                     <Box>
-                      <Typography variant="h6" fontWeight={700}>{selectedProspect.name || selectedProspect.phone}</Typography>
-                      <Typography variant="body2" color="text.secondary">{selectedProspect.phone}</Typography>
+                      <Typography variant="h6" fontWeight={700}>{selectedProspect.data?.nombre ? selectedProspect.data.nombre.trim() : (selectedProspect.data?.telefono || '-')}</Typography>
+                      <Typography variant="body2" color="text.secondary">{selectedProspect.data?.telefono || '-'}</Typography>
                     </Box>
                   </Box>
                 )}
@@ -892,8 +919,8 @@ const QuickLearningDashboard: React.FC = () => {
                   <PersonIcon fontSize="large" />
                 </Avatar>
                 <Box>
-                  <Typography variant="h6" fontWeight={700}>{selectedProspect?.name || selectedProspect?.phone}</Typography>
-                  <Typography variant="body2" color="text.secondary">{selectedProspect?.phone}</Typography>
+                  <Typography variant="h6" fontWeight={700}>{selectedProspect.data?.nombre ? selectedProspect.data.nombre.trim() : (selectedProspect.data?.telefono || '-')}</Typography>
+                  <Typography variant="body2" color="text.secondary">{selectedProspect.data?.telefono || '-'}</Typography>
                 </Box>
               </Box>
               <Divider sx={{ my: 1 }} />

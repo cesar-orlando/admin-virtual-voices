@@ -365,11 +365,13 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
 
   // Cargar prospectos al inicializar
   useEffect(() => {
+    console.log('useEffect: Loading prospects on mount');
     loadProspects();
   }, []);
 
   // Cargar lista de prospectos
   const loadProspects = useCallback(async (cursor?: string | null) => {
+    console.log('loadProspects called with cursor:', cursor);
     if (cursor) {
       setIsLoadingMoreProspects(true);
     } else {
@@ -378,7 +380,9 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     setErrorProspects(null);
     
     try {
+      console.log('Calling getQuickLearningProspects...');
       const data = await getQuickLearningProspects(cursor);
+      console.log('getQuickLearningProspects response:', data);
       // Validación defensiva para soportar ambas respuestas
       if (!data || !data.usuarios) {
         setErrorProspects('Respuesta inesperada del servidor.');
@@ -386,12 +390,41 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
         setIsLoadingMoreProspects(false);
         return;
       }
+
+      // Transformar los datos para que coincidan con la estructura esperada por el componente
+      const transformedUsuarios = data.usuarios.map((usuario: any) => ({
+        _id: usuario._id,
+        data: {
+          nombre: usuario.name || usuario.phone || 'Sin nombre',
+          telefono: usuario.phone,
+          ultimo_mensaje: usuario.lastMessage?.body || 'Sin mensajes',
+          email: usuario.email,
+          ciudad: usuario.ciudad,
+          curso: usuario.curso,
+          asesor: usuario.asesor,
+          status: usuario.status,
+          stage: usuario.stage
+        },
+        tableSlug: usuario.tableSlug,
+        linkedTable: {
+          refModel: usuario.tableSlug,
+          refId: usuario._id
+        },
+        phone: usuario.phone,
+        aiEnabled: usuario.aiEnabled || false,
+        createdAt: usuario.createdAt,
+        updatedAt: usuario.updatedAt,
+        lastMessageDate: usuario.lastMessageDate
+      }));
+
+      console.log('Transformed usuarios:', transformedUsuarios);
+
       // Si tiene pagination, úsalo
       if (data.pagination) {
         if (cursor) {
-          setProspects(prev => [...prev, ...data.usuarios]);
+          setProspects(prev => [...prev, ...transformedUsuarios]);
         } else {
-          setProspects(data.usuarios);
+          setProspects(transformedUsuarios);
         }
         setHasMoreProspects(!!data.pagination.hasMore);
         setNextCursor(data.pagination.nextCursor ?? null);
@@ -400,9 +433,9 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
         const total = data.total ?? data.usuarios.length;
         const limit = data.limit ?? 20;
         if (cursor) {
-          setProspects(prev => [...prev, ...data.usuarios]);
+          setProspects(prev => [...prev, ...transformedUsuarios]);
         } else {
-          setProspects(data.usuarios);
+          setProspects(transformedUsuarios);
         }
         setHasMoreProspects(data.usuarios.length >= limit && data.usuarios.length < total);
         setNextCursor(null); // No hay paginación real
@@ -423,17 +456,23 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     if (hasMoreProspects && !isLoadingMoreProspects && nextCursor) {
       await loadProspects(nextCursor);
     }
-  }, [hasMoreProspects, isLoadingMoreProspects, nextCursor, loadProspects]);
+  }, [hasMoreProspects, isLoadingMoreProspects, nextCursor]);
 
-  // Seleccionar prospecto y cargar historial
+  // En selectProspect, usa prospect.data.telefono para obtener el historial:
   const selectProspect = useCallback(async (prospect: any) => {
+    console.log('selectProspect called with:', prospect);
     setSelectedProspect(prospect);
     setIsLoadingChatHistory(true);
     setErrorChatHistory(null);
     try {
-      const data = await getQuickLearningChatHistory(prospect.phone);
+      const phone = prospect.data?.telefono || prospect.phone;
+      if (!phone) throw new Error('El prospecto no tiene número de teléfono');
+      console.log('Loading chat history for phone:', phone);
+      const data = await getQuickLearningChatHistory(phone);
+      console.log('Chat history response:', data);
       setChatHistory(Array.isArray(data) ? data : []);
     } catch (err: any) {
+      console.error('Error loading chat history:', err);
       setErrorChatHistory(err.message || 'Error al cargar historial de chat');
       setChatHistory([]);
     } finally {

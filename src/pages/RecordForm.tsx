@@ -25,8 +25,9 @@ import {
   getTableBySlug, 
   createRecord, 
   getRecordById, 
-  updateRecord 
+  updateRecord
 } from '../api/servicios';
+import { fetchCompanyUsers } from '../api/servicios/userServices';
 import type { DynamicTable, TableField, CreateRecordRequest, UpdateRecordRequest, DynamicRecord } from '../types';
 
 export default function RecordForm() {
@@ -35,6 +36,7 @@ export default function RecordForm() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [asesores, setAsesores] = useState<any[]>([]);
 
   const { tableSlug, recordId } = useParams<{ tableSlug: string; recordId?: string }>();
   const navigate = useNavigate();
@@ -43,6 +45,10 @@ export default function RecordForm() {
 
   useEffect(() => {
     loadData();
+    // Si el campo asesor existe, carga los asesores
+    if (user && tableSlug) {
+      fetchCompanyUsers(user.companySlug || '').then(setAsesores);
+    }
   }, [tableSlug, recordId, user]);
 
   const loadData = async () => {
@@ -110,6 +116,27 @@ export default function RecordForm() {
   
   const renderField = (field: TableField) => {
     const value = formData[field.name] ?? '';
+    // Si el campo es 'asesor', renderiza un select con los asesores
+    if (field.name === 'asesor') {
+      return (
+        <FormControl fullWidth>
+          <InputLabel>Asesor</InputLabel>
+          <Select
+            value={value}
+            onChange={(e) => handleInputChange(field.name, e.target.value)}
+            label="Asesor"
+            required={field.required}
+          >
+            {asesores.map((asesor) => (
+              <MenuItem key={asesor._id || asesor.id || asesor.email} value={asesor._id || asesor.id || asesor.email}>
+                {asesor.nombre || asesor.name || asesor.email || asesor._id}
+                {asesor.apellido ? ` ${asesor.apellido}` : ''}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      );
+    }
 
     switch (field.type) {
       case 'text':

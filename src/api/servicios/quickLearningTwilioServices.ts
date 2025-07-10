@@ -195,7 +195,7 @@ export const getQuickLearningProspects = async (cursor?: string | null, limit: n
   try {
     const queryParams = new URLSearchParams();
     queryParams.append('companySlug', 'quicklearning');
-    queryParams.append('tableSlugs', 'prospectos,clientes');
+    queryParams.append('tableSlugs', 'prospectos,clientes,alumnos,sin_contestar');
     queryParams.append('limit', limit.toString());
     
     if (cursor) {
@@ -203,7 +203,9 @@ export const getQuickLearningProspects = async (cursor?: string | null, limit: n
     }
     
     const response = await api.get(`/quicklearning/twilio/usuarios?${queryParams.toString()}`);
-    return response.data;
+
+    const usuarios = response.data;
+    return usuarios;
   } catch (error: any) {
     handleError(error);
     throw new Error('Error al obtener la lista de prospectos/clientes');
@@ -217,7 +219,7 @@ export const getQuickLearningProspects = async (cursor?: string | null, limit: n
  */
 export const getQuickLearningChatHistory = async (phone: string) => {
   try {
-    const response = await api.get(`/quicklearning/twilio/chat?companySlug=quicklearning&phone=${phone}`);
+    const response = await api.get(`/quicklearning/twilio/chats/${phone}/history?companySlug=quicklearning`);
     return response.data;
   } catch (error: any) {
     handleError(error);

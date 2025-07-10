@@ -67,6 +67,7 @@ interface DynamicDataTableProps {
   onRecordCreate?: () => void;
   refreshTrigger?: number;
   onImportExcel?: () => void; // NUEVO: handler para importar Excel
+  visibleFields?: string[]; // NUEVO: lista de campos visibles
 }
 
 export default function DynamicDataTable({ 
@@ -75,7 +76,8 @@ export default function DynamicDataTable({
   onRecordView, 
   onRecordCreate,
   refreshTrigger = 0,
-  onImportExcel
+  onImportExcel,
+  visibleFields // NUEVO
 }: DynamicDataTableProps) {
   const [records, setRecords] = useState<DynamicRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -273,16 +275,74 @@ export default function DynamicDataTable({
   const handleGalleryPrev = () => setGalleryIndex((prev) => Math.max(prev - 1, 0));
   const handleGalleryNext = () => setGalleryIndex((prev) => Math.min(prev + 1, selectedFiles.length - 1));
 
-  const formatFieldValue = (value: any, field: TableField): string | JSX.Element => {
-    if (value === null || value === undefined) return '-';
-
+  const formatFieldValue = (value: any, field: TableField, isFirstColumn = false): { content: string | JSX.Element; tooltip?: string } => {
+    // Si el campo es 'asesor', renderiza solo el campo 'name' si existe
+    if (field.name === 'asesor') {
+      let name = '';
+      if (typeof value === 'string') {
+        try {
+          const obj = JSON.parse(value);
+          if (obj && obj.name) name = obj.name;
+          else name = value;
+        } catch {
+          name = value;
+        }
+      } else if (typeof value === 'object' && value !== null && value.name) {
+        name = value.name;
+      } else {
+        name = value;
+      }
+      return { 
+        content: <Chip label={name} size="small" color="primary" sx={{ fontWeight: 600, color: '#fff' }} />,
+        tooltip: name.length > 50 ? name : undefined
+      };
+    }
+    // Si el campo es 'medio', renderiza un Chip de color
+    if (field.name === 'medio') {
+      const label = String(value || '').toLowerCase();
+      let sx: any = { fontWeight: 600, color: '#fff', border: 0 };
+      const display = label.charAt(0).toUpperCase() + label.slice(1);
+      switch (label) {
+        case 'meta':
+          sx.backgroundImage = 'linear-gradient(90deg, #8B5CF6 0%, #E05EFF 100%)';
+          break;
+        case 'google':
+          sx.backgroundImage = 'linear-gradient(90deg, #4285F4 0%, #34A853 100%)';
+          break;
+        case 'interno':
+          sx.backgroundImage = 'linear-gradient(90deg, #10B981 0%, #059669 100%)';
+          break;
+        default:
+          sx.background = '#E5E7EB';
+          sx.color = '#374151';
+      }
+      return { 
+        content: <Chip label={display} size="small" sx={sx} />,
+        tooltip: display.length > 50 ? display : undefined
+      };
+    }
+    if (isFirstColumn) {
+      return { 
+        content: (
+          <Chip
+            label={value}
+            size="small"
+            color="primary"
+            sx={{ fontWeight: 600, color: '#fff' }}
+          />
+        ),
+        tooltip: String(value).length > 50 ? String(value) : undefined
+      };
+    }
+    if (value === null || value === undefined) return { content: '-' };
+    
     switch (field.type) {
       case 'date': {
         const date = new Date(value);
         if (isNaN(date.getTime())) {
-          return '-';
+          return { content: '-' };
         }
-        return date.toLocaleString('es-ES', {
+        const formattedDate = date.toLocaleString('es-ES', {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit',
@@ -290,23 +350,24 @@ export default function DynamicDataTable({
           minute: '2-digit',
           hour12: true,
         });
+        return { content: formattedDate };
       }
       case 'boolean':
-        return value ? 'Sí' : 'No';
+        return { content: value ? 'Sí' : 'No' };
       case 'currency':
-        return new Intl.NumberFormat('es-MX', {
+        const formattedCurrency = new Intl.NumberFormat('es-MX', {
           style: 'currency',
           currency: 'MXN'
         }).format(value);
+        return { content: formattedCurrency };
       case 'number':
-        return new Intl.NumberFormat('es-MX').format(value);
-      case 'file':
-        // Manejar diferentes formatos de archivos
+        const formattedNumber = new Intl.NumberFormat('es-MX').format(value);
+        return { content: formattedNumber };
+      case 'file': {
         let files: any[] = [];
         if (Array.isArray(value)) {
           files = value;
         } else if (typeof value === 'string') {
-          // Si es una cadena de URLs separadas por espacio
           if (value.includes('http')) {
             files = value.split(/\s+/).filter((url) => url.startsWith('http'));
           } else {
@@ -323,29 +384,38 @@ export default function DynamicDataTable({
         }
         const validFiles = files.filter(file => typeof file === 'string' && file.startsWith('http'));
         if (validFiles.length > 0) {
-          return (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 1,
-                cursor: 'pointer',
-                '&:hover': {
-                  opacity: 0.8,
-                }
-              }}
-              onClick={() => handleFileClick(validFiles, field.name)}
-            >
-              <AttachFileIcon sx={{ fontSize: 16, color: theme.palette.primary.main }} />
-              <Typography variant="body2" sx={{ color: theme.palette.primary.main, fontWeight: 500 }}>
-                {validFiles.length} archivo{validFiles.length !== 1 ? 's' : ''}
-              </Typography>
-            </Box>
-          );
+          return {
+            content: (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  cursor: 'pointer',
+                  '&:hover': {
+                    opacity: 0.8,
+                  }
+                }}
+                onClick={() => handleFileClick(validFiles, field.name)}
+              >
+                <AttachFileIcon sx={{ fontSize: 16, color: theme.palette.primary.main }} />
+                <Typography variant="body2" sx={{ color: theme.palette.primary.main, fontWeight: 500 }}>
+                  {validFiles.length} archivo{validFiles.length !== 1 ? 's' : ''}
+                </Typography>
+              </Box>
+            ),
+            tooltip: validFiles.length > 0 ? `Archivos: ${validFiles.join(', ')}` : undefined
+          };
         }
-        return '-';
-      default:
-        return String(value);
+        return { content: '-' };
+      }
+      default: {
+        const stringValue = String(value);
+        return { 
+          content: stringValue,
+          tooltip: stringValue.length > 50 ? stringValue : undefined
+        };
+      }
     }
   };
 
@@ -393,6 +463,12 @@ export default function DynamicDataTable({
       return 0;
     });
   }
+
+  // Filtrar campos visibles si visibleFields está definido
+  const displayedFields = useMemo(() => {
+    if (!visibleFields) return table.fields;
+    return table.fields.filter(f => visibleFields.includes(f.name));
+  }, [table.fields, visibleFields]);
 
   if (loading && records.length === 0) {
     return (
@@ -540,7 +616,7 @@ export default function DynamicDataTable({
           <Table stickyHeader>
             <TableHead>
               <TableRow>
-                {table.fields.map((field, idx) => {
+                {displayedFields.map((field, idx) => {
                   const isSortable = ['number', 'currency', 'date'].includes(field.type);
                   return (
                     <TableCell key={field.name} sx={{ minWidth: field.width || 150, fontWeight: 'bold', maxWidth: 220, p: 1 }}>
@@ -580,7 +656,7 @@ export default function DynamicDataTable({
               {loading ? (
                 Array.from(new Array(rowsPerPage)).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell colSpan={table.fields.length + 2}>
+                    <TableCell colSpan={displayedFields.length + 2}>
                       <Skeleton variant="text" height={40} />
                     </TableCell>
                   </TableRow>
@@ -588,47 +664,47 @@ export default function DynamicDataTable({
               ) : (
                 sortedRecords.map((record) => (
                   <TableRow hover role="checkbox" tabIndex={-1} key={record._id}>
-                    {table.fields.map((field, idx) => (
-                      <TableCell key={field.name} sx={{ maxWidth: 220, p: 1 }}>
-                        {idx === 0 ? (
-                          <Chip
-                            label={record.data[field.name] || '-'}
-                            size="small"
-                            sx={{
-                              fontWeight: 600,
-                              color: theme.palette.mode === 'dark' ? '#E05EFF' : '#8B5CF6',
-                              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(224, 94, 255, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-                              fontSize: '0.95rem',
-                              px: 2,
-                              py: 0.5,
-                              borderRadius: 2,
-                              maxWidth: 180,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          />
-                        ) : field.type === 'text' ? (
-                          <Tooltip title={record.data[field.name] || ''} placement="top" arrow>
+                    {displayedFields.map((field, idx) => {
+                      const fieldData = formatFieldValue(record.data[field.name], field, idx === 0);
+                      return (
+                        <TableCell key={field.name} sx={{ maxWidth: 220, p: 1 }}>
+                          {fieldData.tooltip ? (
+                            <Tooltip 
+                              title={fieldData.tooltip} 
+                              placement="top" 
+                              arrow
+                              PopperProps={{
+                                sx: {
+                                  '& .MuiTooltip-tooltip': {
+                                    maxWidth: 400,
+                                    fontSize: '0.875rem',
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-word'
+                                  }
+                                }
+                              }}
+                            >
+                              <Box sx={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                cursor: 'help'
+                              }}>
+                                {fieldData.content}
+                              </Box>
+                            </Tooltip>
+                          ) : (
                             <Box sx={{
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              display: 'flex',
-                              WebkitLineClamp: 2,
-                              WebkitBoxOrient: 'vertical',
-                              fontSize: '0.95rem',
-                              lineHeight: 1.2,
-                              maxHeight: '2.6em',
-                              whiteSpace: 'normal',
+                              whiteSpace: 'nowrap'
                             }}>
-                              {record.data[field.name]}
+                              {fieldData.content}
                             </Box>
-                          </Tooltip>
-                        ) : (
-                          formatFieldValue(record.data[field.name], field)
-                        )}
-                      </TableCell>
-                    ))}
+                          )}
+                        </TableCell>
+                      );
+                    })}
                     <TableCell align="right">
                       <IconButton onClick={(e) => handleMenuOpen(e, record)}>
                         <MoreVertIcon />
