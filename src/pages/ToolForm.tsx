@@ -514,6 +514,7 @@ const ToolForm: React.FC = () => {
           description: val.description || '',
           required: reqs.includes(name),
           enum: val.enum || [],
+          enumText: (val.enum || []).join(','),
           format: val.format || '',
         }))
       );
@@ -541,17 +542,31 @@ const ToolForm: React.FC = () => {
       return;
     }
     setParamError(null);
+    // Procesa enumText a array solo al guardar
+    const enumArray =
+      typeof paramEdit.enumText === 'string'
+        ? paramEdit.enumText.split(',').map((s: string) => s.trim()).filter(Boolean)
+        : paramEdit.enum || [];
     if (paramEdit._editing) {
-      setParamList(paramList.map((p) => (p.name === paramEdit._editing ? { ...paramEdit, _editing: undefined } : p)));
+      setParamList(
+        paramList.map((p) =>
+          p.name === paramEdit._editing
+            ? { ...paramEdit, enum: enumArray, enumText: undefined, _editing: undefined }
+            : p
+        )
+      );
     } else {
-      setParamList([...paramList, { ...paramEdit }]);
+      setParamList([
+        ...paramList,
+        { ...paramEdit, enum: enumArray, enumText: undefined },
+      ]);
     }
     setParamEdit(null);
   };
 
   const handleEditParam = (name: string) => {
     const p = paramList.find((p) => p.name === name);
-    if (p) setParamEdit({ ...p, _editing: name });
+    if (p) setParamEdit({ ...p, enumText: (p.enum || []).join(','), _editing: name });
   };
   const handleDeleteParam = (name: string) => {
     setParamList(paramList.filter((p) => p.name !== name));
@@ -942,8 +957,8 @@ const ToolForm: React.FC = () => {
                             <Grid item xs={12} sm={2}>
                               <TextField
                                 label="Enum (opciones, separadas por coma)"
-                                value={paramEdit.enum?.join(',') || ''}
-                                onChange={e => setParamEdit({ ...paramEdit, enum: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })}
+                                value={paramEdit.enumText ?? ''}
+                                onChange={e => setParamEdit({ ...paramEdit, enumText: e.target.value })}
                                 fullWidth
                                 helperText="Opcional"
                               />
