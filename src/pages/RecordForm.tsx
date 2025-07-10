@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -38,6 +38,8 @@ export default function RecordForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [asesores, setAsesores] = useState<any[]>([]);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+  const fieldRefs = useRef<Record<string, any>>({});
 
   const { tableSlug, recordId } = useParams<{ tableSlug: string; recordId?: string }>();
   const navigate = useNavigate();
@@ -97,13 +99,39 @@ export default function RecordForm() {
     }));
   };
 
-  const handleSubmit = async () => {
-    if (!tableSlug || !user) return;
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!tableSlug || !user || !table) return;
+
+    // Validar campos requeridos
+    const requiredFields = table.fields.filter(f => f.required);
+    const missing: string[] = [];
+    requiredFields.forEach(f => {
+      const value = formData[f.name];
+      if (
+        value === undefined ||
+        value === null ||
+        (typeof value === 'string' && value.trim() === '') ||
+        (Array.isArray(value) && value.length === 0)
+      ) {
+        missing.push(f.name);
+      }
+    });
+    setMissingFields(missing);
+    if (missing.length > 0) {
+      setError(`Faltan campos requeridos: ${missing.map(n => table.fields.find(f => f.name === n)?.label || n).join(', ')}`);
+      // Focus al primer campo con error
+      setTimeout(() => {
+        if (fieldRefs.current[missing[0]] && typeof fieldRefs.current[missing[0]].focus === 'function') {
+          fieldRefs.current[missing[0]].focus();
+        }
+      }, 100);
+      return;
+    }
 
     try {
       setSaving(true);
       setError(null);
-
       if (isEditMode && recordId) {
         const updateData: UpdateRecordRequest = { data: formData };
         await updateRecord(recordId, updateData, user);
@@ -111,7 +139,6 @@ export default function RecordForm() {
         const createData: CreateRecordRequest = { tableSlug, data: formData };
         await createRecord(createData, user);
       }
-      
       navigate(`/tablas/${tableSlug}`);
     } catch (err) {
       setError('Error al guardar el registro');
@@ -123,16 +150,17 @@ export default function RecordForm() {
   
   const renderField = (field: TableField) => {
     const value = formData[field.name] ?? '';
+    const isMissing = missingFields.includes(field.name);
     // Si el campo es 'asesor', renderiza un select con los asesores
     if (field.name === 'asesor') {
       return (
-        <FormControl fullWidth>
-          <InputLabel>Asesor</InputLabel>
+        <FormControl fullWidth error={isMissing}>
+          <InputLabel>{field.label + (field.required ? ' *' : '')}</InputLabel>
           <Select
             value={value}
             onChange={(e) => handleInputChange(field.name, e.target.value)}
-            label="Asesor"
-            required={field.required}
+            label={field.label + (field.required ? ' *' : '')}
+            inputRef={el => fieldRefs.current[field.name] = el}
           >
             {asesores.map((asesor) => (
               <MenuItem key={asesor._id || asesor.id || asesor.email} value={asesor._id || asesor.id || asesor.email}>
@@ -141,6 +169,9 @@ export default function RecordForm() {
               </MenuItem>
             ))}
           </Select>
+          {isMissing && (
+            <Typography variant="caption" color="error">Este campo es obligatorio</Typography>
+          )}
         </FormControl>
       );
     }
@@ -153,45 +184,60 @@ export default function RecordForm() {
         return (
           <TextField
             fullWidth
-            label={field.label}
+            label={field.label + (field.required ? ' *' : '')}
             type={field.type === 'currency' ? 'number' : field.type}
             value={value}
             onChange={(e) => handleInputChange(field.name, e.target.value)}
-            required={field.required}
+            error={isMissing}
+            helperText={isMissing ? 'Este campo es obligatorio' : ''}
+            inputRef={el => fieldRefs.current[field.name] = el}
           />
         );
       case 'date': {
         const dateValue = value ? new Date(value) : null;
         return (
           <DateTimePicker
-            label={field.label}
+            label={field.label + (field.required ? ' *' : '')}
             value={dateValue}
             onChange={(newValue) => handleInputChange(field.name, newValue)}
             sx={{ width: '100%' }}
+            slotProps={{
+              textField: {
+                error: isMissing,
+                helperText: isMissing ? 'Este campo es obligatorio' : '',
+                inputRef: (el: any) => fieldRefs.current[field.name] = el
+              }
+            }}
           />
         );
       }
       case 'boolean':
         return (
-          <FormControlLabel
-            control={
-              <Switch
-                checked={!!value}
-                onChange={(e) => handleInputChange(field.name, e.target.checked)}
-              />
-            }
-            label={field.label}
-          />
+          <Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={!!value}
+                  onChange={(e) => handleInputChange(field.name, e.target.checked)}
+                  inputRef={el => fieldRefs.current[field.name] = el}
+                />
+              }
+              label={field.label + (field.required ? ' *' : '')}
+            />
+            {isMissing && (
+              <Typography variant="caption" color="error">Este campo es obligatorio</Typography>
+            )}
+          </Box>
         );
       case 'select':
         return (
-          <FormControl fullWidth>
-            <InputLabel>{field.label}</InputLabel>
+          <FormControl fullWidth error={isMissing}>
+            <InputLabel>{field.label + (field.required ? ' *' : '')}</InputLabel>
             <Select
               value={value}
               onChange={(e) => handleInputChange(field.name, e.target.value)}
-              label={field.label}
-              required={field.required}
+              label={field.label + (field.required ? ' *' : '')}
+              inputRef={el => fieldRefs.current[field.name] = el}
             >
               {field.options?.map((option) => (
                 <MenuItem key={option} value={option}>
@@ -199,17 +245,25 @@ export default function RecordForm() {
                 </MenuItem>
               ))}
             </Select>
+            {isMissing && (
+              <Typography variant="caption" color="error">Este campo es obligatorio</Typography>
+            )}
           </FormControl>
         );
       case 'file':
         return (
-          <FileDropzone
-            value={Array.isArray(value) ? value : (value ? [value] : [])}
-            onChange={(urls) => handleInputChange(field.name, urls)}
-            label={field.label}
-            required={field.required}
-            maxFiles={10}
-          />
+          <Box>
+            <FileDropzone
+              value={Array.isArray(value) ? value : (value ? [value] : [])}
+              onChange={(urls) => handleInputChange(field.name, urls)}
+              label={field.label + (field.required ? ' *' : '')}
+              maxFiles={10}
+              acceptedFileTypes={['image/*','video/mp4','video/webm','video/ogg','video/quicktime','application/pdf']}
+            />
+            {isMissing && (
+              <Typography variant="caption" color="error">Este campo es obligatorio</Typography>
+            )}
+          </Box>
         );
       default:
         return null;
@@ -220,7 +274,8 @@ export default function RecordForm() {
     return <CircularProgress sx={{ display: 'block', margin: 'auto', mt: 4 }} />;
   }
 
-  if (error) {
+  // Solo ocultar el formulario si el error es de carga de datos
+  if (error && (error.startsWith('Error al cargar') || error.startsWith('Error loading'))) {
     return <Alert severity="error">{error}</Alert>;
   }
 
@@ -240,34 +295,43 @@ export default function RecordForm() {
             </Box>
         </Box>
 
-        <Card>
-            <CardContent>
-                <Grid container spacing={3}>
-                    {table?.fields.map((field) => (
-                        <Grid item xs={12} sm={6} key={field.name}>
-                            {renderField(field)}
-                        </Grid>
-                    ))}
-                </Grid>
-            </CardContent>
-        </Card>
+        {/* Alert de error de validación */}
+        {missingFields.length > 0 && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            Faltan campos obligatorios: {missingFields.map(n => table?.fields.find(f => f.name === n)?.label || n).join(', ')}
+          </Alert>
+        )}
 
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-            <Button
-                variant="contained"
-                onClick={handleSubmit}
-                disabled={saving}
-                startIcon={<SaveIcon />}
-                sx={{
-                    background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #D04EFF 0%, #7A4CF6 100%)',
-                    }
-                }}
-            >
-                {saving ? 'Guardando...' : (isEditMode ? 'Guardar Cambios' : 'Crear Registro')}
-            </Button>
-        </Box>
+        <form onSubmit={handleSubmit} autoComplete="off">
+          <Card>
+              <CardContent>
+                  <Grid container spacing={3}>
+                      {table?.fields.map((field) => (
+                          <Grid item xs={12} sm={6} key={field.name}>
+                              {renderField(field)}
+                          </Grid>
+                      ))}
+                  </Grid>
+              </CardContent>
+          </Card>
+
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+              <Button
+                  variant="contained"
+                  type="submit"
+                  disabled={saving}
+                  startIcon={<SaveIcon />}
+                  sx={{
+                      background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+                      '&:hover': {
+                        background: 'linear-gradient(135deg, #D04EFF 0%, #7A4CF6 100%)',
+                      }
+                  }}
+              >
+                  {saving ? 'Guardando...' : (isEditMode ? 'Guardar Cambios' : 'Crear Registro')}
+              </Button>
+          </Box>
+        </form>
     </Box>
   );
 } 

@@ -37,6 +37,9 @@ interface FileDropzoneProps {
   required?: boolean;
   disabled?: boolean;
   maxFiles?: number;
+  /**
+   * Lista de tipos MIME permitidos. Ejemplo: ['image/jpeg', 'application/pdf', 'video/mp4']
+   */
   acceptedFileTypes?: string[];
   maxFileSize?: number; // en MB
 }
@@ -67,6 +70,11 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    // Soporte para videos
+    "video/mp4",
+    "video/webm",
+    "video/ogg",
+    "video/quicktime",
   ],
   maxFileSize = 10, // 10MB por defecto
 }) => {
