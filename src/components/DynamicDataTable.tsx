@@ -361,6 +361,7 @@ export default function DynamicDataTable({
         }).format(value);
         return { content: formattedCurrency };
       case 'number':
+
         const formattedNumber = new Intl.NumberFormat('es-MX').format(value);
         return { content: formattedNumber };
       case 'file': {

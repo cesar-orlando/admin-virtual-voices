@@ -43,10 +43,29 @@ export default function Whatsapp() {
   const dotInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const socket = io("http://localhost:3001");
+    const socket = io(import.meta.env.VITE_SOCKET_URL);
+    
+    console.log('Socket URL:', import.meta.env.VITE_SOCKET_URL);
+    console.log('User companySlug:', user.companySlug);
+    console.log('User id:', user.id);
+    console.log('Listening for QR event:', `whatsapp-qr-${user.companySlug}-${user.id}`);
+    
+    // Debug: eventos de conexión
+    socket.on('connect', () => {
+      console.log('Socket connected successfully');
+    });
+    
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+    
+    socket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason);
+    });
     
     // Evento QR: mostrar QR y abrir modal
     socket.on(`whatsapp-qr-${user.companySlug}-${user.id}`, (data) => {
+      console.log('QR event received:', data);
       setQr(data);
       setShowQR(true);
       setQrLoading(false);
@@ -54,6 +73,18 @@ export default function Whatsapp() {
       setLoadingMessage("Escanea el código QR");
       setLoadingPercent(0);
       setQrModalOpen(true); // ABRIR MODAL SOLO CUANDO LLEGA EL QR
+    });
+    
+    // Debug: escuchar el evento específico del backend
+    socket.on('whatsapp-qr-grupo-milkasa-686bcf967c3d33781b55c1bb', (data) => {
+      console.log('Backend QR event received:', data);
+      setQr(data);
+      setShowQR(true);
+      setQrLoading(false);
+      setShowFullscreenLoading(false);
+      setLoadingMessage("Escanea el código QR");
+      setLoadingPercent(0);
+      setQrModalOpen(true);
     });
 
     // Evento de estado
