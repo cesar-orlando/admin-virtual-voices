@@ -56,8 +56,19 @@ const FIELD_TYPES: { value: FieldType; label: string; icon: string }[] = [
 
 const ICONS = [
   '📊', '📈', '📉', '📋', '📝', '📄', '📁', '📂', '📌', '📍', '🎯', '⭐', '💡', '🔧', '⚙️', '🎨',
-  '👥', '👤', '👨‍💼', '👩‍💼', '🏢', '🏪', '🏭', '🏗️', '🚗', '✈️', '🚢', '📦', '📱', '💻', '🖥️', '📺'
+  '👥', '👤', '👨‍💼', '👩‍💼', '🏢', '🏪', '🏭', '🏗️', '🚗', '✈️', '🚢', '📦', '📱', '🖥️', '📺'
 ];
+
+// Normaliza el nombre del campo a formato slug
+function normalizeFieldName(label: string): string {
+  return label
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/ñ/g, 'n')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
 
 export default function EditTable() {
   const [table, setTable] = useState<DynamicTable | null>(null);
@@ -118,7 +129,6 @@ export default function EditTable() {
 
   // Función para detectar campos renombrados
   const detectRenamedFields = (currentFields: TableField[], originalFields: TableField[]) => {
-    const originalFieldMap = new Map(originalFields.map(f => [f.name, f]));
     const renamedFields: Array<{ 
       oldField: TableField; 
       newField: TableField; 
@@ -128,20 +138,19 @@ export default function EditTable() {
     }> = [];
 
     currentFields.forEach((field, index) => {
-      // Buscar si este campo existía antes con un nombre diferente
-      const originalField = originalFieldMap.get(field.name);
+      const originalField = originalFields[index];
       if (!originalField) {
         // Es un campo nuevo, no nos interesa aquí
         return;
       }
 
-      // Verificar si el campo original en esta posición tenía un nombre diferente
-      if (originalFields[index] && originalFields[index].name !== field.name) {
+      // Detectar si el name cambió (esto indica un renombre)
+      if (originalField.name !== field.name) {
         renamedFields.push({
-          oldField: originalFields[index],
+          oldField: originalField,
           newField: field,
           index,
-          oldName: originalFields[index].name,
+          oldName: originalField.name,
           newName: field.name
         });
       }
@@ -186,15 +195,13 @@ export default function EditTable() {
       }));
     }
 
-    // Detectar si se cambió el nombre de un campo y hay registros existentes
+    // Detectar si se cambió el name de un campo y hay registros existentes
     if (field.name && tableStats && tableStats.totalRecords > 0) {
-      const renamedFields = detectRenamedFields(updatedFields, originalFields);
-      if (renamedFields.length > 0) {
-        const renamedField = renamedFields.find(rf => rf.index === index);
-        if (renamedField) {
-          setNewFieldIndex(index);
-          setShowNewFieldDialog(true);
-        }
+      const originalField = originalFields[index];
+      if (originalField && originalField.name !== field.name) {
+        // El name cambió, esto es un renombre
+        setNewFieldIndex(index);
+        setShowNewFieldDialog(true);
       }
     }
   };
@@ -349,6 +356,29 @@ export default function EditTable() {
     }
   };
 
+  const handleFieldLabelBlur = (index: number) => {
+    const field = fields[index];
+    const originalField = originalFields[index];
+    const newName = normalizeFieldName(field.label);
+
+    // Solo si el name realmente cambia y hay registros
+    if (
+      originalField &&
+      originalField.name !== newName &&
+      tableStats &&
+      tableStats.totalRecords > 0
+    ) {
+      handleUpdateField(index, { name: newName });
+      setNewFieldIndex(index);
+      setShowNewFieldDialog(true);
+    } else {
+      // Solo actualiza el name si no hay registros (para consistencia)
+      if (field.name !== newName) {
+        handleUpdateField(index, { name: newName });
+      }
+    }
+  };
+
   if (loading) {
     return <CircularProgress sx={{ display: 'block', margin: 'auto', mt: 4 }} />;
   }
@@ -493,31 +523,39 @@ export default function EditTable() {
                     Agregar Campo
                 </Button>
             </Box>
-            <Grid container spacing={2}>
+            <Grid container spacing={1}>
                 {fields.map((field, index) => (
                 <Grid item xs={12} key={index}>
-                    <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider' }}>
-                    <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={12} sm={6} md={3}>
-                            <TextField fullWidth label="Nombre del campo" value={field.name} onChange={(e) => handleUpdateField(index, { name: e.target.value })} size="small" required />
+                    <Paper sx={{ p: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                    <Grid container spacing={1} alignItems="center">
+                        <Grid item xs={12} sm={6} md={7}>
+                            <TextField
+                              fullWidth
+                              label="Etiqueta"
+                              value={field.label}
+                              onChange={(e) => handleUpdateField(index, { label: e.target.value })} // Solo label
+                              onBlur={() => handleFieldLabelBlur(index)}
+                              size="small"
+                              required
+                              helperText="Este será el nombre de la columna en tu tabla"
+                            />
                         </Grid>
-                        <Grid item xs={12} sm={6} md={3}>
-                            <TextField fullWidth label="Etiqueta" value={field.label} onChange={(e) => handleUpdateField(index, { label: e.target.value })} size="small" required />
-                        </Grid>
-                        <Grid item xs={12} sm={6} md={2}>
+                        <Grid item xs={6} sm={3} md={2}>
                             <FormControl fullWidth size="small">
-                                <InputLabel>Tipo</InputLabel>
-                                <Select value={field.type} onChange={(e) => handleUpdateField(index, { type: e.target.value as FieldType })} label="Tipo">
+                              <InputLabel>Tipo</InputLabel>
+                              <Select value={field.type} onChange={(e) => handleUpdateField(index, { type: e.target.value as FieldType })} label="Tipo">
                                 {FIELD_TYPES.map((type) => (
-                                    <MenuItem key={type.value} value={type.value}>{type.icon} {type.label}</MenuItem>
+                                  <MenuItem key={type.value} value={type.value}>
+                                    {type.icon} {type.label}
+                                  </MenuItem>
                                 ))}
-                                </Select>
+                              </Select>
                             </FormControl>
                         </Grid>
-                        <Grid item xs={6} sm={4} md={2}>
-                            <FormControlLabel control={<Switch checked={field.required || false} onChange={(e) => handleUpdateField(index, { required: e.target.checked })} />} label="Requerido" />
+                        <Grid item xs={3} sm={2} md={2}>
+                            <FormControlLabel control={<Switch checked={field.required || false} onChange={(e) => handleUpdateField(index, { required: e.target.checked })} />} label="Requerido" sx={{ ml: 0 }} />
                         </Grid>
-                        <Grid item xs={6} sm={2} md={2} sx={{ textAlign: 'right' }}>
+                        <Grid item xs={3} sm={1} md={1} sx={{ textAlign: 'right' }}>
                             <IconButton color="error" onClick={() => handleRemoveField(index)} size="small"><DeleteIcon /></IconButton>
                         </Grid>
                         {field.type === 'select' && (
@@ -532,10 +570,8 @@ export default function EditTable() {
                                   ...prev,
                                   [index]: value,
                                 }));
-                                // No actualices field.options aquí, solo el input
                               }}
                               onBlur={() => {
-                                // Al salir del input, actualiza el campo real
                                 const options = (selectOptionsInputs[index] ?? '')
                                   .split(',')
                                   .map(s => s.trim())
@@ -543,14 +579,15 @@ export default function EditTable() {
                                 handleUpdateField(index, { options });
                               }}
                               size="small"
+                              helperText="Ej: Opción 1, Opción 2, Opción 3"
                             />
                           </Grid>
                         )}
-                      </Grid>
+                    </Grid>
                     </Paper>
-                  </Grid>
+                </Grid>
                 ))}
-              </Grid>
+            </Grid>
         </CardContent>
       </Card>
 

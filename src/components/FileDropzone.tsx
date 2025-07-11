@@ -59,23 +59,7 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({
   required = false,
   disabled = false,
   maxFiles = 10,
-  acceptedFileTypes = [
-    "application/pdf",
-    "image/jpeg",
-    "image/png",
-    "image/webp",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.ms-excel",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "application/vnd.ms-powerpoint",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    // Soporte para videos
-    "video/mp4",
-    "video/webm",
-    "video/ogg",
-    "video/quicktime",
-  ],
+  acceptedFileTypes,
   maxFileSize = 10, // 10MB por defecto
 }) => {
   const theme = useTheme();
@@ -114,6 +98,7 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({
 
   // Función para validar tipo de archivo
   const isValidFileType = (file: File): boolean => {
+    if (!acceptedFileTypes) return true; // Si no se especifica, acepta todos
     return acceptedFileTypes.includes(file.type);
   };
 
@@ -287,16 +272,17 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({
         });
       }
     }
-  }, [value, uploadingFiles, onChange, disabled, maxFiles, maxFileSize]);
+  }, [value, uploadingFiles, onChange, disabled, maxFiles, maxFileSize, acceptedFileTypes]);
 
   // Configuración de dropzone
-  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone({
+  const dropzoneConfig = {
     onDrop: handleFiles,
-    accept: acceptedFileTypes.reduce((acc, type) => ({ ...acc, [type]: [] }), {}),
     disabled,
     maxFiles: maxFiles - value.length - uploadingFiles.length,
     maxSize: maxFileSize * 1024 * 1024,
-  });
+    ...(acceptedFileTypes ? { accept: acceptedFileTypes.reduce((acc, type) => ({ ...acc, [type]: [] }), {}) } : {})
+  };
+  const { getRootProps, getInputProps, isDragActive, isDragReject } = useDropzone(dropzoneConfig);
 
   // Función para eliminar archivo
   const handleRemoveFile = (index: number) => {

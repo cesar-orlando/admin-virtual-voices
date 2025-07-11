@@ -41,6 +41,7 @@ import {
   UploadFile as UploadFileIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
+  Lock as LockIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -196,9 +197,29 @@ export default function CreateTable() {
     setFields([...fields, newField]);
   };
 
+  // Normaliza el nombre del campo a formato slug
+  function normalizeFieldName(label: string): string {
+    return label
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/ñ/g, 'n')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '');
+  }
+
 const handleUpdateField = (index: number, field: Partial<TableField>) => {
   const updatedFields = [...fields];
-  updatedFields[index] = { ...updatedFields[index], ...field };
+  // Si cambia la etiqueta, actualiza el nombre automáticamente
+  if (field.label !== undefined) {
+    updatedFields[index] = {
+      ...updatedFields[index],
+      ...field,
+      name: normalizeFieldName(field.label)
+    };
+  } else {
+    updatedFields[index] = { ...updatedFields[index], ...field };
+  }
   setFields(updatedFields);
 
   // Si se actualiza el tipo a 'select', inicializa el input de opciones si no existe
@@ -300,6 +321,13 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
     reader.readAsArrayBuffer(file);
   };
 
+  // Al guardar (handleCreateTable), antes de enviar los fields al backend, genera el nombre interno:
+  const prepareFieldsForBackend = (fields: TableField[]) =>
+    fields.map(f => ({
+      ...f,
+      name: normalizeFieldName(f.label)
+    }));
+
   const handleCreateTable = async () => {
     if (!user) {
       setFormErrors({ general: 'Usuario no autenticado' });
@@ -316,7 +344,7 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
         slug: tableSlug,
         icon: tableIcon,
         description: tableDescription,
-        fields: fields,
+        fields: prepareFieldsForBackend(fields),
         isActive: true,
       };
 
@@ -404,10 +432,11 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
               fullWidth
               label="Slug (identificador)"
               value={tableSlug}
-              onChange={(e) => setTableSlug(e.target.value)}
+              InputProps={{ readOnly: true, startAdornment: <LockIcon sx={{ color: 'action.active', mr: 1 }} /> }}
               required
               error={!!formErrors.slug}
-              helperText={formErrors.slug || "Identificador único para la tabla"}
+              sx={{ background: '#f5f6fa' }}
+              helperText={formErrors.slug || "Este campo se llena automáticamente"}
             />
           </Grid>
           <Grid item xs={12} md={6}>
@@ -535,23 +564,12 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
             </Typography>
           </Box>
         ) : (
-          <Grid container spacing={2}>
+          <Grid container spacing={1}>
             {fields.map((field, index) => (
               <Grid item xs={12} key={index}>
-                <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider' }}>
-                  <Grid container spacing={2} alignItems="center">
-                    <Grid item xs={12} sm={6} md={3}>
-                      <TextField
-                        fullWidth
-                        label="Nombre del campo"
-                        value={field.name}
-                        onChange={(e) => handleUpdateField(index, { name: e.target.value.toLowerCase().replace(/\s+/g, '_') })}
-                        size="small"
-                        required
-                        helperText="Nombre interno (sin espacios)"
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={3}>
+                <Paper sx={{ p: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                  <Grid container spacing={1} alignItems="center">
+                    <Grid item xs={12} sm={6} md={7}>
                       <TextField
                         fullWidth
                         label="Etiqueta"
@@ -559,10 +577,9 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                         onChange={(e) => handleUpdateField(index, { label: e.target.value })}
                         size="small"
                         required
-                        helperText="Nombre que verá el usuario"
                       />
                     </Grid>
-                    <Grid item xs={12} sm={6} md={2}>
+                    <Grid item xs={6} sm={3} md={2}>
                       <FormControl fullWidth size="small">
                         <InputLabel>Tipo</InputLabel>
                         <Select
@@ -581,7 +598,7 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                         </Select>
                       </FormControl>
                     </Grid>
-                    <Grid item xs={6} sm={4} md={2}>
+                    <Grid item xs={3} sm={2} md={2}>
                       <FormControlLabel
                         control={
                           <Switch
@@ -590,9 +607,10 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                           />
                         }
                         label="Requerido"
+                        sx={{ ml: 0 }}
                       />
                     </Grid>
-                    <Grid item xs={6} sm={2} md={2} sx={{ textAlign: 'right' }}>
+                    <Grid item xs={3} sm={1} md={1} sx={{ textAlign: 'right' }}>
                       <IconButton
                         color="error"
                         onClick={() => handleRemoveField(index)}
@@ -602,7 +620,6 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                       </IconButton>
                     </Grid>
                   </Grid>
-
                   {/* Opciones adicionales para campos tipo select */}
                   {field.type === 'select' && (
                     <Box sx={{ mt: 2 }}>

@@ -311,11 +311,7 @@ const ToolForm: React.FC = () => {
     if (selectedTable && envValue && user) {
       const envOpt = ENV_OPTIONS.find(opt => opt.value === envValue);
       if (envOpt && envOpt.baseUrl) {
-<<<<<<< Updated upstream
-        setValue('config.endpoint', `${envOpt.baseUrl}/records/table/${user.c_name}/${selectedTable.slug}`);
-=======
         setValue('config.endpoint', `${envOpt.baseUrl}/records/bot/table/${user.companySlug}/${selectedTable.slug}`);
->>>>>>> Stashed changes
       }
     }
   }, [watch('config.environment'), selectedTable, user, setValue]);
