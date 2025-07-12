@@ -172,7 +172,21 @@ const STRING_FORMATS = [
   { value: 'url', label: 'URL' },
   { value: 'uuid', label: 'UUID' },
 ];
-
+const mapFieldType = (type: string): 'string' | 'number' | 'boolean' | 'array' => {
+  switch (type) {
+    case 'boolean':
+      return 'boolean';
+    case 'number':
+    case 'int':
+      return 'number';
+    case 'multiselect':
+      return 'array';
+    case 'text':
+    case 'select':
+    default:
+      return 'string';
+  }
+};
 const ToolForm: React.FC = () => {
   const navigate = useNavigate();
   const { toolId } = useParams();
@@ -449,18 +463,24 @@ const ToolForm: React.FC = () => {
     // Obtener estructura y mapear a parámetros
     try {
       const structure = await getTableStructure(slug, user);
-      const properties: any = {};
       const required: string[] = [];
-      (structure.fields || []).forEach((field: any) => {
-        properties[field.name] = {
-          type: field.type === 'int' ? 'number' : field.type, // Ajusta según tus tipos
+      const fields = structure.structure.fields || [];
+
+      const properties = fields.map((field: any) => {
+        const { name, type, label, defaultValue, options } = field;
+
+        return {
+          name,
+          type: mapFieldType(field.type),
           description: field.label || field.name,
-          required: !!field.required,
+          required: false,
           default: field.defaultValue,
-          enum: field.options || undefined,
+          enum: field.options || [],
         };
-        if (field.required) required.push(field.name);
       });
+
+      // Save to state — triggers useEffect
+      setParamList(properties);
       setValue('parameters', {
         type: 'object',
         properties,
