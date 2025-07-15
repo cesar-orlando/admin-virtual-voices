@@ -27,7 +27,7 @@ api.interceptors.response.use(
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       localStorage.removeItem("currentCompany");
-      window.location.href = "/login?expired=1";
+      // window.location.href = "/login?expired=1"; // Eliminado el redirect
     }
     return Promise.reject(error);
   }

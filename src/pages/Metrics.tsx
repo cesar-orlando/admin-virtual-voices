@@ -562,6 +562,8 @@ const Metrics = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { currentCompany, user } = useAuth();
   const isQuickLearning = user?.companySlug === 'quicklearning';
+  // Elimina cualquier declaración previa de isAdmin y deja solo esta:
+  const isAdmin = user?.role === 'Administrador' as any;
 
   // Estado para el ciclo seleccionado
   const [selectedCycle, setSelectedCycle] = useState(getCurrentCycle());
@@ -617,7 +619,7 @@ const Metrics = () => {
     color: m.color
   }));
 
-  if (isQuickLearning) {
+  if (isQuickLearning && isAdmin) {
     return (
       <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
         <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
@@ -771,7 +773,7 @@ const Metrics = () => {
     );
   }
 
-  // Para otras empresas, dejar mensaje de "Próximamente"
+  // Para otras empresas o si no es admin, dejar mensaje de "Próximamente"
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
       <Typography variant="h3" sx={{ fontWeight: 800, color: '#222', mb: 1 }}>

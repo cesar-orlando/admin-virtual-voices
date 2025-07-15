@@ -10,7 +10,9 @@ import {
   InputAdornment,
   useMediaQuery,
   Alert,
+  Snackbar,
 } from "@mui/material";
+import MuiAlert from "@mui/material/Alert";
 import { useAuth } from "../hooks/useAuth";
 import { useForm } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
@@ -58,8 +60,12 @@ const Login = () => {
   const isMobile = useMediaQuery("(max-width:600px)");
   const [cardVisible, setCardVisible] = useState(false);
   const location = useLocation();
-  const params = new URLSearchParams(location.search);
-  const expired = params.get("expired");
+  // Snackbar state
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: "",
+    severity: "success" as "success" | "error" | "warning",
+  });
 
   React.useEffect(() => {
     setTimeout(() => setCardVisible(true), 100); // Animación de entrada
@@ -82,21 +88,39 @@ const Login = () => {
   const watchedCompanySlug = watch("companySlug");
 
   const handleLogin = async (form: LoginFormsInputs) => {
-    setLoading(true);
+    // Limpiar mensajes previos
+    setSnackbar(s => ({ ...s, open: false }));
     setServerError("");
-    
+    setLoading(true);
     try {
       const loginData: LoginRequest = {
         email: form.email,
         password: form.password,
         companySlug: form.companySlug
       };
-      
       await loginUser(loginData);
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Credenciales incorrectas o error al iniciar sesión.";
+    } catch (error: any) {
+      let errorMessage = "Credenciales incorrectas, por favor verifica tus datos.";
+      // Si es un error de axios con response y data.message
+      if (error && error.response && error.response.data && error.response.data.message) {
+        if (error.response.data.message === "Invalid credentials") {
+          errorMessage = "Credenciales incorrectas, por favor verifica tus datos.";
+        } else if (error.response.data.message.length > 0 && error.response.data.message.length < 100) {
+          errorMessage = error.response.data.message;
+        }
+      } else if (error instanceof Error && error.message) {
+        if (error.message === "Invalid credentials") {
+          errorMessage = "Credenciales incorrectas, por favor verifica tus datos.";
+        } else if (error.message.length > 0 && error.message.length < 100) {
+          errorMessage = error.message;
+        }
+      }
       setServerError(errorMessage);
-      toast.error(errorMessage);
+      setSnackbar({
+        open: true,
+        message: errorMessage,
+        severity: "error",
+      });
     } finally {
       setLoading(false);
     }
@@ -184,13 +208,6 @@ const Login = () => {
           </Box>
 
           {/* Alerta de sesión expirada */}
-          {expired && (
-            <Box sx={{ mb: 2 }}>
-              <Alert severity="warning">
-                Tu sesión ha expirado. Por favor, inicia sesión de nuevo.
-              </Alert>
-            </Box>
-          )}
 
           <form onSubmit={handleSubmit(handleLogin)} noValidate autoComplete="off">
             <TextField
@@ -292,9 +309,10 @@ const Login = () => {
               }}
             />
             {serverError && (
-              <Typography color="error" sx={{ mt: 1, mb: 1, textAlign: "center" }} role="alert" aria-live="assertive">
-                {serverError}
-              </Typography>
+              // <Typography color="error" sx={{ mt: 1, mb: 1, textAlign: "center" }} role="alert" aria-live="assertive">
+              //   {serverError}
+              // </Typography>
+              null
             )}
             <Button
               type="submit"
@@ -349,6 +367,37 @@ const Login = () => {
           © {new Date().getFullYear()} Virtual Voices. Todos los derechos reservados.
         </Box>
       </Box>
+      {/* Snackbar para errores y sesión expirada */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <MuiAlert
+          elevation={6}
+          variant="filled"
+          onClose={() => setSnackbar({ ...snackbar, open: false })}
+          severity={snackbar.severity}
+          sx={{
+            backgroundColor:
+              snackbar.severity === 'success'
+                ? '#8B5CF6'
+                : snackbar.severity === 'warning'
+                ? '#F59E42'
+                : undefined,
+            color: '#fff',
+            fontWeight: 600,
+            fontSize: 16,
+            letterSpacing: 0.5,
+            minWidth: 320,
+            justifyContent: 'center',
+            textAlign: 'center',
+          }}
+        >
+          {snackbar.message}
+        </MuiAlert>
+      </Snackbar>
     </Box>
   );
 } 
