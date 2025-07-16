@@ -1110,7 +1110,9 @@ const QuickLearningDashboard: React.FC = () => {
                     {chatHistoryLocal.length === 0 ? (
                       <Typography color="text.secondary">No hay mensajes</Typography>
                     ) : (
-                      [...chatHistoryLocal].reverse().map((msg, idx) => {
+                      [...chatHistoryLocal]
+                        .sort((a, b) => new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime())
+                        .map((msg, idx) => {
                         const body = msg.body || '';
                         const mediaUrl = msg.mediaUrl || '';
                         let content = null;
