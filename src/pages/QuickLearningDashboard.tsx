@@ -1223,7 +1223,7 @@ const QuickLearningDashboard: React.FC = () => {
                 )}
                 {/* Input de mensaje o botón plantilla según antigüedad del último mensaje */}
                 {selectedProspect && (
-                  isLastMessageOlderThan24h ? (
+                  !isLastMessageOlderThan24h ? (
                     <Box sx={{ mt: 2 }}>
                       <Button
                         variant="contained"
@@ -1553,13 +1553,22 @@ const QuickLearningDashboard: React.FC = () => {
         templates={templates}
         name={selectedProspect?.data?.nombre || selectedProspect?.data?.name || 'amigo/a'}
         onSend={async (templateId: string, preview: string) => {
-          if (!selectedProspect?.phone) return;
+          const phone = selectedProspect?.data?.telefono || selectedProspect?.phone;
+          const nombre = selectedProspect?.data?.nombre || selectedProspect?.data?.name || 'amigo/a';
+          console.log('DEBUG: Enviando plantilla', { phone, templateId, variables: [nombre] });
+          if (!phone) {
+            alert('No hay teléfono para enviar la plantilla');
+            return;
+          }
           try {
-            await sendTemplate({ phone: selectedProspect.phone, templateId, variables: [selectedProspect?.data?.nombre || selectedProspect?.data?.name || 'amigo/a'] });
+            const resp = await sendTemplate({ phone, templateId, variables: [nombre] });
+            console.log('DEBUG: Respuesta de sendTemplate', resp);
+            alert('Plantilla enviada correctamente');
             setTemplateModalOpen(false);
             selectProspect(selectedProspect); // recarga el chat
-          } catch (error) {
+          } catch (error: any) {
             console.error('Error al enviar plantilla:', error);
+            alert('Error al enviar plantilla: ' + (error?.message || error));
           }
         }}
       />
@@ -1608,13 +1617,22 @@ const QuickLearningDashboard: React.FC = () => {
                   boxShadow: '0 4px 16px 0 rgba(123,97,255,0.10)'
                 }}
                 onClick={async () => {
-                  if (!selectedProspect?.phone) return;
+                  const phone = selectedProspect?.data?.telefono || selectedProspect?.phone;
+                  const nombre = selectedProspect?.data?.nombre || selectedProspect?.data?.name || 'amigo/a';
+                  console.log('DEBUG: Enviando plantilla de pago', { phone, templateId: method.templateId, variables: [nombre] });
+                  if (!phone) {
+                    alert('No hay teléfono para enviar la plantilla de pago');
+                    return;
+                  }
                   try {
-                    await sendTemplate({ phone: selectedProspect.phone, templateId: method.templateId, variables: [selectedProspect?.data?.nombre || selectedProspect?.data?.name || 'amigo/a'] });
+                    const resp = await sendTemplate({ phone, templateId: method.templateId, variables: [nombre] });
+                    console.log('DEBUG: Respuesta de sendTemplate (pago)', resp);
+                    alert('Plantilla de pago enviada correctamente');
                     setPaymentModalOpen(false);
                     selectProspect(selectedProspect);
-                  } catch (error) {
+                  } catch (error: any) {
                     console.error('Error al enviar método de pago:', error);
+                    alert('Error al enviar plantilla de pago: ' + (error?.message || error));
                   }
                 }}
               >
