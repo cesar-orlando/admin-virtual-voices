@@ -68,6 +68,7 @@ import type { TwilioSendRequest, TwilioTemplateRequest } from '../types/quicklea
 import api from '../api/axios';
 import { fetchCompanyUsers } from '../api/servicios';
 import { updateRecord } from '../api/servicios';
+import { useDebounce } from '../hooks/useDebounce';
 // import TemplateModal from '../../components/Record/';
 
 // TemplateModal local para plantillas (basado en ProspectDrawer)
@@ -202,6 +203,12 @@ const QuickLearningDashboard: React.FC = () => {
   // State para filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
+  // Estados para búsqueda global
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isGlobalSearch, setIsGlobalSearch] = useState(false);
+  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   const [messageInputValue, setMessageInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -338,39 +345,6 @@ const QuickLearningDashboard: React.FC = () => {
     setMessageInputValue('');
   }, [selectedProspect]);
 
-  // Agregar mensajes de prueba para verificar el formato de fechas
-  useEffect(() => {
-    if (chatHistoryLocal.length === 0 && selectedProspect) {
-      const testMessages = [
-        {
-          _id: 'test-1',
-          body: 'Mensaje de prueba - Hace 5 minutos',
-          direction: 'inbound' as const,
-          dateCreated: new Date(Date.now() - 5 * 60 * 1000).toISOString()
-        },
-        {
-          _id: 'test-2',
-          body: 'Mensaje de prueba - Ayer',
-          direction: 'outbound' as const,
-          dateCreated: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
-        },
-        {
-          _id: 'test-3',
-          body: 'Mensaje de prueba - Hace 3 días',
-          direction: 'inbound' as const,
-          dateCreated: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
-        },
-        {
-          _id: 'test-4',
-          body: 'Mensaje de prueba - Hace 1 semana',
-          direction: 'outbound' as const,
-          dateCreated: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
-        }
-      ];
-      setChatHistoryLocal(testMessages);
-    }
-  }, [chatHistoryLocal.length, selectedProspect]);
-
   useEffect(() => {
     loadProspects();
   }, [loadProspects]);
@@ -403,7 +377,7 @@ const QuickLearningDashboard: React.FC = () => {
   // Infinite scroll para la lista de prospectos
   useEffect(() => {
     const prospectsContainer = document.querySelector('[data-prospects-container]');
-    if (!prospectsContainer) return;
+    if (!prospectsContainer || isGlobalSearch) return;
 
     const handleProspectsScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = prospectsContainer as HTMLElement;
@@ -416,7 +390,7 @@ const QuickLearningDashboard: React.FC = () => {
 
     prospectsContainer.addEventListener('scroll', handleProspectsScroll);
     return () => prospectsContainer.removeEventListener('scroll', handleProspectsScroll);
-  }, [hasMoreProspects, isLoadingMoreProspects, loadMoreProspects]);
+  }, [hasMoreProspects, isLoadingMoreProspects, loadMoreProspects, isGlobalSearch]);
 
   // Handler optimizado para el input
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -464,6 +438,92 @@ const QuickLearningDashboard: React.FC = () => {
       p.data?.telefono?.includes(searchTerm)
     );
   }, [prospects, searchTerm]);
+
+  // Función para búsqueda global en el backend
+  const performGlobalSearch = useCallback(async (query: string) => {
+    console.log('DEBUG: performGlobalSearch called with query:', query);
+    
+    if (!query.trim()) {
+      console.log('DEBUG: Empty query, clearing search');
+      setIsGlobalSearch(false);
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    setIsGlobalSearch(true);
+    
+    try {
+      // Búsqueda local inteligente en todos los prospectos
+      const searchTerm = query.toLowerCase().trim();
+      
+      // Buscar en múltiples campos de cada prospecto
+      const localResults = prospects.filter(prospect => {
+        const nombre = prospect.data?.nombre?.toLowerCase() || '';
+        const telefono = prospect.data?.telefono?.toLowerCase() || '';
+        const email = prospect.data?.email?.toLowerCase() || '';
+        const ciudad = prospect.data?.ciudad?.toLowerCase() || '';
+        const ultimo_mensaje = prospect.data?.ultimo_mensaje?.toLowerCase() || '';
+        
+        // Manejar asesor que puede ser objeto o string
+        let asesor = '';
+        if (typeof prospect.data?.asesor === 'string') {
+          asesor = prospect.data.asesor.toLowerCase();
+        } else if (prospect.data?.asesor && typeof prospect.data.asesor === 'object') {
+          asesor = (prospect.data.asesor.nombre || prospect.data.asesor.name || prospect.data.asesor.email || '').toLowerCase();
+        }
+        
+        const curso = prospect.data?.curso?.toLowerCase() || '';
+        const campana = prospect.data?.campana?.toLowerCase() || '';
+        const medio = prospect.data?.medio?.toLowerCase() || '';
+        const comentario = prospect.data?.comentario?.toLowerCase() || '';
+        
+        // Buscar en todos los campos
+        return nombre.includes(searchTerm) ||
+               telefono.includes(searchTerm) ||
+               email.includes(searchTerm) ||
+               ciudad.includes(searchTerm) ||
+               ultimo_mensaje.includes(searchTerm) ||
+               asesor.includes(searchTerm) ||
+               curso.includes(searchTerm) ||
+               campana.includes(searchTerm) ||
+               medio.includes(searchTerm) ||
+               comentario.includes(searchTerm) ||
+               prospect.tableSlug?.toLowerCase().includes(searchTerm);
+      });
+      
+      console.log('DEBUG: Local search results:', localResults);
+      setSearchResults(localResults);
+      
+      // Si no hay resultados y hay más prospectos disponibles, cargar más
+      if (localResults.length === 0 && hasMoreProspects && !isLoadingMoreProspects) {
+        console.log('DEBUG: No results found, loading more prospects for search');
+        // Cargar más prospectos para la búsqueda
+        await loadMoreProspects();
+      }
+      
+    } catch (error) {
+      console.error('DEBUG: Error en búsqueda:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [prospects, hasMoreProspects, isLoadingMoreProspects, loadMoreProspects]);
+
+  // useEffect para búsqueda global cuando cambia el término debounced
+  useEffect(() => {
+    console.log('DEBUG: useEffect debouncedSearchTerm changed:', debouncedSearchTerm);
+    console.log('DEBUG: isGlobalSearch current state:', isGlobalSearch);
+    
+    if (debouncedSearchTerm.trim()) {
+      console.log('DEBUG: Calling performGlobalSearch with:', debouncedSearchTerm);
+      performGlobalSearch(debouncedSearchTerm);
+    } else {
+      console.log('DEBUG: Clearing global search');
+      setIsGlobalSearch(false);
+      setSearchResults([]);
+    }
+  }, [debouncedSearchTerm, performGlobalSearch]);
 
   // Handlers para modales
   const handleSendMessage = useCallback(async () => {
@@ -796,18 +856,62 @@ const QuickLearningDashboard: React.FC = () => {
         {/* Lista de prospectos */}
         <Card sx={{ width: 340, minWidth: 340, maxWidth: 340, height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, boxShadow: 2, borderRadius: 2, bgcolor: theme.palette.background.paper, ml: 0, mr: 0 }}>
           <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
-            <TextField size="small" placeholder="Buscar prospecto..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} InputProps={{ startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} /> }} sx={{ flex: 1, fontSize: 15, bgcolor: theme.palette.background.default, borderRadius: 2 }} inputProps={{ style: { color: theme.palette.text.primary } }} />
-            <IconButton onClick={() => loadProspects()} disabled={isLoadingProspects}><RefreshIcon fontSize="small" sx={{ color: theme.palette.text.secondary }} /></IconButton>
+            <TextField 
+              size="small" 
+              placeholder="Buscar prospecto..." 
+              value={searchTerm} 
+              onChange={e => {
+                setSearchTerm(e.target.value);
+                if (!e.target.value.trim()) {
+                  setIsGlobalSearch(false);
+                  setSearchResults([]);
+                }
+              }}
+              InputProps={{ 
+                startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />,
+                endAdornment: isGlobalSearch && (
+                  <Chip 
+                    label="Búsqueda global" 
+                    size="small" 
+                    color="primary" 
+                    variant="outlined"
+                    sx={{ mr: 1, fontSize: '0.7rem', height: 20 }}
+                  />
+                )
+              }} 
+              sx={{ flex: 1, fontSize: 15, bgcolor: theme.palette.background.default, borderRadius: 2 }} 
+              inputProps={{ style: { color: theme.palette.text.primary } }} 
+            />
+            <IconButton onClick={() => {
+              loadProspects();
+              setSearchTerm('');
+              setIsGlobalSearch(false);
+              setSearchResults([]);
+            }} disabled={isLoadingProspects}>
+              <RefreshIcon fontSize="small" sx={{ color: theme.palette.text.secondary }} />
+            </IconButton>
           </Box>
           <Box data-prospects-container sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 0.5, bgcolor: theme.palette.background.paper }}>
             {errorProspects && <Alert severity="error">{errorProspects}</Alert>}
             {isLoadingProspects ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 120 }}><CircularProgress size={28} /></Box>
-            ) : prospects.length === 0 ? (
-              <Box sx={{ textAlign: 'center', color: 'text.secondary', mt: 2 }}><WhatsAppIcon sx={{ fontSize: 32, mb: 1, color: theme.palette.text.secondary }} /><Typography fontSize={15}>No hay prospectos</Typography></Box>
+            ) : isSearching ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 120 }}>
+                <CircularProgress size={28} />
+                <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                  Buscando...
+                </Typography>
+              </Box>
+            ) : (isGlobalSearch ? searchResults : filteredProspects).length === 0 ? (
+              <Box sx={{ textAlign: 'center', color: 'text.secondary', mt: 2 }}>
+                <WhatsAppIcon sx={{ fontSize: 32, mb: 1, color: theme.palette.text.secondary }} />
+                <Typography fontSize={15}>
+                  {isGlobalSearch ? 'No se encontraron prospectos' : 'No hay prospectos'}
+                </Typography>
+              </Box>
             ) : (
               <List>
-                {filteredProspects.map(prospect => (
+                {(isGlobalSearch ? searchResults : filteredProspects).map(prospect => (
                   <ListItem
                     key={prospect._id}
                     button
@@ -911,7 +1015,7 @@ const QuickLearningDashboard: React.FC = () => {
                 ))}
                 
                 {/* Indicador de carga para infinite scroll */}
-                {isLoadingMoreProspects && (
+                {isLoadingMoreProspects && !isGlobalSearch && (
                   <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 2 }}>
                     <CircularProgress size={24} />
                     <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
@@ -921,7 +1025,7 @@ const QuickLearningDashboard: React.FC = () => {
                 )}
                 
                 {/* Indicador de fin de lista */}
-                {!hasMoreProspects && prospects.length > 0 && (
+                {!hasMoreProspects && prospects.length > 0 && !isGlobalSearch && (
                   <Box sx={{ textAlign: 'center', py: 2 }}>
                     <Typography variant="body2" color="text.secondary">
                       No hay más prospectos para cargar
@@ -1006,7 +1110,7 @@ const QuickLearningDashboard: React.FC = () => {
                     {chatHistoryLocal.length === 0 ? (
                       <Typography color="text.secondary">No hay mensajes</Typography>
                     ) : (
-                      chatHistoryLocal.map((msg, idx) => {
+                      [...chatHistoryLocal].reverse().map((msg, idx) => {
                         const body = msg.body || '';
                         const mediaUrl = msg.mediaUrl || '';
                         let content = null;

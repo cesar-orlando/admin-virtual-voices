@@ -72,7 +72,6 @@ interface UseQuickLearningTwilioReturn {
 }
 
 export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
-  console.log('useQuickLearningTwilio - Hook initialized')
   const [status, setStatus] = useState<TwilioStatus | null>(null);
   const [history, setHistory] = useState<TwilioHistoryResponse | null>(null);
   const [activeChats, setActiveChats] = useState<QuickLearningChat[]>([]);
@@ -415,7 +414,7 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
           role = user.role;
         }
       }
-      const response = await getQuickLearningProspects(cursor, 20, role, asesorId);
+      const response = await getQuickLearningProspects(cursor, 200, role, asesorId);
       
       // El backend retorna { data: { pagination, usuarios }, lastMessageDate }
       let data = response.data || response; // Fallback para compatibilidad
