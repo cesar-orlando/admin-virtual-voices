@@ -1223,7 +1223,7 @@ const QuickLearningDashboard: React.FC = () => {
                 )}
                 {/* Input de mensaje o botón plantilla según antigüedad del último mensaje */}
                 {selectedProspect && (
-                  !isLastMessageOlderThan24h ? (
+                  isLastMessageOlderThan24h ? (
                     <Box sx={{ mt: 2 }}>
                       <Button
                         variant="contained"
