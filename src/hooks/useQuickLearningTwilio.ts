@@ -392,9 +392,9 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
         setUnreadMessages(prev => new Set([...prev, formattedPhone]));
       }
       
-      // Si es el chat actual, actualizar el historial inmediatamente
+      // Si es el chat actual, actualizar el historial inmediatamente (al principio)
       if (selectedProspect?.data?.telefono === formattedPhone) {
-        setChatHistory(prev => [...prev, {
+        setChatHistory(prev => [{
           _id: message.twilioSid || `temp_${Date.now()}`,
           body: message.body,
           direction: message.direction,
@@ -402,10 +402,10 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
           messageType: message.messageType,
           dateCreated: notificationData.timestamp,
           mediaUrl: message.mediaUrl || null
-        }]);
+        }, ...prev]);
       }
       
-      // Actualizar el último mensaje en la lista de prospectos
+      // Actualizar el último mensaje en la lista de prospectos (opcional, ya que recargamos)
       setProspects(prev => prev.map(prospect => {
         const prospectPhone = formatPhoneNumber(prospect.data?.telefono || '');
         if (prospectPhone === formattedPhone) {
@@ -420,6 +420,9 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
         }
         return prospect;
       }));
+
+      // Recargar la lista de prospectos para reflejar el nuevo orden
+      loadProspects();
     });
 
     setSocket(socketInstance);
