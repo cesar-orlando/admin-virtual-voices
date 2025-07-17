@@ -103,7 +103,23 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
   const [lastMessageDate, setLastMessageDate] = useState<string | null>(null);
 
   // Socket state para mensajes no leídos
-  const [unreadMessages, setUnreadMessages] = useState<Set<string>>(new Set());
+  const [unreadMessages, setUnreadMessages] = useState<Set<string>>(() => {
+    // Restaurar desde localStorage al montar
+    const saved = localStorage.getItem('unreadMessages');
+    if (saved) {
+      try {
+        return new Set(JSON.parse(saved));
+      } catch {
+        return new Set();
+      }
+    }
+    return new Set();
+  });
+
+  // Guardar unreadMessages en localStorage cada vez que cambie
+  useEffect(() => {
+    localStorage.setItem('unreadMessages', JSON.stringify(Array.from(unreadMessages)));
+  }, [unreadMessages]);
 
   // Socket instance
   const [socket, setSocket] = useState<any>(null);
