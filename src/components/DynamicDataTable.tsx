@@ -114,6 +114,9 @@ export default function DynamicDataTable({
 
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
 
+  // Add this new state for local filtering
+  const [localFilteredRecords, setLocalFilteredRecords] = useState<DynamicRecord[]>([]);
+
   useEffect(() => {
     // Identificar los campos de fecha disponibles para filtrar
     const availableDateFields = table.fields
@@ -130,6 +133,8 @@ export default function DynamicDataTable({
     }
   }, [table.slug, page, rowsPerPage, refreshTrigger, activeFilters]); // Recargar si los filtros cambian
 
+  // Comment out or remove this useEffect that calls backend search
+  /*
   useEffect(() => {
     if (debouncedSearchQuery) {
       handleSearch(debouncedSearchQuery);
@@ -137,6 +142,31 @@ export default function DynamicDataTable({
       loadRecords();
     }
   }, [debouncedSearchQuery]);
+  */
+
+  // Keep only this useEffect for local search across all fields
+  useEffect(() => {
+    if (debouncedSearchQuery) {
+      // Local search across all fields
+      const filtered = records.filter(record => {
+        if (!debouncedSearchQuery.trim()) return true;
+        
+        const searchLower = debouncedSearchQuery.toLowerCase();
+        
+        // Search in all record data values
+        return Object.values(record.data).some(value => {
+          if (value === null || value === undefined) return false;
+          return String(value).toLowerCase().includes(searchLower);
+        });
+      });
+      
+      setLocalFilteredRecords(filtered);
+      setTotalRecords(filtered.length);
+    } else {
+      setLocalFilteredRecords(records);
+      setTotalRecords(records.length);
+    }
+  }, [debouncedSearchQuery, records]);
 
   const loadRecords = async () => {
     if (!user) return;
@@ -209,11 +239,11 @@ export default function DynamicDataTable({
     if (!user) return;
 
     try {
-      const blob = await exportRecords(table.slug, user, 'json');
+      const blob = await exportRecords(table.slug, user, 'CSV');
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${table.slug}-records-${Date.now()}.json`;
+      a.download = `${table.slug}-records-${Date.now()}.CSV`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -275,7 +305,32 @@ export default function DynamicDataTable({
   const handleGalleryPrev = () => setGalleryIndex((prev) => Math.max(prev - 1, 0));
   const handleGalleryNext = () => setGalleryIndex((prev) => Math.min(prev + 1, selectedFiles.length - 1));
 
+  // Add this helper function at the top of your component or in a utils file
+  const normalizeText = (text: string): string => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, ''); // Remove accents
+  };
+
+  // Update your formatFieldValue function
   const formatFieldValue = (value: any, field: TableField, isFirstColumn = false): { content: string | JSX.Element; tooltip?: string } => {
+    // Handle "numero" field formatting (ignoring accents and caps)
+    if (normalizeText(field.name).includes('numero') || normalizeText(field.label).includes('numero')) {
+      const numero = String(value || '').replace(/\D/g, ''); // Remove non-digits
+    
+      // Format as "521 6441 59 34 90"
+      if (numero.length >= 12) {
+        const formatted = `${numero.slice(0, 3)} ${numero.slice(3, 7)} ${numero.slice(7, 9)} ${numero.slice(9, 11)} ${numero.slice(11, 13)}`;
+        return { 
+          content: formatted,
+          tooltip: formatted
+        };
+      } else {
+        return { content: numero || '-' };
+      }
+    }
+
     // Si el campo es 'asesor', renderiza solo el campo 'name' si existe
     if (field.name === 'asesor') {
       let name = '';
@@ -354,16 +409,17 @@ export default function DynamicDataTable({
       }
       case 'boolean':
         return { content: value ? 'Sí' : 'No' };
-      case 'currency':
+      case 'currency': {
         const formattedCurrency = new Intl.NumberFormat('es-MX', {
           style: 'currency',
           currency: 'MXN'
         }).format(value);
         return { content: formattedCurrency };
-      case 'number':
-
+      }
+      case 'number': {
         const formattedNumber = new Intl.NumberFormat('es-MX').format(value);
         return { content: formattedNumber };
+      }
       case 'file': {
         let files: any[] = [];
         if (Array.isArray(value)) {
@@ -460,7 +516,8 @@ export default function DynamicDataTable({
   // Antes del renderizado de las filas, ordena los records si sortBy está definido y es de tipo sortable
   const sortableTypes = ['number', 'currency', 'date'];
   const sortableField = table.fields.find(f => f.name === sortBy && sortableTypes.includes(f.type));
-  let sortedRecords = [...records];
+  let sortedRecords = searchQuery ? localFilteredRecords : [...records];
+
   if (sortableField && sortBy) {
     sortedRecords.sort((a, b) => {
       let aValue = a.data[sortBy];
@@ -485,6 +542,9 @@ export default function DynamicDataTable({
     if (!visibleFields) return table.fields;
     return table.fields.filter(f => visibleFields.includes(f.name));
   }, [table.fields, visibleFields]);
+
+  // Use sortedRecords directly (it already includes the search filtering)
+  const displayRecords = sortedRecords;
 
   if (loading && records.length === 0) {
     return (
@@ -673,12 +733,12 @@ export default function DynamicDataTable({
                 Array.from(new Array(rowsPerPage)).map((_, index) => (
                   <TableRow key={index}>
                     <TableCell colSpan={displayedFields.length + 2}>
-                      <Skeleton variant="text" height={40} />
-                    </TableCell>
-                  </TableRow>
+          <Skeleton variant="text" height={40} />
+        </TableCell>
+      </TableRow>
                 ))
               ) : (
-                sortedRecords.map((record) => (
+                displayRecords.map((record) => (
                   <TableRow hover role="checkbox" tabIndex={-1} key={record._id}>
                     {displayedFields.map((field, idx) => {
                       const fieldData = formatFieldValue(record.data[field.name], field, idx === 0);
@@ -938,4 +998,4 @@ const handleOpenFile = (fileInfo: { name: string; url: string; size?: number }) 
   if (fileInfo.url) {
     window.open(fileInfo.url, '_blank');
   }
-}; 
+};
