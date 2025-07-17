@@ -387,10 +387,12 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
       // Formatear el teléfono para hacer match
       const formattedPhone = formatPhoneNumber(phone);
       
-      // Agregar a mensajes no leídos si no es el chat actual
-      if (selectedProspect?.data?.telefono !== formattedPhone) {
-        setUnreadMessages(prev => new Set([...prev, formattedPhone]));
-      }
+      // Acumular todos los teléfonos con mensajes no leídos
+      setUnreadMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.add(formattedPhone);
+        return newSet;
+      });
       
       // Si es el chat actual, actualizar el historial inmediatamente (al principio)
       if (selectedProspect?.data?.telefono === formattedPhone) {
