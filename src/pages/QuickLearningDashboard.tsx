@@ -180,13 +180,12 @@ const QuickLearningDashboard: React.FC = () => {
     errorProspects,
     errorChatHistory,
     hasMoreProspects,
+    unreadMessages,
+    markMessageAsRead,
   } = useQuickLearningTwilio();
 
   // State para modales y formularios
   const [sendMessageDialog, setSendMessageDialog] = useState(false);
-  const [sendTemplateDialog, setSendTemplateDialog] = useState(false);
-  const [chatDetailsDialog, setChatDetailsDialog] = useState(false);
-  const [selectedChat, setSelectedChat] = useState<string | null>(null);
   
   // State para formularios
   const [messageForm, setMessageForm] = useState<TwilioSendRequest>({
@@ -348,6 +347,39 @@ const QuickLearningDashboard: React.FC = () => {
   useEffect(() => {
     loadProspects();
   }, [loadProspects]);
+
+  // Limpiar mensajes no leídos al desmontar el componente
+  useEffect(() => {
+    return () => {
+      // Cleanup: limpiar todos los mensajes no leídos al salir
+      unreadMessages.forEach(phone => {
+        markMessageAsRead(phone);
+      });
+    };
+  }, [unreadMessages, markMessageAsRead]);
+
+  // Mostrar notificación cuando llega un nuevo mensaje
+  useEffect(() => {
+    if (unreadMessages.size > 0) {
+      // Encontrar el prospecto correspondiente al último mensaje no leído
+      const lastUnreadPhone = Array.from(unreadMessages).pop();
+      if (lastUnreadPhone) {
+        const prospect = prospects.find(p => formatPhoneNumber(p.data?.telefono || '') === lastUnreadPhone);
+        if (prospect && selectedProspect?._id !== prospect._id) {
+          setNewMessageNotification({
+            show: true,
+            phone: lastUnreadPhone,
+            message: prospect.data?.ultimo_mensaje || 'Nuevo mensaje'
+          });
+          
+          // Ocultar notificación después de 5 segundos
+          setTimeout(() => {
+            setNewMessageNotification(prev => ({ ...prev, show: false }));
+          }, 5000);
+        }
+      }
+    }
+  }, [unreadMessages, prospects, selectedProspect, formatPhoneNumber]);
 
   // Auto-scroll al último mensaje
   useEffect(() => {
@@ -536,22 +568,6 @@ const QuickLearningDashboard: React.FC = () => {
     }
   }, [sendMessage, messageForm]);
 
-  const handleSendTemplate = useCallback(async () => {
-    try {
-      await sendTemplate(templateForm);
-      setSendTemplateDialog(false);
-      setTemplateForm({ phone: '', templateId: '', variables: [] });
-    } catch (err) {
-      console.error('Error sending template:', err);
-    }
-  }, [sendTemplate, templateForm]);
-
-  const handleChatClick = useCallback(async (phone: string) => {
-    setSelectedChat(phone);
-    await loadChatByPhone(phone);
-    setChatDetailsDialog(true);
-  }, [loadChatByPhone]);
-
   // Filtrar chats (memoizado para evitar recálculos)
   const filteredChats = React.useMemo(() => {
     return activeChats.filter(chat => {
@@ -565,49 +581,6 @@ const QuickLearningDashboard: React.FC = () => {
     });
   }, [activeChats, searchTerm, statusFilter]);
 
-  // MessageInput definition:
-  type MessageInputProps = {
-    value: string;
-    setValue: Dispatch<SetStateAction<string>>;
-    onSend: (msg: string) => void;
-    disabled: boolean;
-  };
-  const MessageInput = memo(function MessageInput({ value, setValue, onSend, disabled }: MessageInputProps) {
-    const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => setValue(e.target.value), [setValue]);
-    const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        if (value.trim()) onSend(value.trim());
-      }
-    }, [onSend, value]);
-    const handleSend = useCallback(() => {
-      if (value.trim()) onSend(value.trim());
-    }, [onSend, value]);
-    return (
-      <Box sx={{ display: 'flex', alignItems: 'center', p: 1.5, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', gap: 1 }}>
-        <TextField
-          fullWidth
-          size="small"
-          placeholder="Escribe un mensaje..."
-          value={value}
-          onChange={handleChange}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          sx={{ borderRadius: 2, fontSize: 16, bgcolor: 'background.default' }}
-          inputProps={{ maxLength: 1500, style: { fontSize: '16px' } }}
-        />
-        <Button
-          variant="contained"
-          color="success"
-          onClick={handleSend}
-          disabled={disabled || !value.trim()}
-          sx={{ minWidth: 48, minHeight: 48, borderRadius: 2, fontWeight: 700, fontSize: 18, boxShadow: 1 }}
-        >
-          <SendIcon />
-        </Button>
-      </Box>
-    );
-  });
 
   // Cuando se abre la info del cliente, inicializa los datos editables
   const handleOpenClientInfo = async () => {
@@ -647,6 +620,7 @@ const QuickLearningDashboard: React.FC = () => {
         initialData.campana = selectedProspect.data.campana || '';
         initialData.medio = selectedProspect.data.medio || '';
         initialData.comentario = selectedProspect.data.comentario || '';
+        initialData.consecutivo = selectedProspect.data.consecutivo || '';
 
 
         setEditProspectData(initialData);
@@ -805,6 +779,13 @@ const QuickLearningDashboard: React.FC = () => {
   // Estado para el modal de pago
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
 
+  // Estado para notificación de nuevo mensaje
+  const [newMessageNotification, setNewMessageNotification] = useState<{
+    show: boolean;
+    phone: string;
+    message: string;
+  }>({ show: false, phone: '', message: '' });
+
   // Métodos de pago igual que en ProspectDrawer
   const paymentMethods = [
     {
@@ -817,7 +798,30 @@ const QuickLearningDashboard: React.FC = () => {
   ];
 
   return (
-    <Box sx={{ width: '90vw', height: '85vh', overflow: 'hidden', bgcolor: theme.palette.background.default, display: 'flex', flexDirection: 'column', borderRadius: 2, boxShadow: 3 }}>
+    <Box sx={{ 
+      width: '90vw', 
+      height: '85vh', 
+      overflow: 'hidden', 
+      bgcolor: theme.palette.background.default, 
+      display: 'flex', 
+      flexDirection: 'column', 
+      borderRadius: 2, 
+      boxShadow: 3,
+      '@keyframes pulse': {
+        '0%': {
+          opacity: 1,
+          transform: 'scale(1)'
+        },
+        '50%': {
+          opacity: 0.7,
+          transform: 'scale(1.1)'
+        },
+        '100%': {
+          opacity: 1,
+          transform: 'scale(1)'
+        }
+      }
+    }}>
       {/* Header y stats */}
       <Box sx={{ flexShrink: 0 }}>
         {/* Header */}
@@ -827,9 +831,27 @@ const QuickLearningDashboard: React.FC = () => {
               <WhatsAppIcon fontSize="large" />
             </Avatar>
             <Box>
-              <Typography variant="h6" fontWeight={700} color="primary" sx={{ letterSpacing: 1 }}>
-                Quick Learning WhatsApp
-              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Typography variant="h6" fontWeight={700} color="primary" sx={{ letterSpacing: 1 }}>
+                  Quick Learning WhatsApp
+                </Typography>
+                {unreadMessages.size > 0 && (
+                  <Badge
+                    badgeContent={unreadMessages.size}
+                    color="error"
+                    sx={{
+                      '& .MuiBadge-badge': {
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        minWidth: 20,
+                        height: 20
+                      }
+                    }}
+                  >
+                    <Box />
+                  </Badge>
+                )}
+              </Box>
               <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 Dashboard de NatalIA - IA Conversacional
               </Typography>
@@ -916,7 +938,14 @@ const QuickLearningDashboard: React.FC = () => {
                     key={prospect._id}
                     button
                     selected={selectedProspect?._id === prospect._id}
-                    onClick={() => selectProspect(prospect)}
+                    onClick={() => {
+                      selectProspect(prospect);
+                      // Marcar mensajes como leídos inmediatamente al hacer clic
+                      const phone = prospect.data?.telefono || prospect.phone;
+                      if (phone) {
+                        markMessageAsRead(phone);
+                      }
+                    }}
                     sx={{
                       borderRadius: 2,
                       mb: 0.5,
@@ -933,23 +962,62 @@ const QuickLearningDashboard: React.FC = () => {
                     }}
                   >
                     <ListItemAvatar>
-                      <Avatar sx={{ bgcolor: theme.palette.success.main, width: 32, height: 32, color: theme.palette.getContrastText(theme.palette.success.main) }}>
-                        <PersonIcon fontSize="small" />
-                      </Avatar>
+                      <Badge
+                        overlap="circular"
+                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                        badgeContent={
+                          unreadMessages.has(formatPhoneNumber(prospect.data?.telefono || '')) ? (
+                            <Box
+                              sx={{
+                                width: 12,
+                                height: 12,
+                                borderRadius: '50%',
+                                bgcolor: theme.palette.success.main,
+                                border: `2px solid ${theme.palette.background.paper}`,
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                              }}
+                            />
+                          ) : null
+                        }
+                      >
+                        <Avatar sx={{ bgcolor: theme.palette.success.main, width: 32, height: 32, color: theme.palette.getContrastText(theme.palette.success.main) }}>
+                          <PersonIcon fontSize="small" />
+                        </Avatar>
+                      </Badge>
                     </ListItemAvatar>
                     <ListItemText
                       primary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography
                             component="span"
-                            fontWeight={700}
+                            fontWeight={unreadMessages.has(formatPhoneNumber(prospect.data?.telefono || '')) ? 800 : 700}
                             fontSize={15}
                             noWrap
-                            color={theme.palette.text.primary}
-                            sx={{ flex: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                            color={unreadMessages.has(formatPhoneNumber(prospect.data?.telefono || '')) ? theme.palette.primary.main : theme.palette.text.primary}
+                            sx={{ 
+                              flex: 1, 
+                              textOverflow: 'ellipsis', 
+                              overflow: 'hidden', 
+                              whiteSpace: 'nowrap',
+                              ...(unreadMessages.has(formatPhoneNumber(prospect.data?.telefono || '')) && {
+                                textShadow: '0 0 1px rgba(0,0,0,0.1)'
+                              })
+                            }}
                           >
                             {prospect.data?.nombre ? prospect.data.nombre.trim() : (prospect.data?.telefono || '-')}
                           </Typography>
+                          {unreadMessages.has(formatPhoneNumber(prospect.data?.telefono || '')) && (
+                            <Box
+                              sx={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                bgcolor: theme.palette.success.main,
+                                flexShrink: 0,
+                                animation: 'pulse 2s infinite'
+                              }}
+                            />
+                          )}
                         </Box>
                       }
                       secondary={
@@ -1645,6 +1713,41 @@ const QuickLearningDashboard: React.FC = () => {
           <Button onClick={() => setPaymentModalOpen(false)} sx={{ color: '#7B61FF', fontWeight: 700, fontSize: 16 }}>Cancelar</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Notificación de nuevo mensaje */}
+      <Snackbar
+        open={newMessageNotification.show}
+        autoHideDuration={5000}
+        onClose={() => setNewMessageNotification(prev => ({ ...prev, show: false }))}
+        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+        sx={{ mt: 8 }}
+      >
+        <Alert 
+          onClose={() => setNewMessageNotification(prev => ({ ...prev, show: false }))} 
+          severity="info" 
+          sx={{ 
+            width: '100%',
+            bgcolor: theme.palette.primary.main,
+            color: 'white',
+            '& .MuiAlert-icon': {
+              color: 'white'
+            }
+          }}
+          icon={<MessageIcon />}
+        >
+          <Box>
+            <Typography variant="subtitle2" fontWeight={700}>
+              Nuevo mensaje de {newMessageNotification.phone}
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.9 }}>
+              {newMessageNotification.message.length > 50 
+                ? `${newMessageNotification.message.substring(0, 50)}...` 
+                : newMessageNotification.message
+              }
+            </Typography>
+          </Box>
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

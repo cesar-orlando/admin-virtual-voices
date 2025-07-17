@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { io } from 'socket.io-client';
 import { 
   sendTwilioMessage, 
   sendTwilioTemplate, 
@@ -21,6 +22,7 @@ import type {
   QuickLearningChat,
   TwilioMessage
 } from '../types/quicklearning';
+import api from '../api/axios';
 
 interface UseQuickLearningTwilioReturn {
   // State
@@ -47,6 +49,9 @@ interface UseQuickLearningTwilioReturn {
   // Última fecha de mensaje global
   lastMessageDate: string | null;
   
+  // Socket state
+  unreadMessages: Set<string>; // Set de teléfonos con mensajes no leídos
+  
   // Actions
   sendMessage: (request: TwilioSendRequest) => Promise<any>;
   sendTemplate: (request: TwilioTemplateRequest) => Promise<any>;
@@ -59,6 +64,7 @@ interface UseQuickLearningTwilioReturn {
   updateCustomerInfo: (phone: string, customerInfo: any) => Promise<void>;
   changeChatStatus: (phone: string, status: "active" | "inactive" | "blocked") => Promise<void>;
   clearError: () => void;
+  markMessageAsRead: (phone: string) => void; // Marcar mensaje como leído
   
   // Utilities
   formatPhoneNumber: (phone: string) => string;
@@ -95,6 +101,12 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
 
   // State para lastMessageDate global
   const [lastMessageDate, setLastMessageDate] = useState<string | null>(null);
+
+  // Socket state para mensajes no leídos
+  const [unreadMessages, setUnreadMessages] = useState<Set<string>>(new Set());
+
+  // Socket instance
+  const [socket, setSocket] = useState<any>(null);
 
   // Utilidad para formatear números de teléfono
   const formatPhoneNumber = useCallback((phone: string): string => {
@@ -344,6 +356,89 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     setError(null);
   }, []);
 
+  // Inicializar socket
+  useEffect(() => {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL;
+    if (!socketUrl) {
+      console.warn('VITE_SOCKET_URL no está configurado');
+      return;
+    }
+
+    const socketInstance = io(socketUrl);
+    
+    socketInstance.on('connect', () => {
+      console.log('QuickLearning - Socket connected successfully');
+    });
+
+    socketInstance.on('connect_error', (error) => {
+      console.error('QuickLearning - Socket connection error:', error);
+    });
+
+    socketInstance.on('disconnect', (reason) => {
+      console.log('QuickLearning - Socket disconnected:', reason);
+    });
+
+    // Escuchar mensajes nuevos de WhatsApp
+    socketInstance.on('nuevo_mensaje_whatsapp', (notificationData: any) => {
+      console.log('📨 QuickLearning - Nuevo mensaje recibido:', notificationData);
+      
+      const { phone, message } = notificationData;
+      
+      // Formatear el teléfono para hacer match
+      const formattedPhone = formatPhoneNumber(phone);
+      
+      // Agregar a mensajes no leídos si no es el chat actual
+      if (selectedProspect?.data?.telefono !== formattedPhone) {
+        setUnreadMessages(prev => new Set([...prev, formattedPhone]));
+      }
+      
+      // Si es el chat actual, actualizar el historial inmediatamente
+      if (selectedProspect?.data?.telefono === formattedPhone) {
+        setChatHistory(prev => [...prev, {
+          _id: message.twilioSid || `temp_${Date.now()}`,
+          body: message.body,
+          direction: message.direction,
+          respondedBy: message.respondedBy,
+          messageType: message.messageType,
+          dateCreated: notificationData.timestamp,
+          mediaUrl: message.mediaUrl || null
+        }]);
+      }
+      
+      // Actualizar el último mensaje en la lista de prospectos
+      setProspects(prev => prev.map(prospect => {
+        const prospectPhone = formatPhoneNumber(prospect.data?.telefono || '');
+        if (prospectPhone === formattedPhone) {
+          return {
+            ...prospect,
+            data: {
+              ...prospect.data,
+              ultimo_mensaje: message.body,
+              lastMessageDate: notificationData.timestamp
+            }
+          };
+        }
+        return prospect;
+      }));
+    });
+
+    setSocket(socketInstance);
+
+    return () => {
+      socketInstance.disconnect();
+    };
+  }, [selectedProspect?.data?.telefono]);
+
+  // Función para marcar mensaje como leído
+  const markMessageAsRead = useCallback((phone: string) => {
+    const formattedPhone = formatPhoneNumber(phone);
+    setUnreadMessages(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(formattedPhone);
+      return newSet;
+    });
+  }, []);
+
   // Cargar datos iniciales
   useEffect(() => {
     const loadInitialData = async () => {
@@ -429,28 +524,54 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
         return;
       }
 
+      // Obtener la estructura de la tabla para mapear todos los campos dinámicamente
+      let tableFields: any= [];
+      try {
+        // Intentar obtener la estructura de la tabla del primer usuario
+        if (data.usuarios.length > 0 && data.usuarios[0].tableSlug) {
+          const tableResponse = await api.get(`/tables/${user.companySlug}/${data.usuarios[0].tableSlug}`);
+          tableFields = tableResponse.data.fields || [];
+        }
+      } catch (tableError) {
+        console.warn('No se pudo obtener la estructura de la tabla:', tableError);
+      }
+
       // Transformar los datos para que coincidan con la estructura esperada por el componente
-      const transformedUsuarios = data.usuarios.map((usuario: any) => ({
-        _id: usuario._id,
-        data: {
-          nombre: usuario.data.nombre || usuario.name || 'Sin nombre',
-          telefono: usuario.data.telefono || usuario.phone,
-          ultimo_mensaje: usuario.data.ultimo_mensaje || usuario.lastMessage?.body || 'Sin mensajes',
-          clasificacion: usuario.data.clasificacion,
-          email: usuario.data.email,
-          ciudad: usuario.data.ciudad,
-          curso: usuario.data.curso,
-          asesor: usuario.data.asesor,
-          campana: usuario.data.campana,
-          medio: usuario.data.medio,
-          comentario: usuario.data.comentario
-        },
-        tableSlug: usuario.tableSlug,
-        aiEnabled: usuario.data.aiEnabled || false,
-        createdAt: usuario.createdAt,
-        updatedAt: usuario.updatedAt,
-        lastMessageDate: usuario.lastMessageDate
-      }));
+      const transformedUsuarios = data.usuarios.map((usuario: any) => {
+        // Crear un objeto data dinámico basado en la estructura de la tabla
+        const dynamicData: any = {};
+        
+        // Mapear campos específicos que siempre necesitamos
+        dynamicData.nombre = usuario.data.nombre || usuario.name || 'Sin nombre';
+        dynamicData.telefono = usuario.data.telefono || usuario.phone;
+        dynamicData.ultimo_mensaje = usuario.data.ultimo_mensaje || usuario.lastMessage?.body || 'Sin mensajes';
+        
+        // Mapear todos los campos de la tabla dinámicamente
+        tableFields.forEach((field: any) => {
+          dynamicData[field.name] = usuario.data[field.name] ?? '';
+        });
+        
+        // Asegurar que campos específicos tengan valores por defecto si no están en la tabla
+        if (!dynamicData.clasificacion) dynamicData.clasificacion = usuario.data.clasificacion || '';
+        if (!dynamicData.email) dynamicData.email = usuario.data.email || '';
+        if (!dynamicData.ciudad) dynamicData.ciudad = usuario.data.ciudad || '';
+        if (!dynamicData.curso) dynamicData.curso = usuario.data.curso || '';
+        if (!dynamicData.asesor) dynamicData.asesor = usuario.data.asesor || '';
+        if (!dynamicData.campana) dynamicData.campana = usuario.data.campana || '';
+        if (!dynamicData.medio) dynamicData.medio = usuario.data.medio || '';
+        if (!dynamicData.comentario) dynamicData.comentario = usuario.data.comentario || '';
+        if (!dynamicData.consecutivo) dynamicData.consecutivo = usuario.data.consecutivo || '';
+        
+        return {
+          _id: usuario._id,
+          data: dynamicData,
+          tableSlug: usuario.tableSlug,
+          aiEnabled: usuario.data.aiEnabled || false,
+          createdAt: usuario.createdAt,
+          updatedAt: usuario.updatedAt,
+          lastMessageDate: usuario.lastMessageDate
+        };
+      });
 
       // Si tiene pagination, úsalo
       if (data.pagination) {
@@ -509,6 +630,9 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
       console.log('Extracted chat history data:', data);
       
       setChatHistory(Array.isArray(data) ? data : []);
+      
+      // Marcar mensajes como leídos cuando se selecciona el prospecto
+      markMessageAsRead(phone);
     } catch (err: any) {
       console.error('Error loading chat history:', err);
       setErrorChatHistory(err.message || 'Error al cargar historial de chat');
@@ -516,7 +640,7 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     } finally {
       setIsLoadingChatHistory(false);
     }
-  }, []);
+  }, [markMessageAsRead]);
 
   return {
     // State
@@ -543,6 +667,9 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     // Última fecha de mensaje global
     lastMessageDate,
     
+    // Socket state
+    unreadMessages,
+    
     // Actions
     sendMessage,
     sendTemplate,
@@ -555,6 +682,7 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     updateCustomerInfo,
     changeChatStatus,
     clearError,
+    markMessageAsRead,
     
     // Utilities
     formatPhoneNumber,
