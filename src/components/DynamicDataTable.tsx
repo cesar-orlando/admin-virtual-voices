@@ -59,6 +59,7 @@ import {
   searchRecords,
 } from '../api/servicios';
 import type { DynamicTable, DynamicRecord, TableField, TableStats } from '../types';
+import * as XLSX from 'xlsx';
 
 interface DynamicDataTableProps {
   table: DynamicTable;
@@ -206,21 +207,53 @@ export default function DynamicDataTable({
   };
 
   const handleExportData = async () => {
-    if (!user) return;
+    if (!table || !user) return;
 
     try {
       const blob = await exportRecords(table.slug, user, 'json');
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${table.slug}-records-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+
+      const text = await blob.text();
+      const data = JSON.parse(text);
+
+      const records = data.records;
+      const fields = data.table.fields;
+
+      if (Array.isArray(records) && Array.isArray(fields) && fields.length > 0) {
+        const headers = fields.map(field => field.label);
+
+        const dataRows = records.map(record =>
+          fields.map(field => record.data[field.name] ?? '')
+        );
+
+        const worksheetData = [headers, ...dataRows];
+
+        const worksheet = XLSX.utils.aoa_to_sheet(worksheetData); // AOA = Array of Arrays
+        const workbook = XLSX.utils.book_new(); // Create a new workbook
+        XLSX.utils.book_append_sheet(workbook, worksheet, table.slug); // Append the sheet to the workbook
+
+        // Convert workbook to array buffer (Excel format)
+        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+
+        // Create a blob from the buffer for the Excel file
+        const excelBlob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+
+        // Create URL for the blob and trigger the download
+        const url = window.URL.createObjectURL(excelBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${table.slug}-${Date.now()}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        throw new Error('Invalid records or fields data');
+      }
     } catch (err) {
-      console.error('Error exporting data:', err);
+      console.error('Error exporting table:', err);
     }
+
+    handleMenuClose();
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, record: DynamicRecord) => {
