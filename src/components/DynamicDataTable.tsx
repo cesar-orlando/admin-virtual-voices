@@ -85,7 +85,7 @@ export default function DynamicDataTable({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
   const [totalRecords, setTotalRecords] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
@@ -117,9 +117,6 @@ export default function DynamicDataTable({
 
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
 
-  // Add this new state for local filtering
-  const [localFilteredRecords, setLocalFilteredRecords] = useState<DynamicRecord[]>([]);
-  
   // State para exportación
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
@@ -140,40 +137,17 @@ export default function DynamicDataTable({
     }
   }, [table.slug, page, rowsPerPage, refreshTrigger, activeFilters]); // Recargar si los filtros cambian
 
-  // Comment out or remove this useEffect that calls backend search
-  /*
+  // Use server-side search instead of local search for better pagination
   useEffect(() => {
     if (debouncedSearchQuery) {
+      // Use server-side search
       handleSearch(debouncedSearchQuery);
-    } else {
+    } else if (debouncedSearchQuery === '') {
+      // Reset to normal pagination when search is cleared
+      setPage(0);
       loadRecords();
     }
   }, [debouncedSearchQuery]);
-  */
-
-  // Keep only this useEffect for local search across all fields
-  useEffect(() => {
-    if (debouncedSearchQuery) {
-      // Local search across all fields
-      const filtered = records.filter(record => {
-        if (!debouncedSearchQuery.trim()) return true;
-        
-        const searchLower = debouncedSearchQuery.toLowerCase();
-        
-        // Search in all record data values
-        return Object.values(record.data).some(value => {
-          if (value === null || value === undefined) return false;
-          return String(value).toLowerCase().includes(searchLower);
-        });
-      });
-      
-      setLocalFilteredRecords(filtered);
-      setTotalRecords(filtered.length);
-    } else {
-      setLocalFilteredRecords(records);
-      setTotalRecords(records.length);
-    }
-  }, [debouncedSearchQuery, records]);
 
   const loadRecords = async () => {
     if (!user) return;
@@ -567,7 +541,7 @@ export default function DynamicDataTable({
   // Antes del renderizado de las filas, ordena los records si sortBy está definido y es de tipo sortable
   const sortableTypes = ['number', 'currency', 'date'];
   const sortableField = table.fields.find(f => f.name === sortBy && sortableTypes.includes(f.type));
-  let sortedRecords = searchQuery ? localFilteredRecords : [...records];
+  let sortedRecords = [...records];
 
   if (sortableField && sortBy) {
     sortedRecords.sort((a, b) => {
@@ -594,7 +568,7 @@ export default function DynamicDataTable({
     return table.fields.filter(f => visibleFields.includes(f.name));
   }, [table.fields, visibleFields]);
 
-  // Use sortedRecords directly (it already includes the search filtering)
+  // Use records directly since search is now server-side
   const displayRecords = sortedRecords;
 
   if (loading && records.length === 0) {
@@ -895,14 +869,14 @@ export default function DynamicDataTable({
 
         {/* Pagination */}
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25, 50, 100]}
+          rowsPerPageOptions={[ 25, 50, 100]}
           component="div"
-          count={totalRecords}
+          count={totalRecords} // SIEMPRE el total del backend
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={(e, newPage) => setPage(newPage)}
           onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
+            setRowsPerPage(parseInt(e.target.value, 25));
             setPage(0);
           }}
           labelRowsPerPage="Filas por página:"
