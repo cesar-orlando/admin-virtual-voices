@@ -117,13 +117,13 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     return new Set();
   });
 
-  // Estado de conexión del socket
-  const [socketConnected, setSocketConnected] = useState<boolean>(false);
-
   // Guardar unreadMessages en localStorage cada vez que cambie
   useEffect(() => {
     localStorage.setItem('unreadMessages', JSON.stringify(Array.from(unreadMessages)));
   }, [unreadMessages]);
+
+  // Estado de conexión del socket
+  const [socketConnected, setSocketConnected] = useState<boolean>(false);
 
   // Socket instance - crear una sola vez
   const [socket, setSocket] = useState<any>(null);
@@ -137,12 +137,7 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     }
 
     console.log('🔌 QuickLearning - Inicializando socket...');
-    const socketInstance = io(socketUrl, {
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      timeout: 20000,
-    });
+    const socketInstance = io(socketUrl);
     
     socketInstance.on('connect', () => {
       console.log('✅ QuickLearning - Socket connected successfully, ID:', socketInstance.id);
@@ -156,20 +151,6 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
 
     socketInstance.on('disconnect', (reason) => {
       console.log('🔌 QuickLearning - Socket disconnected:', reason);
-      if (reason === 'io server disconnect') {
-        // El servidor desconectó, intentar reconectar manualmente
-        socketInstance.connect();
-      }
-      setSocketConnected(false);
-    });
-
-    socketInstance.on('reconnect', (attemptNumber) => {
-      console.log('🔄 QuickLearning - Socket reconnected after', attemptNumber, 'attempts');
-      setSocketConnected(true);
-    });
-
-    socketInstance.on('reconnect_error', (error) => {
-      console.error('❌ QuickLearning - Socket reconnection error:', error);
       setSocketConnected(false);
     });
 
@@ -518,25 +499,10 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     return () => clearInterval(interval);
   }, []);
 
-  // Cargar prospectos al inicializar con manejo de errores robusto
+  // Cargar prospectos al inicializar
   useEffect(() => {
     console.log('useEffect: Loading prospects on mount');
-    const loadInitialProspects = async () => {
-      try {
-        await loadProspects();
-      } catch (error) {
-        console.error('Error loading initial prospects:', error);
-        // Reintentar después de 3 segundos
-        setTimeout(() => {
-          console.log('Retrying prospects load...');
-          loadProspects().catch(err => {
-            console.error('Retry failed:', err);
-          });
-        }, 3000);
-      }
-    };
-    
-    loadInitialProspects();
+    loadProspects();
   }, []);
 
   // Cargar lista de prospectos
