@@ -335,6 +335,7 @@ const QuickLearningDashboard: React.FC = () => {
   // Sincroniza chatHistoryLocal con chatHistory global al seleccionar prospecto
   useEffect(() => {
     setChatHistoryLocal(chatHistory);
+    
     // Limpiar input de mensaje solo cuando cambia selectedProspect
     // (No limpiar por cada cambio en chatHistory)
     // setMessageInputValue(''); // <-- Elimina esta línea aquí
@@ -821,6 +822,23 @@ const QuickLearningDashboard: React.FC = () => {
           opacity: 1,
           transform: 'scale(1)'
         }
+      },
+      '@keyframes newMessagePulse': {
+        '0%': {
+          opacity: 1,
+          transform: 'scale(1)',
+          boxShadow: '0 0 0 0 rgba(25, 118, 210, 0.7)'
+        },
+        '50%': {
+          opacity: 0.9,
+          transform: 'scale(1.02)',
+          boxShadow: '0 0 0 10px rgba(25, 118, 210, 0)'
+        },
+        '100%': {
+          opacity: 1,
+          transform: 'scale(1)',
+          boxShadow: '0 0 0 0 rgba(25, 118, 210, 0)'
+        }
       }
     }}>
       {/* Header y stats */}
@@ -1284,10 +1302,28 @@ const QuickLearningDashboard: React.FC = () => {
                               borderRadius: msg.direction === 'inbound' ? '18px 18px 18px 6px' : '18px 18px 6px 18px',
                               p: 2,
                               mx: 2,
-                              boxShadow: 2
+                              boxShadow: 2,
+                              position: 'relative',
+                              ...(msg.isNewMessage && {
+                                border: `2px solid ${theme.palette.primary.main}`,
+                                animation: 'newMessagePulse 2s ease-in-out'
+                              })
                             }}>
                               {content}
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, float: 'right' }}>
+                                {msg.isNewMessage && (
+                                  <Chip
+                                    label="NUEVO"
+                                    size="small"
+                                    color="primary"
+                                    sx={{
+                                      fontSize: '0.6rem',
+                                      height: 16,
+                                      mr: 0.5,
+                                      animation: 'newMessagePulse 2s ease-in-out'
+                                    }}
+                                  />
+                                )}
                                 <AccessTimeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
                                 <Typography variant="caption" color="text.secondary" fontSize={14}>
                                   {formatMessageDate(msg.dateCreated)}

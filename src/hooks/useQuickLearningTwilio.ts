@@ -198,7 +198,8 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
           respondedBy: message.respondedBy,
           messageType: message.messageType,
           dateCreated: notificationData.timestamp,
-          mediaUrl: message.mediaUrl || null
+          mediaUrl: message.mediaUrl || null,
+          isNewMessage: true // Identificador para mensajes nuevos por socket
         }, ...prev]);
       }
       
@@ -694,7 +695,13 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
       let data = response.data || response; // Fallback para compatibilidad
       console.log('Extracted chat history data:', data);
       
-      setChatHistory(Array.isArray(data) ? data : []);
+      // Quitar el indicador "NUEVO" de todos los mensajes cuando se selecciona el prospecto
+      const cleanedData = Array.isArray(data) ? data.map(msg => ({
+        ...msg,
+        isNewMessage: false
+      })) : [];
+      
+      setChatHistory(cleanedData);
       
       // Marcar mensajes como leídos cuando se selecciona el prospecto
       markMessageAsRead(phone);
