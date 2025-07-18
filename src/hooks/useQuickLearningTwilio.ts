@@ -51,6 +51,7 @@ interface UseQuickLearningTwilioReturn {
   
   // Socket state
   unreadMessages: Set<string>; // Set de teléfonos con mensajes no leídos
+  socketConnected: boolean; // Estado de conexión del socket
   
   // Actions
   sendMessage: (request: TwilioSendRequest) => Promise<any>;
@@ -116,13 +117,119 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     return new Set();
   });
 
+  // Estado de conexión del socket
+  const [socketConnected, setSocketConnected] = useState<boolean>(false);
+
   // Guardar unreadMessages en localStorage cada vez que cambie
   useEffect(() => {
     localStorage.setItem('unreadMessages', JSON.stringify(Array.from(unreadMessages)));
   }, [unreadMessages]);
 
-  // Socket instance
+  // Socket instance - crear una sola vez
   const [socket, setSocket] = useState<any>(null);
+
+  // Inicializar socket una sola vez al montar el componente
+  useEffect(() => {
+    const socketUrl = import.meta.env.VITE_SOCKET_URL;
+    if (!socketUrl) {
+      console.warn('VITE_SOCKET_URL no está configurado');
+      return;
+    }
+
+    console.log('🔌 QuickLearning - Inicializando socket...');
+    const socketInstance = io(socketUrl, {
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 20000,
+    });
+    
+    socketInstance.on('connect', () => {
+      console.log('✅ QuickLearning - Socket connected successfully, ID:', socketInstance.id);
+      setSocketConnected(true);
+    });
+
+    socketInstance.on('connect_error', (error) => {
+      console.error('❌ QuickLearning - Socket connection error:', error);
+      setSocketConnected(false);
+    });
+
+    socketInstance.on('disconnect', (reason) => {
+      console.log('🔌 QuickLearning - Socket disconnected:', reason);
+      if (reason === 'io server disconnect') {
+        // El servidor desconectó, intentar reconectar manualmente
+        socketInstance.connect();
+      }
+      setSocketConnected(false);
+    });
+
+    socketInstance.on('reconnect', (attemptNumber) => {
+      console.log('🔄 QuickLearning - Socket reconnected after', attemptNumber, 'attempts');
+      setSocketConnected(true);
+    });
+
+    socketInstance.on('reconnect_error', (error) => {
+      console.error('❌ QuickLearning - Socket reconnection error:', error);
+      setSocketConnected(false);
+    });
+
+    // Escuchar mensajes nuevos de WhatsApp
+    socketInstance.on('nuevo_mensaje_whatsapp', (notificationData: any) => {
+      console.log('📨 QuickLearning - Nuevo mensaje recibido:', notificationData);
+      
+      const { phone, message } = notificationData;
+      
+      // Formatear el teléfono para hacer match
+      const formattedPhone = formatPhoneNumber(phone);
+      
+      // Acumular todos los teléfonos con mensajes no leídos
+      setUnreadMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.add(formattedPhone);
+        return newSet;
+      });
+      
+      // Si es el chat actual, actualizar el historial inmediatamente (al principio)
+      if (selectedProspect?.data?.telefono === formattedPhone) {
+        setChatHistory(prev => [{
+          _id: message.twilioSid || `temp_${Date.now()}`,
+          body: message.body,
+          direction: message.direction,
+          respondedBy: message.respondedBy,
+          messageType: message.messageType,
+          dateCreated: notificationData.timestamp,
+          mediaUrl: message.mediaUrl || null
+        }, ...prev]);
+      }
+      
+      // Actualizar el último mensaje en la lista de prospectos (opcional, ya que recargamos)
+      setProspects(prev => prev.map(prospect => {
+        const prospectPhone = formatPhoneNumber(prospect.data?.telefono || '');
+        if (prospectPhone === formattedPhone) {
+          return {
+            ...prospect,
+            data: {
+              ...prospect.data,
+              ultimo_mensaje: message.body,
+              lastMessageDate: notificationData.timestamp
+            }
+          };
+        }
+        return prospect;
+      }));
+
+      // Recargar la lista de prospectos para reflejar el nuevo orden
+      loadProspects();
+    });
+
+    setSocket(socketInstance);
+
+    // Cleanup al desmontar
+    return () => {
+      console.log('🔌 QuickLearning - Desconectando socket...');
+      socketInstance.disconnect();
+    };
+  }, []); // Sin dependencias - se ejecuta solo una vez al montar
 
   // Utilidad para formatear números de teléfono
   const formatPhoneNumber = useCallback((phone: string): string => {
@@ -372,84 +479,6 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     setError(null);
   }, []);
 
-  // Inicializar socket
-  useEffect(() => {
-    const socketUrl = import.meta.env.VITE_SOCKET_URL;
-    if (!socketUrl) {
-      console.warn('VITE_SOCKET_URL no está configurado');
-      return;
-    }
-
-    const socketInstance = io(socketUrl);
-    
-    socketInstance.on('connect', () => {
-      console.log('QuickLearning - Socket connected successfully');
-    });
-
-    socketInstance.on('connect_error', (error) => {
-      console.error('QuickLearning - Socket connection error:', error);
-    });
-
-    socketInstance.on('disconnect', (reason) => {
-      console.log('QuickLearning - Socket disconnected:', reason);
-    });
-
-    // Escuchar mensajes nuevos de WhatsApp
-    socketInstance.on('nuevo_mensaje_whatsapp', (notificationData: any) => {
-      console.log('📨 QuickLearning - Nuevo mensaje recibido:', notificationData);
-      
-      const { phone, message } = notificationData;
-      
-      // Formatear el teléfono para hacer match
-      const formattedPhone = formatPhoneNumber(phone);
-      
-      // Acumular todos los teléfonos con mensajes no leídos
-      setUnreadMessages(prev => {
-        const newSet = new Set(prev);
-        newSet.add(formattedPhone);
-        return newSet;
-      });
-      
-      // Si es el chat actual, actualizar el historial inmediatamente (al principio)
-      if (selectedProspect?.data?.telefono === formattedPhone) {
-        setChatHistory(prev => [{
-          _id: message.twilioSid || `temp_${Date.now()}`,
-          body: message.body,
-          direction: message.direction,
-          respondedBy: message.respondedBy,
-          messageType: message.messageType,
-          dateCreated: notificationData.timestamp,
-          mediaUrl: message.mediaUrl || null
-        }, ...prev]);
-      }
-      
-      // Actualizar el último mensaje en la lista de prospectos (opcional, ya que recargamos)
-      setProspects(prev => prev.map(prospect => {
-        const prospectPhone = formatPhoneNumber(prospect.data?.telefono || '');
-        if (prospectPhone === formattedPhone) {
-          return {
-            ...prospect,
-            data: {
-              ...prospect.data,
-              ultimo_mensaje: message.body,
-              lastMessageDate: notificationData.timestamp
-            }
-          };
-        }
-        return prospect;
-      }));
-
-      // Recargar la lista de prospectos para reflejar el nuevo orden
-      loadProspects();
-    });
-
-    setSocket(socketInstance);
-
-    return () => {
-      socketInstance.disconnect();
-    };
-  }, [selectedProspect?.data?.telefono]);
-
   // Función para marcar mensaje como leído
   const markMessageAsRead = useCallback((phone: string) => {
     const formattedPhone = formatPhoneNumber(phone);
@@ -488,10 +517,25 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     return () => clearInterval(interval);
   }, []);
 
-  // Cargar prospectos al inicializar
+  // Cargar prospectos al inicializar con manejo de errores robusto
   useEffect(() => {
     console.log('useEffect: Loading prospects on mount');
-    loadProspects();
+    const loadInitialProspects = async () => {
+      try {
+        await loadProspects();
+      } catch (error) {
+        console.error('Error loading initial prospects:', error);
+        // Reintentar después de 3 segundos
+        setTimeout(() => {
+          console.log('Retrying prospects load...');
+          loadProspects().catch(err => {
+            console.error('Retry failed:', err);
+          });
+        }, 3000);
+      }
+    };
+    
+    loadInitialProspects();
   }, []);
 
   // Cargar lista de prospectos
@@ -690,6 +734,7 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     
     // Socket state
     unreadMessages,
+    socketConnected,
     
     // Actions
     sendMessage,

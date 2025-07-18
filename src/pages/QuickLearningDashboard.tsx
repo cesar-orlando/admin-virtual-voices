@@ -182,6 +182,7 @@ const QuickLearningDashboard: React.FC = () => {
     hasMoreProspects,
     unreadMessages,
     markMessageAsRead,
+    socketConnected,
   } = useQuickLearningTwilio();
 
   // State para modales y formularios
@@ -851,6 +852,34 @@ const QuickLearningDashboard: React.FC = () => {
                     <Box />
                   </Badge>
                 )}
+                {/* Indicador de estado de conexión del socket */}
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    ml: 1,
+                    px: 1,
+                    py: 0.5,
+                    borderRadius: 1,
+                    bgcolor: socketConnected ? 'success.light' : 'error.light',
+                    color: socketConnected ? 'success.dark' : 'error.dark',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    opacity: 0.8
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      bgcolor: socketConnected ? 'success.main' : 'error.main',
+                      animation: socketConnected ? 'pulse 2s infinite' : 'none'
+                    }}
+                  />
+                  {socketConnected ? 'Conectado' : 'Desconectado'}
+                </Box>
               </Box>
               <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 Dashboard de NatalIA - IA Conversacional
@@ -915,6 +944,11 @@ const QuickLearningDashboard: React.FC = () => {
           </Box>
           <Box data-prospects-container sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 0.5, bgcolor: theme.palette.background.paper }}>
             {errorProspects && <Alert severity="error">{errorProspects}</Alert>}
+            {!socketConnected && (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                Conectando al servidor en tiempo real...
+              </Alert>
+            )}
             {isLoadingProspects ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 120 }}><CircularProgress size={28} /></Box>
             ) : isSearching ? (
