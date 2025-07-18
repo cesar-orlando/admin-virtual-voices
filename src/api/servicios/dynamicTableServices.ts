@@ -122,7 +122,23 @@ export const duplicateTable = async (tableId: string, newName: string, newSlug: 
   }
 };
 
-// Exportar tabla
+// Exportar tabla (frontend only) - usando utilidades
+export const exportTableFrontend = (
+  table: DynamicTable, 
+  records: DynamicRecord[], 
+  format: 'csv' | 'excel' | 'json' = 'csv',
+  filename?: string
+) => {
+  try {
+    const { exportTableData } = require('../../utils/exportUtils');
+    return exportTableData(table, records, format, filename);
+  } catch (error) {
+    console.error('Error al exportar:', error);
+    throw new Error('No se pudo exportar la tabla');
+  }
+};
+
+// Mantener la función original para compatibilidad (opcional)
 export const exportTable = async (tableSlug: string, user: UserProfile) => {
   try {
     const response = await api.get(`/tables/${user.companySlug}/${tableSlug}/export`, {

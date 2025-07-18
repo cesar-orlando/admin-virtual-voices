@@ -51,6 +51,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
 import { useDebounce } from '../hooks/useDebounce';
+import { useSnackbar } from 'notistack';
 import { 
   getRecords, 
   deleteRecord, 
@@ -58,6 +59,7 @@ import {
   getTableStats,
   searchRecords,
 } from '../api/servicios';
+import { exportTableData } from '../utils/exportUtils';
 import type { DynamicTable, DynamicRecord, TableField, TableStats } from '../types';
 
 interface DynamicDataTableProps {
@@ -107,6 +109,7 @@ export default function DynamicDataTable({
 
   const theme = useTheme();
   const { user } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
 
   // Sorting state
   const [sortBy, setSortBy] = useState<string | null>(null);
@@ -116,6 +119,10 @@ export default function DynamicDataTable({
 
   // Add this new state for local filtering
   const [localFilteredRecords, setLocalFilteredRecords] = useState<DynamicRecord[]>([]);
+  
+  // State para exportación
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
 
   useEffect(() => {
     // Identificar los campos de fecha disponibles para filtrar
@@ -235,21 +242,65 @@ export default function DynamicDataTable({
     }
   };
 
-  const handleExportData = async () => {
-    if (!user) return;
+  // Función para obtener todos los registros de la tabla
+  const getAllRecordsForExport = async (): Promise<DynamicRecord[]> => {
+    if (!user) return [];
 
     try {
-      const blob = await exportRecords(table.slug, user, 'CSV');
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${table.slug}-records-${Date.now()}.CSV`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      console.error('Error exporting data:', err);
+      setExporting(true);
+      setExportProgress(0);
+      
+      const allRecords: DynamicRecord[] = [];
+      let currentPage = 1;
+      const pageSize = 100; // Obtener 100 registros por página para optimizar
+      let hasMoreRecords = true;
+      let totalRecords = 0;
+
+      // Primero obtener el total de registros
+      const firstResponse = await getRecords(
+        table.slug, 
+        user, 
+        1, 
+        1,
+        'createdAt',
+        'desc',
+        activeFilters
+      );
+      totalRecords = firstResponse.pagination.total;
+
+      while (hasMoreRecords) {
+        const response = await getRecords(
+          table.slug, 
+          user, 
+          currentPage, 
+          pageSize,
+          'createdAt',
+          'desc',
+          activeFilters
+        );
+        
+        allRecords.push(...response.records);
+        
+        // Actualizar progreso
+        const progress = Math.min((allRecords.length / totalRecords) * 100, 100);
+        setExportProgress(progress);
+        
+        // Verificar si hay más páginas
+        if (response.records.length < pageSize || allRecords.length >= totalRecords) {
+          hasMoreRecords = false;
+        } else {
+          currentPage++;
+        }
+      }
+
+      setExportProgress(100);
+      return allRecords;
+    } catch (error) {
+      console.error('Error getting all records for export:', error);
+      throw new Error('No se pudieron obtener todos los registros para exportar');
+    } finally {
+      setExporting(false);
+      setExportProgress(0);
     }
   };
 
@@ -654,11 +705,60 @@ export default function DynamicDataTable({
               <ListItemText>Importar Excel</ListItemText>
             </MenuItem>
             */}
-            <MenuItem onClick={() => { setActionsAnchorEl(null); handleExportData(); }}>
+            <MenuItem onClick={async () => { 
+              setActionsAnchorEl(null); 
+              try {
+                const allRecords = await getAllRecordsForExport();
+                exportTableData(table, allRecords, 'csv');
+                enqueueSnackbar(`Se exportaron ${allRecords.length} registros a CSV exitosamente`, { variant: 'success' });
+              } catch (err) {
+                console.error('Error exporting CSV:', err);
+                enqueueSnackbar('Error al exportar CSV', { variant: 'error' });
+              }
+            }}>
               <ListItemIcon><ExportIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>Exportar</ListItemText>
+              <ListItemText>Exportar CSV</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={async () => { 
+              setActionsAnchorEl(null); 
+              try {
+                const allRecords = await getAllRecordsForExport();
+                exportTableData(table, allRecords, 'excel');
+                enqueueSnackbar(`Se exportaron ${allRecords.length} registros a Excel exitosamente`, { variant: 'success' });
+              } catch (err) {
+                console.error('Error exporting Excel:', err);
+                enqueueSnackbar('Error al exportar Excel', { variant: 'error' });
+              }
+            }}>
+              <ListItemIcon><InsertDriveFileIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Exportar Excel</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={async () => { 
+              setActionsAnchorEl(null); 
+              try {
+                const allRecords = await getAllRecordsForExport();
+                exportTableData(table, allRecords, 'json');
+                enqueueSnackbar(`Se exportaron ${allRecords.length} registros a JSON exitosamente`, { variant: 'success' });
+              } catch (err) {
+                console.error('Error exporting JSON:', err);
+                enqueueSnackbar('Error al exportar JSON', { variant: 'error' });
+              }
+            }}>
+              <ListItemIcon><AttachFileIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Exportar JSON</ListItemText>
             </MenuItem>
           </Menu>
+          
+          {/* Indicador de progreso de exportación */}
+          {exporting && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="text.secondary">
+                Exportando... {Math.round(exportProgress)}%
+              </Typography>
+            </Box>
+          )}
+          
           {onRecordCreate && (
              <Button
               variant="contained"

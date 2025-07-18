@@ -45,6 +45,7 @@ import {
   exportTable,
   getTableStats
 } from '../api/servicios';
+import { exportTableStructure } from '../utils/exportUtils';
 import type { DynamicTable } from '../types';
 import { useSnackbar } from 'notistack';
 
@@ -168,15 +169,8 @@ export default function Tables() {
     if (!selectedTable || !user) return;
 
     try {
-      const blob = await exportTable(selectedTable.slug, user);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${selectedTable.slug}-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      // Exportar solo la estructura de la tabla (sin registros)
+      exportTableStructure(selectedTable);
     } catch (err) {
       console.error('Error exporting table:', err);
     }
