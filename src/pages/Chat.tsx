@@ -48,6 +48,7 @@ export function ChatsTab() {
   const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
   const theme = useTheme()
   const [conversations, setConversations] = useState<WhatsAppUser[]>([])
+  const [filteredConversations, setFilteredConversations] = useState<WhatsAppUser[]>([])
   const [activeConversation, setActiveConversation] = useState<WhatsAppUser | null>(null)
   const [activeMessages, setActiveMessages] = useState<WhatsAppMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -71,21 +72,20 @@ export function ChatsTab() {
     socket.on(`whatsapp-message-${user.companySlug}`, (newMessageData: any) => {
       // Update conversations when new messages arrive
       setConversations(prev => {
-        const existingConvoIndex = prev.findIndex(m => m.phone === newMessageData.phone)
+        const existingConvoIndex = prev.findIndex(m => m.phone === newMessageData.phone.replace('@c.us', ''));
         if (existingConvoIndex !== -1) {
-          const updatedConversations = [...prev]
+          const updatedConversations = [...prev];
           updatedConversations[existingConvoIndex] = {
             ...updatedConversations[existingConvoIndex],
-            lastMessage: newMessageData.lastMessage,
+            lastMessage: newMessageData.messages[newMessageData.messages.length - 1],
             totalMessages: updatedConversations[existingConvoIndex].totalMessages + 1,
-            updatedAt: new Date().toISOString()
-          }
-          return updatedConversations
+            updatedAt: newMessageData.messages[newMessageData.messages.length - 1].createdAt
+          };
+          return updatedConversations;
         }
-        return prev
-      })
+        return prev;
+      });
       
-      // Update active messages if this conversation is open
       if(activeConversation && activeConversation.phone === newMessageData.phone) {
         setActiveMessages(prev => [...prev, newMessageData.lastMessage])
       }
@@ -94,14 +94,16 @@ export function ChatsTab() {
     // Fetch initial data
     const loadData = async () => {
       try {
-        const [usersData, sessionsData] = await Promise.all([
-          fetchWhatsAppUsers(user, ['prospectos', 'clientes']),
-          fetchSessions(user),
-        ])
-        setConversations(usersData)
-        setSessions(sessionsData)
+        const usersData: WhatsAppUser[] = await fetchWhatsAppUsers(user, ['prospectos', 'clientes'])
+        // Sort conversations after initial fetch
+        const sortedConversations = usersData.sort((a, b) => {
+          const lastMessageDateA = a.lastMessage ? new Date(a.lastMessage.date).getTime() : 0;
+          const lastMessageDateB = b.lastMessage ? new Date(b.lastMessage.date).getTime() : 0;
+          return lastMessageDateB - lastMessageDateA; // Sort descending by latest message
+        });
+        setConversations(sortedConversations)
       } catch (error) {
-        console.error("Failed to load initial data", error)
+        console.error("Error loading conversations:", error)
         setSnackbar({ open: true, message: 'Error al cargar datos iniciales', severity: 'error' })
       } finally {
         setIsLoading(false)
@@ -115,6 +117,23 @@ export function ChatsTab() {
       socket.disconnect()
     }
   }, [user.companySlug, user.id])
+
+  useEffect(() => {
+
+    const updatedConversations = conversations
+      .filter(convo =>
+        convo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        convo.phone.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+      .sort((a, b) => {
+        const lastMessageDateA = a.lastMessage && a.lastMessage.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+        const lastMessageDateB = b.lastMessage && b.lastMessage.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+        
+        return lastMessageDateB - lastMessageDateA;  // Descending order
+      });
+
+    setFilteredConversations(updatedConversations);
+  }, [conversations, searchTerm]);
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -132,7 +151,7 @@ export function ChatsTab() {
     } else {
       setActiveMessages([])
     }
-  }, [activeConversation?.phone])
+  }, [activeConversation?.phone, conversations])
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -194,11 +213,6 @@ export function ChatsTab() {
       setSendLoading(false)
     }
   }
-
-  const filteredConversations = conversations.filter(convo =>
-    convo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    convo.phone.toLowerCase().includes(searchTerm.toLowerCase())
-  )
 
   if (isLoading) {
     return (
