@@ -94,7 +94,11 @@ export function ChatsTab() {
     // Fetch initial data
     const loadData = async () => {
       try {
-        const usersData: WhatsAppUser[] = await fetchWhatsAppUsers(user, ['prospectos', 'clientes'])
+        const [usersData, sessionsData] = await Promise.all([
+          fetchWhatsAppUsers(user, ['prospectos', 'clientes']),
+          fetchSessions(user),
+        ]) as [WhatsAppUser[], WhatsAppSession[]]
+        
         // Sort conversations after initial fetch
         const sortedConversations = usersData.sort((a, b) => {
           const lastMessageDateA = a.lastMessage ? new Date(a.lastMessage.date).getTime() : 0;
@@ -102,6 +106,7 @@ export function ChatsTab() {
           return lastMessageDateB - lastMessageDateA; // Sort descending by latest message
         });
         setConversations(sortedConversations)
+        setSessions(sessionsData)
       } catch (error) {
         console.error("Error loading conversations:", error)
         setSnackbar({ open: true, message: 'Error al cargar datos iniciales', severity: 'error' })
@@ -186,31 +191,66 @@ export function ChatsTab() {
 
     // Usa la primera sesión disponible
     const sessionId = sessions[0]._id || sessions[0].id
-    sendMessages(sessionId, user, phone, userMessage)
-      .catch(() => {
-        setSnackbar({ open: true, message: 'Error al enviar mensaje', severity: 'error' })
-        // Si quieres, podrías quitar el mensaje optimista aquí
-      })
+    try {
+      await sendMessages(sessionId, user, phone, userMessage);
+      // Update conversations if message sent successfully
+      setConversations((prevConvos) =>
+        prevConvos.map((convo) =>
+          convo.phone === activeConversation.phone
+            ? {
+                ...convo,
+                lastMessage: newMessage,
+                updatedAt: new Date().toISOString(),
+              }
+            : convo
+        )
+      );
+    } catch (error) {
+      // If the message fails, show error
+      setSnackbar({ open: true, message: 'Error al enviar mensaje', severity: 'error' });
+      // Optionally, remove the optimistic message if failed
+      setActiveMessages((prev) => prev.filter((msg) => msg._id !== newMessage._id));
+    }
   }
 
   async function handleSendFromModal() {
-    if (!sendPhone.trim() || !sendMessage.trim() || !selectedSessionId) return
-    setSendLoading(true)
+    if (!sendPhone.trim() || !sendMessage.trim() || !selectedSessionId) return;
+    setSendLoading(true);
+
+    const newMessage: WhatsAppMessage = {
+      _id: Date.now().toString(),
+      body: sendMessage,
+      direction: 'outbound',
+      respondedBy: 'user',
+      date: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
     try {
-      await sendMessages(
-        selectedSessionId,
-        user,
-        `521${sendPhone}@c.us`,
-        sendMessage
-      )
-      setSnackbar({ open: true, message: 'Mensaje enviado correctamente', severity: 'success' })
-      setSendPhone('')
-      setSendMessage('')
-      setOpenSendModal(false)
+      // Send the message
+      await sendMessages(selectedSessionId, user, `521${sendPhone}@c.us`, sendMessage);
+      // Update conversations if message sent successfully
+      setConversations((prevConvos) =>
+        prevConvos.map((convo) =>
+          convo.phone === `521${sendPhone}`
+            ? {
+                ...convo,
+                lastMessage: newMessage,
+                updatedAt: new Date().toISOString(),
+              }
+            : convo
+        )
+      );
+
+      setSnackbar({ open: true, message: 'Mensaje enviado correctamente', severity: 'success' });
+      setSendPhone('');
+      setSendMessage('');
+      setOpenSendModal(false);
     } catch (err) {
-      setSnackbar({ open: true, message: 'Error al enviar mensaje', severity: 'error' })
+      setSnackbar({ open: true, message: 'Error al enviar mensaje', severity: 'error' });
     } finally {
-      setSendLoading(false)
+      setSendLoading(false);
     }
   }
 
