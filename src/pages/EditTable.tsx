@@ -88,6 +88,8 @@ export default function EditTable() {
   const { tableSlug } = useParams<{ tableSlug: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  const isProspectsTable = tableSlug === 'prospectos';
   
   useEffect(() => {
     loadTableData();
@@ -207,6 +209,13 @@ export default function EditTable() {
   };
 
   const handleRemoveField = (index: number) => {
+    const field = fields[index];
+
+    // Bloquear eliminación de campos "Número" e "IA" en la tabla "prospectos"
+    if (isProspectsTable && (field.label === 'Número' || field.label === 'IA')) {
+      return; // No eliminar estos campos
+    }
+
     const updatedFields = fields.filter((_, i) => i !== index);
     updatedFields.forEach((field, i) => {
       field.order = i + 1;
@@ -538,12 +547,18 @@ export default function EditTable() {
                               size="small"
                               required
                               helperText="Este será el nombre de la columna en tu tabla"
+                              disabled={isProspectsTable && (field.label === 'Número' || field.label === 'IA')}
                             />
                         </Grid>
-                        <Grid item xs={6} sm={3} md={2}>
+                        <Grid item xs={12} sm={6} md={2}>
                             <FormControl fullWidth size="small">
                               <InputLabel>Tipo</InputLabel>
-                              <Select value={field.type} onChange={(e) => handleUpdateField(index, { type: e.target.value as FieldType })} label="Tipo">
+                              <Select 
+                                value={field.type} 
+                                onChange={(e) => handleUpdateField(index, { type: e.target.value as FieldType })} 
+                                label="Tipo"
+                                disabled={isProspectsTable && (field.label === 'Número' || field.label === 'IA')}
+                              >
                                 {FIELD_TYPES.map((type) => (
                                   <MenuItem key={type.value} value={type.value}>
                                     {type.icon} {type.label}
@@ -553,7 +568,11 @@ export default function EditTable() {
                             </FormControl>
                         </Grid>
                         <Grid item xs={3} sm={2} md={2}>
-                            <FormControlLabel control={<Switch checked={field.required || false} onChange={(e) => handleUpdateField(index, { required: e.target.checked })} />} label="Requerido" sx={{ ml: 0 }} />
+                            <FormControlLabel
+                              control={<Switch checked={field.required || false} onChange={(e) => handleUpdateField(index, { required: e.target.checked })} />}
+                              label="Requerido"
+                              disabled={isProspectsTable && (field.label === 'Número' || field.label === 'IA')}
+                            />
                         </Grid>
                         <Grid item xs={3} sm={1} md={1} sx={{ textAlign: 'right' }}>
                             <IconButton color="error" onClick={() => handleRemoveField(index)} size="small"><DeleteIcon /></IconButton>
