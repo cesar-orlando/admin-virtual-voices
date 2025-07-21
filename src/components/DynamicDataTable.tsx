@@ -161,7 +161,7 @@ export default function DynamicDataTable({
         user, 
         page + 1, 
         rowsPerPage,
-        'createdAt',
+        'updatedAt',
         'desc',
         activeFilters
       );
