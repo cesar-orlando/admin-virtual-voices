@@ -374,7 +374,7 @@ export default function DynamicDataTable({
       }
       return { 
         content: <Chip label={name} size="small" color="primary" sx={{ fontWeight: 600, color: '#fff' }} />,
-        tooltip: name.length > 50 ? name : undefined
+        tooltip: name.length > 25 ? name : undefined
       };
     }
     // Si el campo es 'medio', renderiza un Chip de color
@@ -398,7 +398,7 @@ export default function DynamicDataTable({
       }
       return { 
         content: <Chip label={display} size="small" sx={sx} />,
-        tooltip: display.length > 50 ? display : undefined
+        tooltip: display.length > 25 ? display : undefined
       };
     }
     if (isFirstColumn) {
@@ -411,7 +411,7 @@ export default function DynamicDataTable({
             sx={{ fontWeight: 600, color: '#fff' }}
           />
         ),
-        tooltip: String(value).length > 50 ? String(value) : undefined
+        tooltip: String(value).length > 25 ? String(value) : undefined
       };
     }
     if (value === null || value === undefined) return { content: '-' };
@@ -501,7 +501,7 @@ export default function DynamicDataTable({
                 </Typography>
               </Box>
             ),
-            tooltip: validFiles.length > 0 ? `Ver ${validFiles.length} archivo${validFiles.length !== 1 ? 's' : ''}` : undefined
+            tooltip: `Ver ${validFiles.length} archivo${validFiles.length !== 1 ? 's' : ''}`
           };
         }
         return { content: '-' };
@@ -510,7 +510,7 @@ export default function DynamicDataTable({
         const stringValue = String(value);
         return { 
           content: stringValue,
-          tooltip: stringValue.length > 50 ? stringValue : undefined
+          tooltip: stringValue.length > 25 ? stringValue : undefined
         };
       }
     }
@@ -799,6 +799,9 @@ export default function DynamicDataTable({
                     </TableCell>
                   );
                 })}
+                <TableCell key="createdAt" sx={{ minWidth: 150, fontWeight: 'bold', maxWidth: 220, p: 1 }}>
+                  Fecha de Creación
+                </TableCell>
                 <TableCell sx={{ width: '50px' }} />
               </TableRow>
             </TableHead>
@@ -855,6 +858,12 @@ export default function DynamicDataTable({
                         </TableCell>
                       );
                     })}
+                    {/* Add createdAt field as a new TableCell with a Tooltip */}
+                    <TableCell align="left" sx={{ maxWidth: 220, p: 1 }}>
+                      <Tooltip title={record.createdAt ? new Date(record.createdAt).toLocaleString() : 'N/A'} placement="top" arrow>
+                        <span>{record.createdAt ? new Date(record.createdAt).toLocaleString() : 'N/A'}</span>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell align="right">
                       <IconButton onClick={(e) => handleMenuOpen(e, record)}>
                         <MoreVertIcon />
