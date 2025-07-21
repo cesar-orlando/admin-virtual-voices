@@ -35,6 +35,7 @@ interface QuickLearningChat {
 interface UseQuickLearningTwilioReturn {
   // State
   status: TwilioStatus | null;
+  history: any | null;
   isLoading: boolean;
   error: string | null;
   
@@ -61,11 +62,13 @@ interface UseQuickLearningTwilioReturn {
   // Actions
   sendMessage: (request: TwilioSendRequest) => Promise<any>;
   sendTemplate: (request: TwilioTemplateRequest) => Promise<any>;
+  loadHistory: (params?: any) => Promise<void>;
   clearError: () => void;
   markMessageAsRead: (phone: string) => void;
   
   // Utilities
   formatPhoneNumber: (phone: string) => string;
+  getMessageStatusColor: (status: string) => string;
   
   // Prospects
   loadProspects: (cursor?: string | null) => Promise<void>;
@@ -79,6 +82,7 @@ interface UseQuickLearningTwilioReturn {
 export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
   // ===== STATE DECLARATIONS =====
   const [status, setStatus] = useState<TwilioStatus | null>(null);
+  const [history, setHistory] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -131,6 +135,30 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
       return `+${cleaned}`;
     }
     return phone;
+  }, []);
+
+  const getMessageStatusColor = useCallback((status: string): string => {
+    switch (status) {
+      case 'sent': return '#2196F3';
+      case 'delivered': return '#4CAF50';
+      case 'read': return '#8BC34A';
+      case 'failed': return '#F44336';
+      case 'pending': return '#FF9800';
+      default: return '#9E9E9E';
+    }
+  }, []);
+
+  const loadHistory = useCallback(async (params?: any) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      // Implementación básica - puedes expandir según necesites
+      setHistory({ messages: [], total: 0 });
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar historial');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   // ===== UNREAD MESSAGES MANAGEMENT =====
@@ -461,6 +489,7 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
   return {
     // State
     status,
+    history,
     isLoading,
     error,
     
@@ -487,11 +516,13 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     // Actions
     sendMessage,
     sendTemplate,
+    loadHistory,
     clearError,
     markMessageAsRead,
     
     // Utilities
     formatPhoneNumber,
+    getMessageStatusColor,
     
     // Prospects
     loadProspects,
