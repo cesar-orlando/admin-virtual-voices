@@ -48,7 +48,7 @@ export const deleteSession = async (sessionId: string, user: UserProfile) => {
 };
 
 // Nueva función para obtener usuarios de WhatsApp
-export const fetchWhatsAppUsers = async (user: UserProfile, tableSlugs: string[] = ['prospectos', 'clientes']) => {
+export const fetchWhatsAppUsers = async (user: UserProfile, tableSlugs: string[] = ['prospectos', 'clientes', 'nuevo_ingreso']) => {
   try {
     const response = await api.get(`/whatsapp/usuarios/${user.companySlug}?tableSlugs=${tableSlugs.join(',')}`);
     return response.data.usuarios || [];

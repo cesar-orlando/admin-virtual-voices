@@ -73,7 +73,7 @@ interface UseQuickLearningTwilioReturn {
   // Prospects
   loadProspects: (cursor?: string | null) => Promise<void>;
   loadMoreProspects: () => Promise<void>;
-  selectProspect: (prospect: any) => Promise<void>;
+  selectProspect: (prospect: any, forceReload?: boolean) => Promise<void>;
   
   // Testing functions
   simulateTyping: (phone: string, isTyping: boolean, userType: string) => Promise<void>;
@@ -269,7 +269,11 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
       setErrorProspects(null);
       
       const user = JSON.parse(localStorage.getItem('user') || '{}');
-      const response = await getQuickLearningProspects(cursor, 20, user.role, user._id);
+      let asesorId = undefined;
+      if (user.role === 'Asesor') {
+        asesorId = user._id || user.id;
+      }
+      const response = await getQuickLearningProspects(cursor, 20, user.role, asesorId);
       
       if (cursor) {
         // Cargar más prospectos
@@ -301,47 +305,41 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     }
   }, [hasMoreProspects, isLoadingMoreProspects, nextCursor, loadProspects]);
 
-  const selectProspect = useCallback(async (prospect: any) => {
-    console.log('selectProspect called with:', prospect);
+  const selectProspect = useCallback(async (prospect: any, forceReload: boolean = true) => {
     setSelectedProspect(prospect);
-    setIsLoadingChatHistory(true);
-    setErrorChatHistory(null);
-    try {
-      const phone = prospect.data?.telefono || prospect.phone;
-      if (!phone) throw new Error('El prospecto no tiene número de teléfono');
-      const formattedPhone = formatPhoneNumber(phone);
-      
-      console.log('📥 Cargando historial desde API para:', formattedPhone);
-      const response = await getQuickLearningChatHistory(phone);
-      console.log('Chat history response:', response);
-      
-      let data = response.data || response;
-      console.log('Extracted chat history data:', data);
-      
-      // Extraer los mensajes del objeto de respuesta
-      const messages = data.messages || data;
-      console.log('Messages extracted:', messages);
-      
-      const cleanedData = Array.isArray(messages) ? messages.map(msg => ({
-        ...msg,
-        isNewMessage: false
-      })) : [];
-      
-      console.log('📋 Datos del backend:', cleanedData.length, 'mensajes');
-      setChatHistory(cleanedData);
-      
-      const unreadCount = unreadMessages.get(formattedPhone) || 0;
-      if (unreadCount > 0) {
-        console.log('👁️ Marcando como leído al seleccionar chat:', formattedPhone, 'con', unreadCount, 'mensajes no leídos');
-        markMessageAsRead(phone);
-      } else {
-        console.log('ℹ️ Chat seleccionado no tiene mensajes no leídos:', formattedPhone);
+    
+    if (forceReload) {
+      setIsLoadingChatHistory(true);
+      setErrorChatHistory(null);
+      try {
+        const phone = prospect.data?.telefono || prospect.phone;
+        if (!phone) throw new Error('El prospecto no tiene número de teléfono');
+        const formattedPhone = formatPhoneNumber(phone);
+        
+        const response = await getQuickLearningChatHistory(phone);
+        
+        let data = response.data || response;
+        
+        // Extraer los mensajes del objeto de respuesta
+        const messages = data.messages || data;
+        
+        const cleanedData = Array.isArray(messages) ? messages.map(msg => ({
+          ...msg,
+          isNewMessage: false
+        })) : [];
+        
+        setChatHistory(cleanedData);
+        
+        const unreadCount = unreadMessages.get(formattedPhone) || 0;
+        if (unreadCount > 0) {
+          markMessageAsRead(phone);
+        }
+      } catch (err: any) {
+        console.error('Error loading chat history:', err);
+        setErrorChatHistory(err.message || 'Error al cargar historial del chat');
+      } finally {
+        setIsLoadingChatHistory(false);
       }
-    } catch (err: any) {
-      console.error('Error loading chat history:', err);
-      setErrorChatHistory(err.message || 'Error al cargar historial del chat');
-    } finally {
-      setIsLoadingChatHistory(false);
     }
   }, [markMessageAsRead, unreadMessages, formatPhoneNumber]);
 

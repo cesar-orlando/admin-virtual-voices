@@ -11,10 +11,6 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Snackbar,
   Alert,
   useTheme,
@@ -45,6 +41,7 @@ import api from '../api/axios';
 import { fetchCompanyUsers } from '../api/servicios';
 import { updateRecord } from '../api/servicios';
 import { useDebounce } from '../hooks/useDebounce';
+import ClientEditModal from '../components/ClientEditModal';
 // import TemplateModal from '../../components/Record/';
 
 // TemplateModal local para plantillas (basado en ProspectDrawer)
@@ -202,6 +199,8 @@ const QuickLearningDashboard: React.FC = () => {
   const [savingProspect, setSavingProspect] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [tableChanged, setTableChanged] = useState(false);
+  const [reloadingTableParams, setReloadingTableParams] = useState(false);
 
   // 1. Agrega estados para validación y referencias de campos
   const [missingFields, setMissingFields] = useState<string[]>([]);
@@ -552,10 +551,22 @@ const QuickLearningDashboard: React.FC = () => {
   const handleOpenClientInfo = async () => {
     if (selectedProspect) {
       try {
+        // Buscar el prospecto actualizado en la lista
+        const updatedProspect = prospects.find(p => p._id === selectedProspect._id) || selectedProspect;
         // Obtener la estructura de la tabla para renderizar campos apropiados
         const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const tableData = await api.get(`/tables/${user.companySlug}/${selectedProspect.tableSlug}`);
-        setTableFields(tableData.data.fields || []);
+        const tableData = await api.get(`/tables/${user.companySlug}/${updatedProspect.tableSlug}`);
+        let fields = tableData.data.fields || [];
+        // Si no existe el campo tableSlug, agrégalo manualmente al principio
+        if (!fields.some((f: any) => f.name === 'tableSlug')) {
+          fields.unshift({
+            name: 'tableSlug',
+            label: 'Tipo de Prospecto',
+            required: true,
+            type: 'string'
+          });
+        }
+        setTableFields(fields);
 
         const response = await fetchCompanyUsers(user.companySlug || '')
         setAsesores(response || []);
@@ -564,29 +575,29 @@ const QuickLearningDashboard: React.FC = () => {
         // Inicializar todos los campos de la tabla, aunque no existan en data
         const initialData: any = {};
         (tableData.data.fields || []).forEach((field: any) => {
-          initialData[field.name] = selectedProspect.data[field.name] ?? '';
+          initialData[field.name] = updatedProspect.data[field.name] ?? '';
         });
 
         // Agregar campos adicionales que no están en la estructura de la tabla
         // pero que necesitamos mostrar en el modal
-        initialData.tableSlug = selectedProspect.tableSlug || '';
-        initialData.aiEnabled = selectedProspect.aiEnabled || false;
-        initialData.lastMessageDate = selectedProspect.lastMessageDate || '';
+        initialData.tableSlug = updatedProspect.tableSlug || '';
+        initialData.aiEnabled = updatedProspect.aiEnabled || false;
+        initialData.lastMessageDate = updatedProspect.lastMessageDate || '';
 
         // Asegurar que los campos especiales tengan valores por defecto
-        if (!initialData.asesor && selectedProspect.data.asesor) {
-          initialData.asesor = selectedProspect.data.asesor;
+        if (!initialData.asesor && updatedProspect.data.asesor) {
+          initialData.asesor = updatedProspect.data.asesor;
         }
 
         if (!initialData.curso) {
-          initialData.curso = selectedProspect.data.curso || 'virtual';
+          initialData.curso = updatedProspect.data.curso || 'virtual';
         }
 
         // Agregar campos específicos de Quick Learning
-        initialData.campana = selectedProspect.data.campana || '';
-        initialData.medio = selectedProspect.data.medio || '';
-        initialData.comentario = selectedProspect.data.comentario || '';
-        initialData.consecutivo = selectedProspect.data.consecutivo || '';
+        initialData.campana = updatedProspect.data.campana || '';
+        initialData.medio = updatedProspect.data.medio || '';
+        initialData.comentario = updatedProspect.data.comentario || '';
+        initialData.consecutivo = updatedProspect.data.consecutivo || '';
 
 
         setEditProspectData(initialData);
@@ -597,13 +608,14 @@ const QuickLearningDashboard: React.FC = () => {
         console.error('Error loading table structure:', err);
         // Fallback: usar solo los datos del prospecto
         setTableFields([]);
+        const updatedProspect = prospects.find(p => p._id === selectedProspect._id) || selectedProspect;
         const fallbackData = { 
-          ...selectedProspect.data,
-          tableSlug: selectedProspect.tableSlug || '',
-          aiEnabled: selectedProspect.aiEnabled || false,
-          campana: selectedProspect.data.campana || '',
-          medio: selectedProspect.data.medio || '',
-          comentario: selectedProspect.data.comentario || ''
+          ...updatedProspect.data,
+          tableSlug: updatedProspect.tableSlug || '',
+          aiEnabled: updatedProspect.aiEnabled || false,
+          campana: updatedProspect.data.campana || '',
+          medio: updatedProspect.data.medio || '',
+          comentario: updatedProspect.data.comentario || ''
         };
         setEditProspectData(fallbackData);
         setOpenClientInfo(true);
@@ -625,12 +637,14 @@ const QuickLearningDashboard: React.FC = () => {
 
 
   // 3. Valida campos requeridos antes de guardar
-  const handleSaveProspectValidated = async () => {
-    console.log('DEBUG: handleSaveProspectValidated called');
+  const handleSaveProspectValidated = async (formData?: any) => {
     if (!selectedProspect) {
-      console.log('DEBUG: No selectedProspect');
       return;
     }
+    
+    // Usar los datos del formulario si se proporcionan, sino usar editProspectData
+    const dataToProcess = formData || editProspectData;
+    
     setSavingProspect(true);
     setSaveError(null);
     setMissingFields([]);
@@ -639,7 +653,7 @@ const QuickLearningDashboard: React.FC = () => {
       const requiredFields = tableFields.filter((f: any) => f.required);
       const missing: string[] = [];
       requiredFields.forEach((f: any) => {
-        const value = editProspectData?.[f.name];
+        const value = dataToProcess?.[f.name];
         if (
           value === undefined ||
           value === null ||
@@ -653,17 +667,11 @@ const QuickLearningDashboard: React.FC = () => {
       if (missing.length > 0) {
         setSaveError('Faltan campos requeridos.');
         setSavingProspect(false);
-        setTimeout(() => {
-          if (fieldRefs.current[missing[0]] && typeof fieldRefs.current[missing[0]].focus === 'function') {
-            fieldRefs.current[missing[0]].focus();
-          }
-        }, 100);
-        console.log('DEBUG: Missing fields', missing);
         return;
       }
 
       // --- TRANSFORMACIONES PARA VALIDACIÓN DEL BACKEND ---
-      const dataToSave = { ...editProspectData };
+      const dataToSave = { ...dataToProcess };
       // 1. Curso: mayúscula inicial
       if (dataToSave.curso) {
         const mapCurso: Record<string, string> = { virtual: 'Virtual', online: 'Online', presencial: 'Presencial', Virtual: 'Virtual', Online: 'Online', Presencial: 'Presencial' };
@@ -687,18 +695,40 @@ const QuickLearningDashboard: React.FC = () => {
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       const recordId = selectedProspect._id;
       const updateData = { data: dataToSave };
-      console.log('DEBUG: updateRecord', { recordId, updateData, user });
-      await updateRecord(recordId, updateData, user);
+      const response = await updateRecord(recordId, updateData, user);
+      
+      // Verificar si se cambió de tabla
+      if (response?.tableChanged) {
+        setTableChanged(true);
+        // Actualizar el selectedProspect con la nueva tabla
+        if (selectedProspect) {
+          selectedProspect.tableSlug = response.table.slug;
+        }
+      } else {
+        setTableChanged(false);
+      }
+      
       setSaveSuccess(true);
       setSaveError(null);
-      console.log('DEBUG: Guardado exitoso');
+      
+      // Recargar la lista de prospectos después de guardar
+      await loadProspects();
+      
+      // Actualizar el selectedProspect con los nuevos datos
+      if (selectedProspect) {
+        const updatedProspect = prospects.find(p => p._id === selectedProspect._id);
+        if (updatedProspect) {
+          // Actualizar el prospecto sin recargar el chat (solo los datos del prospecto)
+          selectProspect(updatedProspect, false);
+        }
+      }
+      
     } catch (err) {
       setSaveError('Error al guardar la información del prospecto.');
       setSaveSuccess(false);
-      console.error('DEBUG: Error saving prospect:', err);
+      console.error('Error saving prospect:', err);
     } finally {
       setSavingProspect(false);
-      console.log('DEBUG: handleSaveProspectValidated finished');
     }
   };
 
@@ -762,6 +792,66 @@ const QuickLearningDashboard: React.FC = () => {
       templateId: "HX1df87ec38ef585d7051f805dec8a395b",
     },
   ];
+
+  // Función para recargar parámetros de tabla cuando cambie tableSlug
+  const reloadTableParameters = async (newTableSlug: string | {}) => {
+    if (!newTableSlug || typeof newTableSlug !== 'string') return;
+    
+    setReloadingTableParams(true);
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      
+      // Obtener la estructura de la nueva tabla
+      const tableData = await api.get(`/tables/${user.companySlug}/${newTableSlug}`);
+      let newTableFields = tableData.data.fields || [];
+      // Si no existe el campo tableSlug, agrégalo manualmente al principio
+      if (!newTableFields.some((f: any) => f.name === 'tableSlug')) {
+        newTableFields.unshift({
+          name: 'tableSlug',
+          label: 'Tipo de Cliente',
+          required: true,
+          type: 'string'
+        });
+      }
+      setTableFields(newTableFields);
+
+      // Crear nuevos datos con los campos de la nueva tabla
+      const newData: any = {};
+      newTableFields.forEach((field: any) => {
+        // Mantener valores existentes si el campo existe en ambos
+        newData[field.name] = editProspectData?.[field.name] ?? '';
+      });
+
+      // Mantener campos especiales que no están en la estructura de tabla
+      newData.tableSlug = newTableSlug;
+      newData.aiEnabled = editProspectData?.aiEnabled || false;
+      newData.lastMessageDate = editProspectData?.lastMessageDate || '';
+
+      // Asegurar que los campos especiales tengan valores por defecto
+      if (!newData.asesor && editProspectData?.asesor) {
+        newData.asesor = editProspectData.asesor;
+      }
+
+      if (!newData.curso) {
+        newData.curso = editProspectData?.curso || 'virtual';
+      }
+
+      // Agregar campos específicos de Quick Learning
+      newData.campana = editProspectData?.campana || '';
+      newData.medio = editProspectData?.medio || '';
+      newData.comentario = editProspectData?.comentario || '';
+      newData.consecutivo = editProspectData?.consecutivo || '';
+
+      setEditProspectData(newData);
+      
+      console.log('DEBUG: Parámetros recargados para tabla:', newTableSlug);
+    } catch (err) {
+      console.error('Error recargando parámetros de tabla:', err);
+      // En caso de error, mantener los datos actuales
+    } finally {
+      setReloadingTableParams(false);
+    }
+  };
 
   return (
     <Box sx={{ 
@@ -1549,175 +1639,22 @@ const QuickLearningDashboard: React.FC = () => {
         </Box>
       )}
 
-      {/* Dialog para mostrar información del cliente */}
-      <Dialog open={openClientInfo} onClose={() => setOpenClientInfo(false)} maxWidth="md" fullWidth>
-        <DialogTitle>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <PersonIcon color="primary" />
-            <Typography variant="h6">Información del Cliente</Typography>
-            {selectedProspect && (
-              <Chip 
-                label={selectedProspect.tableSlug} 
-                size="small" 
-                color="secondary" 
-                sx={{ ml: 'auto' }}
-              />
-            )}
-          </Box>
-        </DialogTitle>
-        <DialogContent>
-          {editProspectData && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, py: 1 }}>
-              {/* Alert de éxito */}
-              {saveSuccess && (
-                <Alert severity="success" sx={{ mb: 2 }}>
-                  ¡Información guardada exitosamente!
-                </Alert>
-              )}
-              {/* Alert de error */}
-              {saveError && (
-                <Alert severity="error" sx={{ mb: 2 }}>
-                  {saveError}
-                </Alert>
-              )}
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-                {Object.entries(editProspectData).map(([key, value]) => {
-                  if (key === 'asesor') {
-                    // Campo asesor: select especial
-                    let currentAsesorId = '';
-                    if (typeof value === 'string' && value.startsWith('{')) {
-                      try {
-                        const parsed = JSON.parse(value);
-                        currentAsesorId = parsed._id ? String(parsed._id) : '';
-                      } catch {
-                        currentAsesorId = '';
-                      }
-                    } else if (typeof value === 'object' && value !== null && (value as any)._id) {
-                      currentAsesorId = (value as any)._id ? String((value as any)._id) : '';
-                    } else if (typeof value === 'string') {
-                      currentAsesorId = value;
-                    } else {
-                      currentAsesorId = '';
-                    }
-                    return (
-                      <FormControl fullWidth size="small" error={missingFields.includes('asesor')} key="asesor">
-                        <InputLabel>Asesor</InputLabel>
-                        <Select
-                          value={currentAsesorId || ''}
-                          label="Asesor"
-                          onChange={e => {
-                            setEditProspectData((prev: any) => ({
-                              ...prev,
-                              asesor: e.target.value
-                            }));
-                          }}
-                          inputRef={el => fieldRefs.current['asesor'] = el}
-                        >
-                          <MenuItem value="">
-                            <em>Sin asesor asignado</em>
-                          </MenuItem>
-                          {asesores.map((asesor: any) => {
-                            const id = String(asesor._id || asesor.id || asesor.email || '');
-                            return (
-                              <MenuItem key={id} value={id}>
-                                {asesor.nombre || asesor.name || asesor.email || id}
-                                {asesor.apellido ? ` ${asesor.apellido}` : ''}
-                              </MenuItem>
-                            );
-                          })}
-                        </Select>
-                        {missingFields.includes('asesor') && <Typography variant="caption" color="error">Este campo es obligatorio</Typography>}
-                      </FormControl>
-                    );
-                  }
-                  // Campo 'medio' como select especial
-                  if (key === 'medio') {
-                    return (
-                      <FormControl fullWidth size="small" key="medio">
-                        <InputLabel>Medio</InputLabel>
-                        <Select
-                          value={value || ''}
-                          label="Medio"
-                          onChange={e => setEditProspectData((prev: any) => ({ ...prev, medio: e.target.value }))}
-                        >
-                          <MenuItem value="Meta">Meta</MenuItem>
-                          <MenuItem value="Google">Google</MenuItem>
-                          <MenuItem value="Interno">Interno</MenuItem>
-                        </Select>
-                      </FormControl>
-                    );
-                  }
-                  // Campo 'curso' como select especial
-                  if (key === 'curso') {
-                    return (
-                      <FormControl fullWidth size="small" key="curso">
-                        <InputLabel>Curso</InputLabel>
-                        <Select
-                          value={value || ''}
-                          label="Curso"
-                          onChange={e => setEditProspectData((prev: any) => ({ ...prev, curso: e.target.value }))}
-                        >
-                          <MenuItem value="virtual">Virtual</MenuItem>
-                          <MenuItem value="online">Online</MenuItem>
-                          <MenuItem value="presencial">Presencial</MenuItem>
-                        </Select>
-                      </FormControl>
-                    );
-                  }
-                  // Campo 'tableSlug' como select especial
-                  if (key === 'tableSlug') {
-                    return (
-                      <FormControl fullWidth size="small" key="tableSlug">
-                        <InputLabel>Tipo</InputLabel>
-                        <Select
-                          value={value || ''}
-                          label="Tipo"
-                          onChange={e => setEditProspectData((prev: any) => ({ ...prev, tableSlug: e.target.value }))}
-                        >
-                          <MenuItem value="alumno">Alumno</MenuItem>
-                          <MenuItem value="prospectos">Prospecto</MenuItem>
-                          <MenuItem value="nuevo_ingreso">Nuevo ingreso</MenuItem>
-                          <MenuItem value="sin_contestar">Sin contestar</MenuItem>
-                        </Select>
-                      </FormControl>
-                    );
-                  }
-                  // Los demás campos normales
-                  return (
-                    <TextField
-                      key={key}
-                      label={key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ')}
-                      value={typeof value === 'object' ? '' : value ?? ''}
-                      onChange={e => setEditProspectData((prev: any) => ({ ...prev, [key]: e.target.value }))}
-                      fullWidth
-                      size="small"
-                      sx={{ bgcolor: 'background.default', borderRadius: 2 }}
-                    />
-                  );
-                })}
-              </Box>
-              <Box sx={{ display: 'flex', gap: 2, mt: 2, justifyContent: 'flex-end' }}>
-                <Button 
-                  onClick={() => setOpenClientInfo(false)} 
-                  sx={{ fontWeight: 700, color: 'text.secondary' }}
-                >
-                  Cancelar
-                </Button>
-                <Button 
-                  variant="contained" 
-                  color="primary" 
-                  onClick={handleSaveProspectValidated} 
-                  sx={{ fontWeight: 700, px: 4, boxShadow: 2 }} 
-                  disabled={savingProspect}
-                  startIcon={savingProspect ? <CircularProgress size={16} /> : null}
-                >
-                  {savingProspect ? 'Guardando...' : 'Guardar Cambios'}
-                </Button>
-              </Box>
-            </Box>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Modal profesional para editar información del cliente */}
+      <ClientEditModal
+        open={openClientInfo}
+        onClose={() => setOpenClientInfo(false)}
+        onSave={handleSaveProspectValidated}
+        initialData={editProspectData}
+        tableFields={tableFields}
+        asesores={asesores}
+        loading={false}
+        saving={savingProspect}
+        error={saveError}
+        success={saveSuccess}
+        tableChanged={tableChanged}
+        reloadingTableParams={reloadingTableParams}
+        onTableSlugChange={reloadTableParameters}
+      />
 
       {/* Dialog para mostrar la imagen en grande */}
       <Dialog open={openImageModal} onClose={() => setOpenImageModal(false)} maxWidth="md" fullWidth>

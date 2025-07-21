@@ -95,7 +95,7 @@ export function ChatsTab() {
     const loadData = async () => {
       try {
         const [usersData, sessionsData] = await Promise.all([
-          fetchWhatsAppUsers(user, ['prospectos', 'clientes']),
+          fetchWhatsAppUsers(user, ['prospectos', 'clientes', 'nuevo_ingreso']),
           fetchSessions(user),
         ]) as [WhatsAppUser[], WhatsAppSession[]]
         

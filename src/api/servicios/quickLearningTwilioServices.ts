@@ -202,7 +202,7 @@ export const getQuickLearningProspects = async (
   try {
     const queryParams = new URLSearchParams();
     queryParams.append('companySlug', 'quicklearning');
-    queryParams.append('tableSlugs', 'prospectos,clientes,alumnos,sin_contestar');
+    queryParams.append('tableSlugs', 'prospectos,clientes,alumnos,sin_contestar,nuevo_ingreso');
     queryParams.append('limit', limit.toString());
     if (cursor) {
       queryParams.append('cursor', cursor);
