@@ -1,10 +1,7 @@
-import React, { useState, useCallback, useEffect, useRef, memo } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Box,
-  Grid,
   Card,
-  CardContent,
   Typography,
   Button,
   Avatar,
@@ -18,11 +15,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Switch,
-  FormControlLabel,
   Snackbar,
   Alert,
-  LinearProgress,
   useTheme,
   Tooltip,
   Badge,
@@ -31,40 +25,22 @@ import {
   ListItem,
   ListItemAvatar,
   ListItemText,
-  ListItemSecondaryAction,
-  Paper,
   CircularProgress,
   Chip
 } from '@mui/material';
 import {
   WhatsApp as WhatsAppIcon,
   Send as SendIcon,
-  History as HistoryIcon,
-  Dashboard as DashboardIcon,
   Person as PersonIcon,
-  Settings as SettingsIcon,
   SmartToy as AIIcon,
-  Phone as PhoneIcon,
   Message as MessageIcon,
-  TrendingUp as TrendingUpIcon,
-  PeopleAlt as PeopleAltIcon,
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
   Refresh as RefreshIcon,
-  Add as AddIcon,
-  FilterList as FilterListIcon,
   Search as SearchIcon,
   AccessTime as AccessTimeIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
-  Launch as LaunchIcon,
-  PictureAsPdf as PictureAsPdfIcon,
-  Audiotrack as AudiotrackIcon,
-  Movie as MovieIcon,
   Payment as PaymentIcon
 } from '@mui/icons-material';
 import { useQuickLearningTwilio } from '../hooks/useQuickLearningTwilio';
-import type { TwilioSendRequest, TwilioTemplateRequest } from '../types/quicklearning';
 import api from '../api/axios';
 import { fetchCompanyUsers } from '../api/servicios';
 import { updateRecord } from '../api/servicios';
@@ -148,26 +124,16 @@ const TemplateModal = ({ open, onClose, templates, onSend, name }: TemplateModal
 );
 
 const QuickLearningDashboard: React.FC = () => {
-  console.log('QuickLearningDashboard - Component rendering')
+  console.log('QuickLearningDashboard - Component rendering');
   
   const theme = useTheme();
   const {
-    status,
-    activeChats,
-    currentChat,
     isLoading,
     error,
     sendMessage,
     sendTemplate,
-    loadChatByPhone,
-    toggleAI,
-    assignAdvisor,
-    updateCustomerInfo,
-    changeChatStatus,
     clearError,
     formatPhoneNumber,
-    getMessageStatusColor,
-    getChatStatusColor,
     prospects,
     selectedProspect,
     chatHistory,
@@ -183,18 +149,19 @@ const QuickLearningDashboard: React.FC = () => {
     unreadMessages,
     markMessageAsRead,
     socketConnected,
+    typingIndicators,
   } = useQuickLearningTwilio();
 
   // State para modales y formularios
   const [sendMessageDialog, setSendMessageDialog] = useState(false);
   
   // State para formularios
-  const [messageForm, setMessageForm] = useState<TwilioSendRequest>({
+  const [messageForm, setMessageForm] = useState<{phone: string; message: string}>({
     phone: '',
     message: ''
   });
   
-  const [templateForm, setTemplateForm] = useState<TwilioTemplateRequest>({
+  const [templateForm, setTemplateForm] = useState<{phone: string; templateId: string; variables: string[]}>({
     phone: '',
     templateId: '',
     variables: []
@@ -216,8 +183,7 @@ const QuickLearningDashboard: React.FC = () => {
   // Estado local para loading del input de mensaje
   const [isSendingMessage, setIsSendingMessage] = useState(false);
 
-  // Estado local para historial mostrado
-  const [chatHistoryLocal, setChatHistoryLocal] = useState<any[]>([]);
+  // Estado local para historial mostrado - ELIMINADO: usar solo chatHistory global
 
   // Estado para controlar si mostrar botón de scroll al final
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
@@ -332,14 +298,23 @@ const QuickLearningDashboard: React.FC = () => {
     }
   }, []);
 
-  // Sincroniza chatHistoryLocal con chatHistory global al seleccionar prospecto
+  // Detectar mensajes nuevos para auto-scroll automático
+  const lastMessageRef = useRef<any>(null);
   useEffect(() => {
-    setChatHistoryLocal(chatHistory);
-    
-    // Limpiar input de mensaje solo cuando cambia selectedProspect
-    // (No limpiar por cada cambio en chatHistory)
-    // setMessageInputValue(''); // <-- Elimina esta línea aquí
-  }, [chatHistory]);
+    if (chatHistory.length > 0) {
+      const lastMessage = chatHistory[chatHistory.length - 1];
+      const isNewMessage = lastMessage.isNewMessage || lastMessage.isOptimistic;
+      
+      if (isNewMessage && lastMessageRef.current !== lastMessage._id) {
+        console.log('🆕 Mensaje nuevo detectado, haciendo auto-scroll automático');
+        lastMessageRef.current = lastMessage._id;
+        setTimeout(() => scrollToBottom(), 100);
+        setShowScrollToBottom(false);
+      }
+    }
+  }, [chatHistory, scrollToBottom]);
+
+  // ELIMINADO: No hay sincronización - usamos únicamente chatHistory global
 
   // Limpiar input de mensaje solo cuando cambia selectedProspect
   useEffect(() => {
@@ -351,21 +326,16 @@ const QuickLearningDashboard: React.FC = () => {
   }, [loadProspects]);
 
   // Limpiar mensajes no leídos al desmontar el componente
-  useEffect(() => {
-    return () => {
-      // Cleanup: limpiar todos los mensajes no leídos al salir
-      unreadMessages.forEach(phone => {
-        markMessageAsRead(phone);
-      });
-    };
-  }, [unreadMessages, markMessageAsRead]);
+  // ELIMINADO: Este useEffect estaba causando que se marcaran como leídos TODOS los números
+  // cuando cambiaba unreadMessages, en lugar de solo el seleccionado
 
   // Mostrar notificación cuando llega un nuevo mensaje
   useEffect(() => {
     if (unreadMessages.size > 0) {
       // Encontrar el prospecto correspondiente al último mensaje no leído
-      const lastUnreadPhone = Array.from(unreadMessages).pop();
-      if (lastUnreadPhone) {
+      const lastUnreadEntry = Array.from(unreadMessages.entries()).pop();
+      if (lastUnreadEntry) {
+        const [lastUnreadPhone] = lastUnreadEntry;
         const prospect = prospects.find(p => formatPhoneNumber(p.data?.telefono || '') === lastUnreadPhone);
         if (prospect && selectedProspect?._id !== prospect._id) {
           setNewMessageNotification({
@@ -376,7 +346,7 @@ const QuickLearningDashboard: React.FC = () => {
           
           // Ocultar notificación después de 5 segundos
           setTimeout(() => {
-            setNewMessageNotification(prev => ({ ...prev, show: false }));
+            setNewMessageNotification((prev: any) => ({ ...prev, show: false }));
           }, 5000);
         }
       }
@@ -384,14 +354,19 @@ const QuickLearningDashboard: React.FC = () => {
   }, [unreadMessages, prospects, selectedProspect, formatPhoneNumber]);
 
   // Auto-scroll al último mensaje
-  useEffect(() => {
+  useEffect(() => {    
+    console.log('🔄 useEffect chatHistory cambió:', chatHistory.length, 'mensajes');
+    
     // Scroll inmediato cuando cambia el prospecto o se cargan mensajes
-    if (chatHistoryLocal.length > 0) {
-      // Pequeño delay para asegurar que el DOM se haya renderizado
-      setTimeout(scrollToBottom, 100);
-      setShowScrollToBottom(false); // Ocultar botón cuando se hace auto-scroll
+    if (chatHistory.length > 0) {
+      console.log('🎯 ChatHistory tiene mensajes, haciendo auto-scroll');
+      // Siempre hacer scroll al final cuando se carga un chat
+      setTimeout(() => scrollToBottom(), 150);
+      setShowScrollToBottom(false);
     }
-  }, [chatHistoryLocal.length, selectedProspect?._id, scrollToBottom]);
+  }, [chatHistory, selectedProspect?._id, scrollToBottom]);
+
+  // ELIMINADO: No hay manejo local - todo se maneja en el hook global
 
   // Detectar scroll del usuario para mostrar/ocultar botón de scroll al final
   useEffect(() => {
@@ -570,18 +545,7 @@ const QuickLearningDashboard: React.FC = () => {
     }
   }, [sendMessage, messageForm]);
 
-  // Filtrar chats (memoizado para evitar recálculos)
-  const filteredChats = React.useMemo(() => {
-    return activeChats.filter(chat => {
-      const matchesSearch = chat.phone.includes(searchTerm) || 
-                           chat.profileName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           chat.customerInfo?.name?.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesStatus = statusFilter === 'all' || chat.status === statusFilter;
-      
-      return matchesSearch && matchesStatus;
-    });
-  }, [activeChats, searchTerm, statusFilter]);
+
 
 
   // Cuando se abre la info del cliente, inicializa los datos editables
@@ -769,8 +733,8 @@ const QuickLearningDashboard: React.FC = () => {
     let lastDate = null;
     if (selectedProspect.lastMessageDate) {
       lastDate = new Date(selectedProspect.lastMessageDate);
-    } else if (chatHistoryLocal.length > 0) {
-      lastDate = new Date(chatHistoryLocal[chatHistoryLocal.length - 1].dateCreated);
+    } else if (chatHistory.length > 0) {
+      lastDate = new Date(chatHistory[chatHistory.length - 1].dateCreated);
     }
     if (!lastDate) return false;
     const now = new Date();
@@ -839,6 +803,30 @@ const QuickLearningDashboard: React.FC = () => {
           transform: 'scale(1)',
           boxShadow: '0 0 0 0 rgba(25, 118, 210, 0)'
         }
+      },
+      '@keyframes typingDot': {
+        '0%, 60%, 100%': {
+          transform: 'translateY(0)',
+          opacity: 0.4
+        },
+        '30%': {
+          transform: 'translateY(-10px)',
+          opacity: 1
+        }
+      },
+      '@keyframes bumpIn': {
+        '0%': {
+          transform: 'translateY(-20px)',
+          opacity: 0
+        },
+        '50%': {
+          transform: 'translateY(5px)',
+          opacity: 0.8
+        },
+        '100%': {
+          transform: 'translateY(0)',
+          opacity: 1
+        }
       }
     }}>
       {/* Header y stats */}
@@ -854,22 +842,7 @@ const QuickLearningDashboard: React.FC = () => {
                 <Typography variant="h6" fontWeight={700} color="primary" sx={{ letterSpacing: 1 }}>
                   Quick Learning WhatsApp
                 </Typography>
-                {unreadMessages.size > 0 && (
-                  <Badge
-                    badgeContent={unreadMessages.size}
-                    color="error"
-                    sx={{
-                      '& .MuiBadge-badge': {
-                        fontSize: '0.75rem',
-                        fontWeight: 700,
-                        minWidth: 20,
-                        height: 20
-                      }
-                    }}
-                  >
-                    <Box />
-                  </Badge>
-                )}
+
                 {/* Indicador de estado de conexión del socket */}
                 <Box
                   sx={{
@@ -904,19 +877,11 @@ const QuickLearningDashboard: React.FC = () => {
               </Typography>
             </Box>
           </Box>
-{/*           <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="contained"
-              startIcon={<SendIcon />}
-              onClick={() => setSendMessageDialog(true)}
-              sx={{ background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)', fontWeight: 700, fontSize: 16, px: 3, borderRadius: 3, boxShadow: 2 }}
-            >
-              ENVIAR MENSAJE
-            </Button>
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={handleRefresh} disabled={isLoading} sx={{ fontWeight: 700, fontSize: 16, px: 3, borderRadius: 3 }}>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => loadProspects()} disabled={isLoadingProspects} sx={{ fontWeight: 700, fontSize: 16, px: 3, borderRadius: 3 }}>
               ACTUALIZAR
             </Button> 
-          </Box> */}
+          </Box>
         </Box>
       </Box>
 
@@ -992,11 +957,7 @@ const QuickLearningDashboard: React.FC = () => {
                     selected={selectedProspect?._id === prospect._id}
                     onClick={() => {
                       selectProspect(prospect);
-                      // Marcar mensajes como leídos inmediatamente al hacer clic
-                      const phone = prospect.data?.telefono || prospect.phone;
-                      if (phone) {
-                        markMessageAsRead(phone);
-                      }
+                      // NO marcar como leído aquí - selectProspect ya lo hace internamente
                     }}
                     sx={{
                       borderRadius: 2,
@@ -1018,18 +979,30 @@ const QuickLearningDashboard: React.FC = () => {
                         overlap="circular"
                         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
                         badgeContent={
-                          unreadMessages.has(formatPhoneNumber(prospect.data?.telefono || '')) ? (
-                            <Box
-                              sx={{
-                                width: 12,
-                                height: 12,
-                                borderRadius: '50%',
-                                bgcolor: theme.palette.success.main,
-                                border: `2px solid ${theme.palette.background.paper}`,
-                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                              }}
-                            />
-                          ) : null
+                          (() => {
+                            const phone = formatPhoneNumber(prospect.data?.telefono || '');
+                            const unreadCount = unreadMessages.get(phone) || 0;
+                            return unreadCount > 0 ? (
+                              <Box
+                                sx={{
+                                  minWidth: 20,
+                                  height: 20,
+                                  borderRadius: '10px',
+                                  bgcolor: theme.palette.error.main,
+                                  border: `2px solid ${theme.palette.background.paper}`,
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  color: 'white'
+                                }}
+                              >
+                                {unreadCount > 99 ? '99+' : unreadCount}
+                              </Box>
+                            ) : null;
+                          })()
                         }
                       >
                         <Avatar sx={{ bgcolor: theme.palette.success.main, width: 32, height: 32, color: theme.palette.getContrastText(theme.palette.success.main) }}>
@@ -1042,34 +1015,50 @@ const QuickLearningDashboard: React.FC = () => {
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography
                             component="span"
-                            fontWeight={unreadMessages.has(formatPhoneNumber(prospect.data?.telefono || '')) ? 800 : 700}
+                            fontWeight={(() => {
+                              const phone = formatPhoneNumber(prospect.data?.telefono || '');
+                              const unreadCount = unreadMessages.get(phone) || 0;
+                              return unreadCount > 0 ? 800 : 700;
+                            })()}
                             fontSize={15}
                             noWrap
-                            color={unreadMessages.has(formatPhoneNumber(prospect.data?.telefono || '')) ? theme.palette.primary.main : theme.palette.text.primary}
+                            color={(() => {
+                              const phone = formatPhoneNumber(prospect.data?.telefono || '');
+                              const unreadCount = unreadMessages.get(phone) || 0;
+                              return unreadCount > 0 ? theme.palette.primary.main : theme.palette.text.primary;
+                            })()}
                             sx={{ 
                               flex: 1, 
                               textOverflow: 'ellipsis', 
                               overflow: 'hidden', 
                               whiteSpace: 'nowrap',
-                              ...(unreadMessages.has(formatPhoneNumber(prospect.data?.telefono || '')) && {
-                                textShadow: '0 0 1px rgba(0,0,0,0.1)'
-                              })
+                              ...(() => {
+                                const phone = formatPhoneNumber(prospect.data?.telefono || '');
+                                const unreadCount = unreadMessages.get(phone) || 0;
+                                return unreadCount > 0 ? {
+                                  textShadow: '0 0 1px rgba(0,0,0,0.1)'
+                                } : {};
+                              })()
                             }}
                           >
                             {prospect.data?.nombre ? prospect.data.nombre.trim() : (prospect.data?.telefono || '-')}
                           </Typography>
-                          {unreadMessages.has(formatPhoneNumber(prospect.data?.telefono || '')) && (
-                            <Box
-                              sx={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                bgcolor: theme.palette.success.main,
-                                flexShrink: 0,
-                                animation: 'pulse 2s infinite'
-                              }}
-                            />
-                          )}
+                          {(() => {
+                            const phone = formatPhoneNumber(prospect.data?.telefono || '');
+                            const unreadCount = unreadMessages.get(phone) || 0;
+                            return unreadCount > 0 ? (
+                              <Box
+                                sx={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: '50%',
+                                  bgcolor: theme.palette.error.main,
+                                  flexShrink: 0,
+                                  animation: 'pulse 2s infinite'
+                                }}
+                              />
+                            ) : null;
+                          })()}
                         </Box>
                       }
                       secondary={
@@ -1227,15 +1216,14 @@ const QuickLearningDashboard: React.FC = () => {
                       position: 'relative'
                     }}
                   >
-                    {chatHistoryLocal.length === 0 ? (
+                    {chatHistory.length === 0 ? (
                       <Typography color="text.secondary">No hay mensajes</Typography>
                     ) : (
-                      [...chatHistoryLocal]
-                        .sort((a, b) => new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime())
-                        .map((msg, idx) => {
-                        const body = msg.body || '';
-                        const mediaUrl = msg.mediaUrl || '';
-                        let content = null;
+                      [...chatHistory]
+                      .map((msg, idx) => {
+                      const body = msg.body || '';
+                      const mediaUrl = msg.mediaUrl || '';
+                      let content = null;
 
                         if (body.startsWith('🖼️ El usuario compartió una imagen:') && body.includes('https://')) {
                           const url = body.replace('🖼️ El usuario compartió una imagen:', '').trim();
@@ -1334,6 +1322,80 @@ const QuickLearningDashboard: React.FC = () => {
                         );
                       })
                     )}
+                    
+                    {/* Indicadores de escritura */}
+                    {(() => {
+                      if (!selectedProspect) return null;
+                      const phone = formatPhoneNumber(selectedProspect.data?.telefono || '');
+                      const typingIndicator = typingIndicators.get(phone);
+                      
+                      if (typingIndicator) {
+                        const typingText = (() => {
+                          switch(typingIndicator.userType) {
+                            case 'human': return 'está escribiendo...';
+                            case 'bot': return 'NatalIA está escribiendo...';
+                            case 'asesor': return 'Asesor está escribiendo...';
+                            default: return 'está escribiendo...';
+                          }
+                        })();
+                        
+                        return (
+                          <Box sx={{ display: 'flex', alignItems: 'flex-end', mb: 2 }}>
+                            <Avatar sx={{ 
+                              bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200], 
+                              width: 44, 
+                              height: 44, 
+                              color: theme.palette.getContrastText(theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200])
+                            }}>
+                              <PersonIcon fontSize="large" />
+                            </Avatar>
+                            <Box sx={{
+                              maxWidth: '70%',
+                              bgcolor: theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.grey[100],
+                              color: theme.palette.text.primary,
+                              borderRadius: '18px 18px 18px 6px',
+                              p: 2,
+                              mx: 2,
+                              boxShadow: 2,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1
+                            }}>
+                              <Typography variant="body2" color="text.secondary">
+                                {typingText}
+                              </Typography>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                <Box sx={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: '50%',
+                                  bgcolor: theme.palette.text.secondary,
+                                  animation: 'typingDot 1.4s infinite ease-in-out'
+                                }} />
+                                <Box sx={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: '50%',
+                                  bgcolor: theme.palette.text.secondary,
+                                  animation: 'typingDot 1.4s infinite ease-in-out',
+                                  animationDelay: '0.2s'
+                                }} />
+                                <Box sx={{
+                                  width: 6,
+                                  height: 6,
+                                  borderRadius: '50%',
+                                  bgcolor: theme.palette.text.secondary,
+                                  animation: 'typingDot 1.4s infinite ease-in-out',
+                                  animationDelay: '0.4s'
+                                }} />
+                              </Box>
+                            </Box>
+                          </Box>
+                        );
+                      }
+                      return null;
+                    })()}
+                    
                     <div ref={messagesEndRef} />
                     
                     {/* Botón de scroll al final */}
@@ -1480,10 +1542,10 @@ const QuickLearningDashboard: React.FC = () => {
             zIndex: 9999
           }}
         >
-          <Paper sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2, bgcolor: 'background.paper', borderRadius: 2 }}>
             <CircularProgress size={24} />
             <Typography>Cargando...</Typography>
-          </Paper>
+          </Box>
         </Box>
       )}
 
@@ -1788,12 +1850,12 @@ const QuickLearningDashboard: React.FC = () => {
       <Snackbar
         open={newMessageNotification.show}
         autoHideDuration={5000}
-        onClose={() => setNewMessageNotification(prev => ({ ...prev, show: false }))}
+                  onClose={() => setNewMessageNotification((prev: any) => ({ ...prev, show: false }))}
         anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
         sx={{ mt: 8 }}
       >
         <Alert 
-          onClose={() => setNewMessageNotification(prev => ({ ...prev, show: false }))} 
+          onClose={() => setNewMessageNotification((prev: any) => ({ ...prev, show: false }))} 
           severity="info" 
           sx={{ 
             width: '100%',
