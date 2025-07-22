@@ -57,7 +57,6 @@ import {
   deleteRecord, 
   exportRecords,
   getTableStats,
-  searchRecords,
 } from '../api/servicios';
 import { exportTableData } from '../utils/exportUtils';
 import type { DynamicTable, DynamicRecord, TableField, TableStats } from '../types';
@@ -126,6 +125,7 @@ export default function DynamicDataTable({
     const availableDateFields = table.fields
       .filter(field => field.type === 'date')
       .map(field => ({ name: field.name, label: field.label }));
+    availableDateFields.push({name: 'createdAt', label: 'Fecha de Creacion'})
     setDateFields(availableDateFields);
   }, [table.fields]);
 
@@ -140,12 +140,17 @@ export default function DynamicDataTable({
   // Use server-side search instead of local search for better pagination
   useEffect(() => {
     if (debouncedSearchQuery) {
-      // Use server-side search
-      handleSearch(debouncedSearchQuery);
+      setActiveFilters(prev => ({
+        ...prev,
+        textQuery: debouncedSearchQuery
+      }));
+      setPage(0); // reset to first page on search
     } else if (debouncedSearchQuery === '') {
-      // Reset to normal pagination when search is cleared
-      setPage(0);
-      loadRecords();
+      setActiveFilters(prev => {
+        const { textQuery, ...rest } = prev;
+        return rest;
+      });
+      setPage(0); // reset to first page when search is cleared
     }
   }, [debouncedSearchQuery]);
 
@@ -184,23 +189,6 @@ export default function DynamicDataTable({
       setStats(statsData);
     } catch (err) {
       console.error('Error loading stats:', err);
-    }
-  };
-
-  const handleSearch = async (query: string) => {
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-    setPage(0);
-    try {
-      const response = await searchRecords(table.slug, user, query, activeFilters, 1, rowsPerPage);
-      setRecords(response.records);
-      setTotalRecords(response.pagination.total);
-    } catch (err) {
-      setError('Error al buscar registros');
-      console.error('Error searching records:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -298,12 +286,22 @@ export default function DynamicDataTable({
 
   const handleApplyDateFilter = () => {
     if (selectedDateField && startDate && endDate) {
-      const newFilters = {
-        ...activeFilters,
-        [selectedDateField]: {
-          $gte: new Date(startDate).toISOString(),
-          $lte: new Date(endDate).toISOString(),
-        }
+      const newFilters = Object.entries(activeFilters)
+        .filter(([key, val]) => {
+          if (typeof val === 'object' && val !== null && ('$gte' in val || '$lte' in val)) {
+            return false;
+          }
+          return true;
+        })
+        .reduce((acc, [key, val]) => {
+          acc[key] = val;
+          return acc;
+        }, {} as Record<string, any>);
+
+      // Añadir filtro de fecha actual
+      newFilters[selectedDateField] = {
+        $gte: new Date(new Date(startDate).setHours(0, 0, 0, 0)).toISOString(),
+        $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)).toISOString()
       };
       setActiveFilters(newFilters);
       setPage(0); // Reset page to 1 on new filter

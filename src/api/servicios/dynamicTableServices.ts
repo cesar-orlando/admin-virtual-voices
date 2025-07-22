@@ -289,29 +289,6 @@ export const validateRecord = async (tableSlug: string, data: Record<string, any
   }
 };
 
-// Buscar registros
-export const searchRecords = async (
-  tableSlug: string, 
-  user: UserProfile, 
-  query: string, 
-  filters?: Record<string, any>,
-  page: number = 1,
-  limit: number = 10
-) => {
-  try {
-    const response = await api.post(`/records/${user.companySlug}/${tableSlug}/search`, {
-      query,
-      filters,
-      page,
-      limit
-    });
-    return response.data;
-  } catch (error) {
-    handleError(error as any);
-    throw new Error('No se pudo buscar en los registros');
-  }
-};
-
 // Obtener estadísticas de la tabla
 export const getTableStats = async (tableSlug: string, user: UserProfile) => {
   try {
