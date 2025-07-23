@@ -189,23 +189,39 @@ export const updateChatStatus = async (phone: string, status: "active" | "inacti
  * Obtener lista de prospectos/clientes con su último mensaje
  * @param cursor - Cursor para paginación
  * @param limit - Límite de resultados por página
+ * @param role - Rol del usuario (Administrador, Gerente, Supervisor, Asesor)
+ * @param asesorId - ID del asesor (solo si role es Asesor)
  * @returns Lista de prospectos/clientes con información de paginación
  */
-export const getQuickLearningProspects = async (cursor?: string | null, limit: number = 20) => {
+export const getQuickLearningProspects = async (
+  cursor?: string | null,
+  limit: number = 20,
+  role?: string,
+  asesorId?: string
+) => {
   try {
     const queryParams = new URLSearchParams();
     queryParams.append('companySlug', 'quicklearning');
-    queryParams.append('tableSlugs', 'prospectos,clientes,alumnos,sin_contestar');
+    queryParams.append('tableSlugs', 'prospectos,clientes,alumnos,sin_contestar,nuevo_ingreso');
     queryParams.append('limit', limit.toString());
-    
     if (cursor) {
       queryParams.append('cursor', cursor);
     }
-    
-    const response = await api.get(`/quicklearning/twilio/usuarios?${queryParams.toString()}`);
+    if (role) {
+      queryParams.append('role', role);
+      if (role === 'Asesor' && asesorId) {
+        queryParams.append('asesorId', asesorId);
+      }
+    }
 
-    const usuarios = response.data;
-    return usuarios;
+    const url = `/quicklearning/twilio/usuarios?${queryParams.toString()}`;
+    console.log("url --------->", url);
+
+    const response = await api.get(url);
+    // El backend ahora retorna { data: { pagination, usuarios }, lastMessageDate }
+    const result = response.data;
+    console.log("API Response --------------------------", result);
+    return result;
   } catch (error: any) {
     handleError(error);
     throw new Error('Error al obtener la lista de prospectos/clientes');

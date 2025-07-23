@@ -46,6 +46,9 @@ export const deleteAiConfig = async (configId: string, user: UserProfile) => {
 
 export const simulateAiResponse = async (user: UserProfile, messages: Array<{ from: "user" | "ai"; text: string }>, aiConfig: Partial<AiConfig>) => {
   try {
+    // Extraer el texto del último mensaje del usuario
+    const lastUserMessage = messages.filter(m => m.from === "user").pop()?.text || "";
+    console.log("messages", messages);
     const response = await api.post(`/ia-configs/testIA/${user.companySlug}`, {
       messages,
       aiConfig,

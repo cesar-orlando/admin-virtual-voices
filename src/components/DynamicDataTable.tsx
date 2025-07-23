@@ -51,13 +51,14 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
 import { useDebounce } from '../hooks/useDebounce';
+import { useSnackbar } from 'notistack';
 import { 
   getRecords, 
   deleteRecord, 
   exportRecords,
   getTableStats,
-  searchRecords,
 } from '../api/servicios';
+import { exportTableData } from '../utils/exportUtils';
 import type { DynamicTable, DynamicRecord, TableField, TableStats } from '../types';
 import * as XLSX from 'xlsx';
 
@@ -84,7 +85,7 @@ export default function DynamicDataTable({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
   const [totalRecords, setTotalRecords] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 500);
@@ -108,6 +109,7 @@ export default function DynamicDataTable({
 
   const theme = useTheme();
   const { user } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
 
   // Sorting state
   const [sortBy, setSortBy] = useState<string | null>(null);
@@ -115,11 +117,16 @@ export default function DynamicDataTable({
 
   const [actionsAnchorEl, setActionsAnchorEl] = useState<null | HTMLElement>(null);
 
+  // State para exportación
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+
   useEffect(() => {
     // Identificar los campos de fecha disponibles para filtrar
     const availableDateFields = table.fields
       .filter(field => field.type === 'date')
       .map(field => ({ name: field.name, label: field.label }));
+    availableDateFields.push({name: 'createdAt', label: 'Fecha de Creacion'})
     setDateFields(availableDateFields);
   }, [table.fields]);
 
@@ -131,11 +138,20 @@ export default function DynamicDataTable({
     }
   }, [table.slug, page, rowsPerPage, refreshTrigger, activeFilters]); // Recargar si los filtros cambian
 
+  // Use server-side search instead of local search for better pagination
   useEffect(() => {
     if (debouncedSearchQuery) {
-      handleSearch(debouncedSearchQuery);
-    } else {
-      loadRecords();
+      setActiveFilters(prev => ({
+        ...prev,
+        textQuery: debouncedSearchQuery
+      }));
+      setPage(0); // reset to first page on search
+    } else if (debouncedSearchQuery === '') {
+      setActiveFilters(prev => {
+        const { textQuery, ...rest } = prev;
+        return rest;
+      });
+      setPage(0); // reset to first page when search is cleared
     }
   }, [debouncedSearchQuery]);
 
@@ -151,7 +167,7 @@ export default function DynamicDataTable({
         user, 
         page + 1, 
         rowsPerPage,
-        'createdAt',
+        'updatedAt',
         'desc',
         activeFilters
       );
@@ -177,23 +193,6 @@ export default function DynamicDataTable({
     }
   };
 
-  const handleSearch = async (query: string) => {
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-    setPage(0);
-    try {
-      const response = await searchRecords(table.slug, user, query, activeFilters, 1, rowsPerPage);
-      setRecords(response.records);
-      setTotalRecords(response.pagination.total);
-    } catch (err) {
-      setError('Error al buscar registros');
-      console.error('Error searching records:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleDeleteRecord = async (record: DynamicRecord) => {
     if (!user) return;
 
@@ -205,52 +204,65 @@ export default function DynamicDataTable({
       console.error('Error deleting record:', err);
     }
   };
-
-  const handleExportData = async () => {
-    if (!table || !user) return;
+  // Función para obtener todos los registros de la tabla
+  const getAllRecordsForExport = async (): Promise<DynamicRecord[]> => {
+    if (!user) return [];
 
     try {
-      const blob = await exportRecords(table.slug, user, 'json');
+      setExporting(true);
+      setExportProgress(0);
+      
+      const allRecords: DynamicRecord[] = [];
+      let currentPage = 1;
+      const pageSize = 100; // Obtener 100 registros por página para optimizar
+      let hasMoreRecords = true;
+      let totalRecords = 0;
 
-      const text = await blob.text();
-      const data = JSON.parse(text);
+      // Primero obtener el total de registros
+      const firstResponse = await getRecords(
+        table.slug, 
+        user, 
+        1, 
+        1,
+        'createdAt',
+        'desc',
+        activeFilters
+      );
+      totalRecords = firstResponse.pagination.total;
 
-      const records = data.records;
-      const fields = data.table.fields;
-
-      if (Array.isArray(records) && Array.isArray(fields) && fields.length > 0) {
-        const headers = fields.map(field => field.label);
-
-        const dataRows = records.map(record =>
-          fields.map(field => record.data[field.name] ?? '')
+      while (hasMoreRecords) {
+        const response = await getRecords(
+          table.slug, 
+          user, 
+          currentPage, 
+          pageSize,
+          'createdAt',
+          'desc',
+          activeFilters
         );
-
-        const worksheetData = [headers, ...dataRows];
-
-        const worksheet = XLSX.utils.aoa_to_sheet(worksheetData); // AOA = Array of Arrays
-        const workbook = XLSX.utils.book_new(); // Create a new workbook
-        XLSX.utils.book_append_sheet(workbook, worksheet, table.slug); // Append the sheet to the workbook
-
-        // Convert workbook to array buffer (Excel format)
-        const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-
-        // Create a blob from the buffer for the Excel file
-        const excelBlob = new Blob([excelBuffer], { type: 'application/octet-stream' });
-
-        // Create URL for the blob and trigger the download
-        const url = window.URL.createObjectURL(excelBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${table.slug}-${Date.now()}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      } else {
-        throw new Error('Invalid records or fields data');
+        
+        allRecords.push(...response.records);
+        
+        // Actualizar progreso
+        const progress = Math.min((allRecords.length / totalRecords) * 100, 100);
+        setExportProgress(progress);
+        
+        // Verificar si hay más páginas
+        if (response.records.length < pageSize || allRecords.length >= totalRecords) {
+          hasMoreRecords = false;
+        } else {
+          currentPage++;
+        }
       }
-    } catch (err) {
-      console.error('Error exporting table:', err);
+
+      setExportProgress(100);
+      return allRecords;
+    } catch (error) {
+      console.error('Error getting all records for export:', error);
+      throw new Error('No se pudieron obtener todos los registros para exportar');
+    } finally {
+      setExporting(false);
+      setExportProgress(0);
     }
 
     handleMenuClose();
@@ -276,12 +288,22 @@ export default function DynamicDataTable({
 
   const handleApplyDateFilter = () => {
     if (selectedDateField && startDate && endDate) {
-      const newFilters = {
-        ...activeFilters,
-        [selectedDateField]: {
-          $gte: new Date(startDate).toISOString(),
-          $lte: new Date(endDate).toISOString(),
-        }
+      const newFilters = Object.entries(activeFilters)
+        .filter(([key, val]) => {
+          if (typeof val === 'object' && val !== null && ('$gte' in val || '$lte' in val)) {
+            return false;
+          }
+          return true;
+        })
+        .reduce((acc, [key, val]) => {
+          acc[key] = val;
+          return acc;
+        }, {} as Record<string, any>);
+
+      // Añadir filtro de fecha actual
+      newFilters[selectedDateField] = {
+        $gte: new Date(new Date(startDate).setHours(0, 0, 0, 0)).toISOString(),
+        $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)).toISOString()
       };
       setActiveFilters(newFilters);
       setPage(0); // Reset page to 1 on new filter
@@ -308,7 +330,32 @@ export default function DynamicDataTable({
   const handleGalleryPrev = () => setGalleryIndex((prev) => Math.max(prev - 1, 0));
   const handleGalleryNext = () => setGalleryIndex((prev) => Math.min(prev + 1, selectedFiles.length - 1));
 
+  // Add this helper function at the top of your component or in a utils file
+  const normalizeText = (text: string): string => {
+    return text
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, ''); // Remove accents
+  };
+
+  // Update your formatFieldValue function
   const formatFieldValue = (value: any, field: TableField, isFirstColumn = false): { content: string | JSX.Element; tooltip?: string } => {
+    // Handle "numero" field formatting (ignoring accents and caps)
+    if (normalizeText(field.name).includes('numero') || normalizeText(field.label).includes('numero')) {
+      const numero = String(value || '').replace(/\D/g, ''); // Remove non-digits
+    
+      // Format as "521 6441 59 34 90"
+      if (numero.length >= 12) {
+        const formatted = `${numero.slice(0, 3)} ${numero.slice(3, 7)} ${numero.slice(7, 9)} ${numero.slice(9, 11)} ${numero.slice(11, 13)}`;
+        return { 
+          content: formatted,
+          tooltip: formatted
+        };
+      } else {
+        return { content: numero || '-' };
+      }
+    }
+
     // Si el campo es 'asesor', renderiza solo el campo 'name' si existe
     if (field.name === 'asesor') {
       let name = '';
@@ -327,7 +374,7 @@ export default function DynamicDataTable({
       }
       return { 
         content: <Chip label={name} size="small" color="primary" sx={{ fontWeight: 600, color: '#fff' }} />,
-        tooltip: name.length > 50 ? name : undefined
+        tooltip: name.length > 25 ? name : undefined
       };
     }
     // Si el campo es 'medio', renderiza un Chip de color
@@ -351,7 +398,7 @@ export default function DynamicDataTable({
       }
       return { 
         content: <Chip label={display} size="small" sx={sx} />,
-        tooltip: display.length > 50 ? display : undefined
+        tooltip: display.length > 25 ? display : undefined
       };
     }
     if (isFirstColumn) {
@@ -364,7 +411,7 @@ export default function DynamicDataTable({
             sx={{ fontWeight: 600, color: '#fff' }}
           />
         ),
-        tooltip: String(value).length > 50 ? String(value) : undefined
+        tooltip: String(value).length > 25 ? String(value) : undefined
       };
     }
     if (value === null || value === undefined) return { content: '-' };
@@ -387,16 +434,17 @@ export default function DynamicDataTable({
       }
       case 'boolean':
         return { content: value ? 'Sí' : 'No' };
-      case 'currency':
+      case 'currency': {
         const formattedCurrency = new Intl.NumberFormat('es-MX', {
           style: 'currency',
           currency: 'MXN'
         }).format(value);
         return { content: formattedCurrency };
-      case 'number':
-
+      }
+      case 'number': {
         const formattedNumber = new Intl.NumberFormat('es-MX').format(value);
         return { content: formattedNumber };
+      }
       case 'file': {
         let files: any[] = [];
         if (Array.isArray(value)) {
@@ -453,7 +501,7 @@ export default function DynamicDataTable({
                 </Typography>
               </Box>
             ),
-            tooltip: validFiles.length > 0 ? `Ver ${validFiles.length} archivo${validFiles.length !== 1 ? 's' : ''}` : undefined
+            tooltip: `Ver ${validFiles.length} archivo${validFiles.length !== 1 ? 's' : ''}`
           };
         }
         return { content: '-' };
@@ -462,7 +510,7 @@ export default function DynamicDataTable({
         const stringValue = String(value);
         return { 
           content: stringValue,
-          tooltip: stringValue.length > 50 ? stringValue : undefined
+          tooltip: stringValue.length > 25 ? stringValue : undefined
         };
       }
     }
@@ -494,6 +542,7 @@ export default function DynamicDataTable({
   const sortableTypes = ['number', 'currency', 'date'];
   const sortableField = table.fields.find(f => f.name === sortBy && sortableTypes.includes(f.type));
   let sortedRecords = [...records];
+
   if (sortableField && sortBy) {
     sortedRecords.sort((a, b) => {
       let aValue = a.data[sortBy];
@@ -518,6 +567,9 @@ export default function DynamicDataTable({
     if (!visibleFields) return table.fields;
     return table.fields.filter(f => visibleFields.includes(f.name));
   }, [table.fields, visibleFields]);
+
+  // Use records directly since search is now server-side
+  const displayRecords = sortedRecords;
 
   if (loading && records.length === 0) {
     return (
@@ -627,11 +679,60 @@ export default function DynamicDataTable({
               <ListItemText>Importar Excel</ListItemText>
             </MenuItem>
             */}
-            <MenuItem onClick={() => { setActionsAnchorEl(null); handleExportData(); }}>
+            <MenuItem onClick={async () => { 
+              setActionsAnchorEl(null); 
+              try {
+                const allRecords = await getAllRecordsForExport();
+                exportTableData(table, allRecords, 'csv');
+                enqueueSnackbar(`Se exportaron ${allRecords.length} registros a CSV exitosamente`, { variant: 'success' });
+              } catch (err) {
+                console.error('Error exporting CSV:', err);
+                enqueueSnackbar('Error al exportar CSV', { variant: 'error' });
+              }
+            }}>
               <ListItemIcon><ExportIcon fontSize="small" /></ListItemIcon>
-              <ListItemText>Exportar</ListItemText>
+              <ListItemText>Exportar CSV</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={async () => { 
+              setActionsAnchorEl(null); 
+              try {
+                const allRecords = await getAllRecordsForExport();
+                exportTableData(table, allRecords, 'excel');
+                enqueueSnackbar(`Se exportaron ${allRecords.length} registros a Excel exitosamente`, { variant: 'success' });
+              } catch (err) {
+                console.error('Error exporting Excel:', err);
+                enqueueSnackbar('Error al exportar Excel', { variant: 'error' });
+              }
+            }}>
+              <ListItemIcon><InsertDriveFileIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Exportar Excel</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={async () => { 
+              setActionsAnchorEl(null); 
+              try {
+                const allRecords = await getAllRecordsForExport();
+                exportTableData(table, allRecords, 'json');
+                enqueueSnackbar(`Se exportaron ${allRecords.length} registros a JSON exitosamente`, { variant: 'success' });
+              } catch (err) {
+                console.error('Error exporting JSON:', err);
+                enqueueSnackbar('Error al exportar JSON', { variant: 'error' });
+              }
+            }}>
+              <ListItemIcon><AttachFileIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>Exportar JSON</ListItemText>
             </MenuItem>
           </Menu>
+          
+          {/* Indicador de progreso de exportación */}
+          {exporting && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, ml: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="text.secondary">
+                Exportando... {Math.round(exportProgress)}%
+              </Typography>
+            </Box>
+          )}
+          
           {onRecordCreate && (
              <Button
               variant="contained"
@@ -698,6 +799,9 @@ export default function DynamicDataTable({
                     </TableCell>
                   );
                 })}
+                <TableCell key="createdAt" sx={{ minWidth: 150, fontWeight: 'bold', maxWidth: 220, p: 1 }}>
+                  Fecha de Creación
+                </TableCell>
                 <TableCell sx={{ width: '50px' }} />
               </TableRow>
             </TableHead>
@@ -706,12 +810,12 @@ export default function DynamicDataTable({
                 Array.from(new Array(rowsPerPage)).map((_, index) => (
                   <TableRow key={index}>
                     <TableCell colSpan={displayedFields.length + 2}>
-                      <Skeleton variant="text" height={40} />
-                    </TableCell>
-                  </TableRow>
+          <Skeleton variant="text" height={40} />
+        </TableCell>
+      </TableRow>
                 ))
               ) : (
-                sortedRecords.map((record) => (
+                displayRecords.map((record) => (
                   <TableRow hover role="checkbox" tabIndex={-1} key={record._id}>
                     {displayedFields.map((field, idx) => {
                       const fieldData = formatFieldValue(record.data[field.name], field, idx === 0);
@@ -754,6 +858,12 @@ export default function DynamicDataTable({
                         </TableCell>
                       );
                     })}
+                    {/* Add createdAt field as a new TableCell with a Tooltip */}
+                    <TableCell align="left" sx={{ maxWidth: 220, p: 1 }}>
+                      <Tooltip title={record.createdAt ? new Date(record.createdAt).toLocaleString() : 'N/A'} placement="top" arrow>
+                        <span>{record.createdAt ? new Date(record.createdAt).toLocaleString() : 'N/A'}</span>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell align="right">
                       <IconButton onClick={(e) => handleMenuOpen(e, record)}>
                         <MoreVertIcon />
@@ -768,14 +878,14 @@ export default function DynamicDataTable({
 
         {/* Pagination */}
         <TablePagination
-          rowsPerPageOptions={[5, 10, 25, 50, 100]}
+          rowsPerPageOptions={[ 25, 50, 100]}
           component="div"
-          count={totalRecords}
+          count={totalRecords} // SIEMPRE el total del backend
           rowsPerPage={rowsPerPage}
           page={page}
           onPageChange={(e, newPage) => setPage(newPage)}
           onRowsPerPageChange={(e) => {
-            setRowsPerPage(parseInt(e.target.value, 10));
+            setRowsPerPage(parseInt(e.target.value, 25));
             setPage(0);
           }}
           labelRowsPerPage="Filas por página:"
@@ -971,4 +1081,4 @@ const handleOpenFile = (fileInfo: { name: string; url: string; size?: number }) 
   if (fileInfo.url) {
     window.open(fileInfo.url, '_blank');
   }
-}; 
+};

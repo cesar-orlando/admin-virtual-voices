@@ -122,7 +122,23 @@ export const duplicateTable = async (tableId: string, newName: string, newSlug: 
   }
 };
 
-// Exportar tabla
+// Exportar tabla (frontend only) - usando utilidades
+export const exportTableFrontend = (
+  table: DynamicTable, 
+  records: DynamicRecord[], 
+  format: 'csv' | 'excel' | 'json' = 'csv',
+  filename?: string
+) => {
+  try {
+    const { exportTableData } = require('../../utils/exportUtils');
+    return exportTableData(table, records, format, filename);
+  } catch (error) {
+    console.error('Error al exportar:', error);
+    throw new Error('No se pudo exportar la tabla');
+  }
+};
+
+// Mantener la función original para compatibilidad (opcional)
 export const exportTable = async (tableSlug: string, user: UserProfile) => {
   try {
     const response = await api.get(`/tables/${user.companySlug}/${tableSlug}/export`, {
@@ -235,11 +251,13 @@ export const getRecordWithTable = async (recordId: string, user: UserProfile) =>
 // Actualizar un registro
 export const updateRecord = async (recordId: string, recordData: UpdateRecordRequest, user: UserProfile) => {
   try {
-    const response = await api.put(`/records/${recordId}`, {
+    const requestData = {
       ...recordData,
       c_name: user.companySlug,
       updatedBy: user.id
-    });
+    };
+    
+    const response = await api.put(`/records/${recordId}`, requestData);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -270,29 +288,6 @@ export const validateRecord = async (tableSlug: string, data: Record<string, any
   } catch (error) {
     handleError(error as any);
     throw new Error('No se pudo validar el registro');
-  }
-};
-
-// Buscar registros
-export const searchRecords = async (
-  tableSlug: string, 
-  user: UserProfile, 
-  query: string, 
-  filters?: Record<string, any>,
-  page: number = 1,
-  limit: number = 10
-) => {
-  try {
-    const response = await api.post(`/records/${user.companySlug}/${tableSlug}/search`, {
-      query,
-      filters,
-      page,
-      limit
-    });
-    return response.data;
-  } catch (error) {
-    handleError(error as any);
-    throw new Error('No se pudo buscar en los registros');
   }
 };
 

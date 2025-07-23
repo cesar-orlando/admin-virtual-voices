@@ -258,7 +258,7 @@ export default function RecordForm() {
               onChange={(urls) => handleInputChange(field.name, urls)}
               label={field.label + (field.required ? ' *' : '')}
               maxFiles={10}
-              acceptedFileTypes={['image/*','video/mp4','video/webm','video/ogg','video/quicktime','application/pdf']}
+              // acceptedFileTypes eliminado para aceptar cualquier archivo
             />
             {isMissing && (
               <Typography variant="caption" color="error">Este campo es obligatorio</Typography>
@@ -300,6 +300,10 @@ export default function RecordForm() {
           <Alert severity="error" sx={{ mb: 3 }}>
             Faltan campos obligatorios: {missingFields.map(n => table?.fields.find(f => f.name === n)?.label || n).join(', ')}
           </Alert>
+        )}
+        {/* Alert de error de guardado */}
+        {error && !(error.startsWith('Error al cargar') || error.startsWith('Error loading')) && (
+          <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
         )}
 
         <form onSubmit={handleSubmit} autoComplete="off">

@@ -1,13 +1,20 @@
 import axios from "axios";
+import { config, getApiHeaders } from "../config/environment";
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  baseURL: config.API_BASE_URL,
+  headers: getApiHeaders(),
+  withCredentials: false,
+  timeout: config.API_TIMEOUT,
 });
-console.log('VITE_SOCKET_URL:', import.meta.env.VITE_SOCKET_URL);
-console.log('VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL);
+
+if (config.DEBUG_MODE) {
+  console.log('🔧 Axios configurado:', {
+    baseURL: config.API_BASE_URL,
+    timeout: config.API_TIMEOUT,
+    headers: getApiHeaders(),
+  });
+}
 
 
 // Interceptor para agregar el token automáticamente
@@ -27,7 +34,7 @@ api.interceptors.response.use(
       localStorage.removeItem("token");
       localStorage.removeItem("user");
       localStorage.removeItem("currentCompany");
-      window.location.href = "/login?expired=1";
+      // window.location.href = "/login?expired=1"; // Eliminado el redirect
     }
     return Promise.reject(error);
   }

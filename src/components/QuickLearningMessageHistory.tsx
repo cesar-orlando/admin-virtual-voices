@@ -127,7 +127,7 @@ const QuickLearningMessageHistory: React.FC<MessageHistoryProps> = ({
 
     const csvContent = [
       ['Fecha', 'De', 'Para', 'Mensaje', 'Dirección', 'Estado', 'Tipo'].join(','),
-      ...history.messages.map(msg => [
+      ...history.messages.map((msg: any) => [
         new Date(msg.timestamp).toLocaleString(),
         msg.from,
         msg.to,
@@ -150,7 +150,7 @@ const QuickLearningMessageHistory: React.FC<MessageHistoryProps> = ({
   }, [history]);
 
   // Filtrar mensajes por término de búsqueda
-  const filteredMessages = history?.messages?.filter(message =>
+  const filteredMessages = history?.messages?.filter((message: any) =>
     message.body.toLowerCase().includes(searchTerm.toLowerCase()) ||
     message.from.includes(searchTerm) ||
     message.to.includes(searchTerm)
@@ -359,7 +359,7 @@ const QuickLearningMessageHistory: React.FC<MessageHistoryProps> = ({
               </Box>
             ) : (
               <List sx={{ p: 0 }}>
-                {filteredMessages.map((message, index) => (
+                {filteredMessages.map((message: any, index: number) => (
                   <ListItem
                     key={message._id || index}
                     button

@@ -1,33 +1,41 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { useSocketIO } from './useSocketIO';
 import { 
-  sendTwilioMessage, 
-  sendTwilioTemplate, 
   getTwilioStatus, 
-  getTwilioHistory,
-  toggleChatAI,
-  assignChatAdvisor,
-  getChatByPhone,
-  updateChatCustomerInfo,
-  updateChatStatus,
-  getQuickLearningProspects,
-  getQuickLearningChatHistory
-} from '../api/servicios';
-import type { 
-  TwilioSendRequest, 
-  TwilioTemplateRequest, 
-  TwilioStatus, 
-  TwilioHistoryRequest, 
-  TwilioHistoryResponse,
-  QuickLearningChat,
-  TwilioMessage
-} from '../types/quicklearning';
+  getQuickLearningChatHistory,
+  sendTwilioMessage,
+  sendTwilioTemplate,
+  getQuickLearningProspects
+} from '../api/servicios/quickLearningTwilioServices';
+
+// Types
+interface TwilioStatus {
+  connected: boolean;
+  status: string;
+}
+
+interface TwilioSendRequest {
+  phone: string;
+  message: string;
+}
+
+interface TwilioTemplateRequest {
+  phone: string;
+  templateId: string;
+  variables: string[];
+}
+
+interface QuickLearningChat {
+  phone: string;
+  profileName?: string;
+  status: string;
+  customerInfo?: any;
+}
 
 interface UseQuickLearningTwilioReturn {
   // State
   status: TwilioStatus | null;
-  history: TwilioHistoryResponse | null;
-  activeChats: QuickLearningChat[];
-  currentChat: QuickLearningChat | null;
+  history: any | null;
   isLoading: boolean;
   error: string | null;
   
@@ -44,36 +52,37 @@ interface UseQuickLearningTwilioReturn {
   hasMoreProspects: boolean;
   isLoadingMoreProspects: boolean;
   
+  // Socket state
+  unreadMessages: Map<string, number>;
+  socketConnected: boolean;
+  
+  // Indicadores de escritura
+  typingIndicators: Map<string, { userType: string; timestamp: Date }>;
+  
   // Actions
   sendMessage: (request: TwilioSendRequest) => Promise<any>;
   sendTemplate: (request: TwilioTemplateRequest) => Promise<any>;
-  refreshStatus: () => Promise<void>;
-  loadHistory: (params?: TwilioHistoryRequest) => Promise<void>;
-  loadActiveChats: () => Promise<void>;
-  loadChatByPhone: (phone: string) => Promise<void>;
-  toggleAI: (phone: string, enabled: boolean) => Promise<void>;
-  assignAdvisor: (phone: string, advisorId: string, advisorName: string) => Promise<void>;
-  updateCustomerInfo: (phone: string, customerInfo: any) => Promise<void>;
-  changeChatStatus: (phone: string, status: "active" | "inactive" | "blocked") => Promise<void>;
+  loadHistory: (params?: any) => Promise<void>;
   clearError: () => void;
+  markMessageAsRead: (phone: string) => void;
   
   // Utilities
   formatPhoneNumber: (phone: string) => string;
   getMessageStatusColor: (status: string) => string;
-  getChatStatusColor: (status: string) => string;
   
   // Prospects
   loadProspects: (cursor?: string | null) => Promise<void>;
   loadMoreProspects: () => Promise<void>;
-  selectProspect: (prospect: any) => Promise<void>;
+  selectProspect: (prospect: any, forceReload?: boolean) => Promise<void>;
+  
+  // Testing functions
+  simulateTyping: (phone: string, isTyping: boolean, userType: string) => Promise<void>;
 }
 
 export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
-  console.log('useQuickLearningTwilio - Hook initialized')
+  // ===== STATE DECLARATIONS =====
   const [status, setStatus] = useState<TwilioStatus | null>(null);
-  const [history, setHistory] = useState<TwilioHistoryResponse | null>(null);
-  const [activeChats, setActiveChats] = useState<QuickLearningChat[]>([]);
-  const [currentChat, setCurrentChat] = useState<QuickLearningChat | null>(null);
+  const [history, setHistory] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -91,74 +100,141 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [isLoadingMoreProspects, setIsLoadingMoreProspects] = useState(false);
 
-  // Utilidad para formatear números de teléfono
+  // Socket state para mensajes no leídos
+  const [unreadMessages, setUnreadMessages] = useState<Map<string, number>>(() => {
+    const saved = localStorage.getItem('unreadMessages');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return new Map(Object.entries(parsed));
+      } catch {
+        return new Map();
+      }
+    }
+    return new Map();
+  });
+
+  // Indicadores de escritura
+  const [typingIndicators, setTypingIndicators] = useState<Map<string, { userType: string; timestamp: Date }>>(new Map());
+
+  // Refs para auto-scroll
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isUserAtBottom = useRef(true);
+
+  // Usar el hook de Socket.IO
+  const { socket, isConnected: socketConnected, error: socketError } = useSocketIO();
+
+  // ===== UTILITY FUNCTIONS =====
+  
   const formatPhoneNumber = useCallback((phone: string): string => {
-    // Remover caracteres no numéricos
     const cleaned = phone.replace(/\D/g, '');
-    
-    // Si empieza con 52, es formato mexicano
     if (cleaned.startsWith('52') && cleaned.length === 12) {
       return `+${cleaned}`;
     }
-    
-    // Si no empieza con +, agregarlo
     if (!phone.startsWith('+')) {
       return `+${cleaned}`;
     }
-    
     return phone;
   }, []);
 
-  // Utilidad para obtener color según estado del mensaje
   const getMessageStatusColor = useCallback((status: string): string => {
     switch (status) {
-      case 'sent': return '#2196F3'; // Blue
-      case 'delivered': return '#4CAF50'; // Green
-      case 'read': return '#8BC34A'; // Light Green
-      case 'failed': return '#F44336'; // Red
-      case 'pending': return '#FF9800'; // Orange
-      default: return '#9E9E9E'; // Grey
+      case 'sent': return '#2196F3';
+      case 'delivered': return '#4CAF50';
+      case 'read': return '#8BC34A';
+      case 'failed': return '#F44336';
+      case 'pending': return '#FF9800';
+      default: return '#9E9E9E';
     }
   }, []);
 
-  // Utilidad para obtener color según estado del chat
-  const getChatStatusColor = useCallback((status: string): string => {
-    switch (status) {
-      case 'active': return '#4CAF50'; // Green
-      case 'inactive': return '#FF9800'; // Orange
-      case 'blocked': return '#F44336'; // Red
-      default: return '#9E9E9E'; // Grey
+  const loadHistory = useCallback(async (params?: any) => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      // Implementación básica - puedes expandir según necesites
+      setHistory({ messages: [], total: 0 });
+    } catch (err: any) {
+      setError(err.message || 'Error al cargar historial');
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
-  // Enviar mensaje
+  // ===== UNREAD MESSAGES MANAGEMENT =====
+
+  const incrementUnreadCount = useCallback((phone: string) => {
+    const formattedPhone = formatPhoneNumber(phone);
+    console.log('📈 Incrementando contador para:', formattedPhone);
+    setUnreadMessages(prev => {
+      const newMap = new Map(prev);
+      const current = newMap.get(formattedPhone) || 0;
+      const newCount = current + 1;
+      newMap.set(formattedPhone, newCount);
+      console.log('📊 Nuevo contador para', formattedPhone, ':', newCount);
+      return newMap;
+    });
+  }, [formatPhoneNumber]);
+
+  const markMessageAsRead = useCallback((phone: string) => {
+    const formattedPhone = formatPhoneNumber(phone);
+    console.log('👁️ Marcando como leído:', formattedPhone);
+    setUnreadMessages(prev => {
+      const newMap = new Map(prev);
+      const currentCount = newMap.get(formattedPhone) || 0;
+      if (currentCount > 0) {
+        newMap.delete(formattedPhone);
+        console.log('✅ Contador eliminado para:', formattedPhone);
+      } else {
+        console.log('ℹ️ No había mensajes no leídos para:', formattedPhone);
+      }
+      return newMap;
+    });
+  }, [formatPhoneNumber]);
+
+  // ===== AUTO-SCROLL FUNCTIONS =====
+
+  const scrollToBottom = useCallback((smooth = true) => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTo({
+        top: chatContainerRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
+    }
+  }, []);
+
+  // ===== API FUNCTIONS =====
+
   const sendMessage = useCallback(async (request: TwilioSendRequest) => {
     try {
       setIsLoading(true);
       setError(null);
+      
+      if (!request.phone || typeof request.phone !== 'string') {
+        setIsLoading(false);
+        throw new Error('El número de teléfono es inválido o está vacío.');
+      }
       
       const formattedRequest = {
         ...request,
         phone: formatPhoneNumber(request.phone)
       };
       
-      const response = await sendTwilioMessage(formattedRequest);
+      console.log('Enviando mensaje a la API:', formattedRequest);
       
-      // Actualizar historial si está cargado
-      if (history) {
-        await loadHistory();
-      }
+      const response = await sendTwilioMessage(formattedRequest);
+      console.log('Respuesta de la API:', response);
       
       return response;
     } catch (err: any) {
       setError(err.message || 'Error al enviar mensaje');
+      console.error('Error en sendMessage:', err);
       throw err;
     } finally {
       setIsLoading(false);
     }
-  }, [formatPhoneNumber, history]);
+  }, [formatPhoneNumber]);
 
-  // Enviar plantilla
   const sendTemplate = useCallback(async (request: TwilioTemplateRequest) => {
     try {
       setIsLoading(true);
@@ -171,321 +247,247 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
       
       const response = await sendTwilioTemplate(formattedRequest);
       
-      // Actualizar historial si está cargado
-      if (history) {
-        await loadHistory();
-      }
-      
       return response;
     } catch (err: any) {
       setError(err.message || 'Error al enviar plantilla');
+      console.error('Error en sendTemplate:', err);
       throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [formatPhoneNumber, history]);
-
-  // Obtener estado del servicio
-  const refreshStatus = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const statusData = await getTwilioStatus();
-      setStatus(statusData);
-    } catch (err: any) {
-      setError(err.message || 'Error al obtener estado del servicio');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Cargar historial
-  const loadHistory = useCallback(async (params?: TwilioHistoryRequest) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const historyData = await getTwilioHistory(params);
-      setHistory(historyData);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar historial');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Cargar chats activos
-  const loadActiveChats = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      // const chats = await getActiveChats();
-      // setActiveChats(chats || []);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar chats activos');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Cargar chat específico
-  const loadChatByPhone = useCallback(async (phone: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const formattedPhone = formatPhoneNumber(phone);
-      const chat = await getChatByPhone(formattedPhone);
-      setCurrentChat(chat);
-    } catch (err: any) {
-      setError(err.message || 'Error al cargar chat');
     } finally {
       setIsLoading(false);
     }
   }, [formatPhoneNumber]);
 
-  // Toggle IA
-  const toggleAI = useCallback(async (phone: string, enabled: boolean) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const formattedPhone = formatPhoneNumber(phone);
-      await toggleChatAI(formattedPhone, enabled);
-      
-      // Actualizar chats activos
-      await loadActiveChats();
-      
-      // Actualizar chat actual si es el mismo
-      if (currentChat && currentChat.phone === formattedPhone) {
-        await loadChatByPhone(formattedPhone);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error al cambiar estado de IA');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [formatPhoneNumber, currentChat, loadActiveChats, loadChatByPhone]);
-
-  // Asignar asesor
-  const assignAdvisor = useCallback(async (phone: string, advisorId: string, advisorName: string) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const formattedPhone = formatPhoneNumber(phone);
-      await assignChatAdvisor(formattedPhone, advisorId, advisorName);
-      
-      // Actualizar chats activos
-      await loadActiveChats();
-      
-      // Actualizar chat actual si es el mismo
-      if (currentChat && currentChat.phone === formattedPhone) {
-        await loadChatByPhone(formattedPhone);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error al asignar asesor');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [formatPhoneNumber, currentChat, loadActiveChats, loadChatByPhone]);
-
-  // Actualizar información del cliente
-  const updateCustomerInfo = useCallback(async (phone: string, customerInfo: any) => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const formattedPhone = formatPhoneNumber(phone);
-      await updateChatCustomerInfo(formattedPhone, customerInfo);
-      
-      // Actualizar chats activos
-      await loadActiveChats();
-      
-      // Actualizar chat actual si es el mismo
-      if (currentChat && currentChat.phone === formattedPhone) {
-        await loadChatByPhone(formattedPhone);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error al actualizar información del cliente');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [formatPhoneNumber, currentChat, loadActiveChats, loadChatByPhone]);
-
-  // Cambiar estado del chat
-  const changeChatStatus = useCallback(async (phone: string, status: "active" | "inactive" | "blocked") => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const formattedPhone = formatPhoneNumber(phone);
-      await updateChatStatus(formattedPhone, status);
-      
-      // Actualizar chats activos
-      await loadActiveChats();
-      
-      // Actualizar chat actual si es el mismo
-      if (currentChat && currentChat.phone === formattedPhone) {
-        await loadChatByPhone(formattedPhone);
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error al cambiar estado del chat');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [formatPhoneNumber, currentChat, loadActiveChats, loadChatByPhone]);
-
-  // Limpiar error
   const clearError = useCallback(() => {
     setError(null);
   }, []);
 
+  // ===== PROSPECTS FUNCTIONS =====
+
+  const loadProspects = useCallback(async (cursor?: string | null) => {
+    try {
+      setIsLoadingProspects(true);
+      setErrorProspects(null);
+      
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      let asesorId = undefined;
+      if (user.role === 'Asesor') {
+        asesorId = user._id || user.id;
+      }
+      const response = await getQuickLearningProspects(cursor, 20, user.role, asesorId);
+      
+      if (cursor) {
+        // Cargar más prospectos
+        setProspects(prev => [...prev, ...response.usuarios]);
+        setHasMoreProspects(response.pagination?.hasMore || false);
+        setNextCursor(response.pagination?.nextCursor || null);
+      } else {
+        // Cargar prospectos iniciales
+        setProspects(response.usuarios || []);
+        setHasMoreProspects(response.pagination?.hasMore || false);
+        setNextCursor(response.pagination?.nextCursor || null);
+      }
+    } catch (err: any) {
+      console.error('Error loading prospects:', err);
+      setErrorProspects(err.message || 'Error al cargar prospectos');
+    } finally {
+      setIsLoadingProspects(false);
+    }
+  }, []);
+
+  const loadMoreProspects = useCallback(async () => {
+    if (hasMoreProspects && !isLoadingMoreProspects && nextCursor) {
+      setIsLoadingMoreProspects(true);
+      try {
+        await loadProspects(nextCursor);
+      } finally {
+        setIsLoadingMoreProspects(false);
+      }
+    }
+  }, [hasMoreProspects, isLoadingMoreProspects, nextCursor, loadProspects]);
+
+  const selectProspect = useCallback(async (prospect: any, forceReload: boolean = true) => {
+    setSelectedProspect(prospect);
+    
+    if (forceReload) {
+      setIsLoadingChatHistory(true);
+      setErrorChatHistory(null);
+      try {
+        const phone = prospect.data?.telefono || prospect.phone;
+        if (!phone) throw new Error('El prospecto no tiene número de teléfono');
+        const formattedPhone = formatPhoneNumber(phone);
+        
+        const response = await getQuickLearningChatHistory(phone);
+        
+        let data = response.data || response;
+        
+        // Extraer los mensajes del objeto de respuesta
+        const messages = data.messages || data;
+        
+        const cleanedData = Array.isArray(messages) ? messages.map(msg => ({
+          ...msg,
+          isNewMessage: false
+        })) : [];
+        
+        setChatHistory(cleanedData);
+        
+        const unreadCount = unreadMessages.get(formattedPhone) || 0;
+        if (unreadCount > 0) {
+          markMessageAsRead(phone);
+        }
+      } catch (err: any) {
+        console.error('Error loading chat history:', err);
+        setErrorChatHistory(err.message || 'Error al cargar historial del chat');
+      } finally {
+        setIsLoadingChatHistory(false);
+      }
+    }
+  }, [markMessageAsRead, unreadMessages, formatPhoneNumber]);
+
+  const simulateTyping = useCallback(async (phone: string, isTyping: boolean, userType: string) => {
+    try {
+      const response = await fetch('/api/quicklearning/twilio/simulate-typing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, isTyping, userType })
+      });
+      
+      const data = await response.json();
+      console.log('Simulación de escritura:', data);
+    } catch (error) {
+      console.error('Error en simulación de escritura:', error);
+    }
+  }, []);
+
+  // ===== EFFECTS =====
+
+  // Guardar unreadMessages en localStorage
+  useEffect(() => {
+    const unreadObj = Object.fromEntries(unreadMessages);
+    localStorage.setItem('unreadMessages', JSON.stringify(unreadObj));
+    console.log('💾 Guardando unreadMessages en localStorage:', unreadObj);
+  }, [unreadMessages]);
+
+  // Solicitar permisos de notificación
+  useEffect(() => {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  // Socket event listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    console.log('🔌 QuickLearning - Configurando listeners de socket...');
+
+    socket.on('nuevo_mensaje_whatsapp', async (notificationData: any) => {
+      console.log('📨 QuickLearning - Nuevo mensaje recibido:', notificationData);
+      
+      try {
+        const { phone, message, chat, metadata } = notificationData;
+        
+        console.log('🔍 Datos extraídos:', { phone, message, chat, metadata });
+        
+        const formattedPhone = formatPhoneNumber(phone);
+        console.log('📱 Teléfono formateado:', formattedPhone);
+        
+        // Incrementar contador de mensajes no leídos
+        incrementUnreadCount(formattedPhone);
+        console.log('📊 Contador incrementado para:', formattedPhone);
+        
+        // Si es el chat actualmente seleccionado, recargar desde el backend
+        const selectedPhone = selectedProspect?.data?.telefono;
+        const formattedSelectedPhone = selectedPhone ? formatPhoneNumber(selectedPhone) : null;
+        
+        if (formattedSelectedPhone === formattedPhone) {
+          console.log('🎯 Chat actual seleccionado, recargando desde backend');
+          // Recargar el chat completo desde el backend
+          const response = await getQuickLearningChatHistory(phone);
+          let data = response.data || response;
+          const messages = data.messages || data;
+          const cleanedData = Array.isArray(messages) ? messages.map(msg => ({
+            ...msg,
+            isNewMessage: false
+          })) : [];
+          setChatHistory(cleanedData);
+        }
+        
+        // Actualizar el último mensaje en la lista de prospectos
+        console.log('📝 Actualizando lista de prospectos');
+        setProspects(prev => prev.map(prospect => {
+          const prospectPhone = formatPhoneNumber(prospect.data?.telefono || '');
+          if (prospectPhone === formattedPhone) {
+            return {
+              ...prospect,
+              data: {
+                ...prospect.data,
+                ultimo_mensaje: message.body,
+                lastMessageDate: notificationData.timestamp
+              }
+            };
+          }
+          return prospect;
+        }));
+        
+        loadProspects();
+        
+        console.log('✅ Procesamiento del mensaje completado');
+      } catch (error) {
+        console.error('❌ Error procesando mensaje:', error);
+      }
+    });
+
+    socket.on('escribiendo_whatsapp', (data: any) => {
+      console.log('✍️ QuickLearning - Indicador de escritura:', data);
+      
+      const { phone, isTyping, userType } = data;
+      
+      if (isTyping) {
+        setTypingIndicators(prev => new Map(prev).set(formatPhoneNumber(phone), {
+          userType,
+          timestamp: new Date()
+        }));
+      } else {
+        setTypingIndicators(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(formatPhoneNumber(phone));
+          return newMap;
+        });
+      }
+    });
+
+    return () => {
+      socket.off('nuevo_mensaje_whatsapp');
+      socket.off('escribiendo_whatsapp');
+    };
+  }, [socket, formatPhoneNumber, incrementUnreadCount, selectedProspect, loadProspects]);
+
   // Cargar datos iniciales
   useEffect(() => {
     const loadInitialData = async () => {
-      await Promise.allSettled([
-        refreshStatus(),
-        loadActiveChats()
-      ]);
+      try {
+        const statusData = await getTwilioStatus();
+        setStatus(statusData as any);
+      } catch (err) {
+        console.warn('Error loading initial status:', err);
+      }
     };
     
     loadInitialData();
-  }, []);
-
-  // Auto-refresh cada 30 segundos (sin mostrar loading)
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        // Refresh silencioso sin activar loading
-        const statusData = await getTwilioStatus();
-        setStatus(statusData);
-      } catch (err) {
-        // Silenciar errores del auto-refresh
-        console.warn('Auto-refresh error:', err);
-      }
-    }, 300000);
-
-    return () => clearInterval(interval);
   }, []);
 
   // Cargar prospectos al inicializar
   useEffect(() => {
     console.log('useEffect: Loading prospects on mount');
     loadProspects();
-  }, []);
+  }, [loadProspects]);
 
-  // Cargar lista de prospectos
-  const loadProspects = useCallback(async (cursor?: string | null) => {
-    console.log('loadProspects called with cursor:', cursor);
-    if (cursor) {
-      setIsLoadingMoreProspects(true);
-    } else {
-      setIsLoadingProspects(true);
-    }
-    setErrorProspects(null);
-    
-    try {
-      console.log('Calling getQuickLearningProspects...');
-      const data = await getQuickLearningProspects(cursor);
-      console.log('getQuickLearningProspects response:', data);
-      // Validación defensiva para soportar ambas respuestas
-      if (!data || !data.usuarios) {
-        setErrorProspects('Respuesta inesperada del servidor.');
-        setIsLoadingProspects(false);
-        setIsLoadingMoreProspects(false);
-        return;
-      }
-
-      // Transformar los datos para que coincidan con la estructura esperada por el componente
-      const transformedUsuarios = data.usuarios.map((usuario: any) => ({
-        _id: usuario._id,
-        data: {
-          nombre: usuario.name || usuario.phone || 'Sin nombre',
-          telefono: usuario.phone,
-          ultimo_mensaje: usuario.lastMessage?.body || 'Sin mensajes',
-          email: usuario.email,
-          ciudad: usuario.ciudad,
-          curso: usuario.curso,
-          asesor: usuario.asesor,
-          status: usuario.status,
-          stage: usuario.stage
-        },
-        tableSlug: usuario.tableSlug,
-        linkedTable: {
-          refModel: usuario.tableSlug,
-          refId: usuario._id
-        },
-        phone: usuario.phone,
-        aiEnabled: usuario.aiEnabled || false,
-        createdAt: usuario.createdAt,
-        updatedAt: usuario.updatedAt,
-        lastMessageDate: usuario.lastMessageDate
-      }));
-
-      console.log('Transformed usuarios:', transformedUsuarios);
-
-      // Si tiene pagination, úsalo
-      if (data.pagination) {
-        if (cursor) {
-          setProspects(prev => [...prev, ...transformedUsuarios]);
-        } else {
-          setProspects(transformedUsuarios);
-        }
-        setHasMoreProspects(!!data.pagination.hasMore);
-        setNextCursor(data.pagination.nextCursor ?? null);
-      } else {
-        // Si no tiene pagination, calcula hasMore de forma defensiva
-        const total = data.total ?? data.usuarios.length;
-        const limit = data.limit ?? 20;
-        if (cursor) {
-          setProspects(prev => [...prev, ...transformedUsuarios]);
-        } else {
-          setProspects(transformedUsuarios);
-        }
-        setHasMoreProspects(data.usuarios.length >= limit && data.usuarios.length < total);
-        setNextCursor(null); // No hay paginación real
-      }
-    } catch (err: any) {
-      setErrorProspects(err.message || 'Error al cargar prospectos');
-    } finally {
-      if (cursor) {
-        setIsLoadingMoreProspects(false);
-      } else {
-        setIsLoadingProspects(false);
-      }
-    }
-  }, []);
-
-  // Cargar más prospectos (infinite scroll)
-  const loadMoreProspects = useCallback(async () => {
-    if (hasMoreProspects && !isLoadingMoreProspects && nextCursor) {
-      await loadProspects(nextCursor);
-    }
-  }, [hasMoreProspects, isLoadingMoreProspects, nextCursor]);
-
-  // En selectProspect, usa prospect.data.telefono para obtener el historial:
-  const selectProspect = useCallback(async (prospect: any) => {
-    console.log('selectProspect called with:', prospect);
-    setSelectedProspect(prospect);
-    setIsLoadingChatHistory(true);
-    setErrorChatHistory(null);
-    try {
-      const phone = prospect.data?.telefono || prospect.phone;
-      if (!phone) throw new Error('El prospecto no tiene número de teléfono');
-      console.log('Loading chat history for phone:', phone);
-      const data = await getQuickLearningChatHistory(phone);
-      console.log('Chat history response:', data);
-      setChatHistory(Array.isArray(data) ? data : []);
-    } catch (err: any) {
-      console.error('Error loading chat history:', err);
-      setErrorChatHistory(err.message || 'Error al cargar historial de chat');
-      setChatHistory([]);
-    } finally {
-      setIsLoadingChatHistory(false);
-    }
-  }, []);
+  // ===== RETURN =====
 
   return {
     // State
     status,
     history,
-    activeChats,
-    currentChat,
     isLoading,
     error,
     
@@ -502,27 +504,30 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
     hasMoreProspects,
     isLoadingMoreProspects,
     
+    // Socket state
+    unreadMessages,
+    socketConnected,
+    
+    // Indicadores de escritura
+    typingIndicators,
+    
     // Actions
     sendMessage,
     sendTemplate,
-    refreshStatus,
     loadHistory,
-    loadActiveChats,
-    loadChatByPhone,
-    toggleAI,
-    assignAdvisor,
-    updateCustomerInfo,
-    changeChatStatus,
     clearError,
+    markMessageAsRead,
     
     // Utilities
     formatPhoneNumber,
     getMessageStatusColor,
-    getChatStatusColor,
     
     // Prospects
     loadProspects,
     loadMoreProspects,
-    selectProspect
+    selectProspect,
+    
+    // Testing functions
+    simulateTyping,
   };
 }

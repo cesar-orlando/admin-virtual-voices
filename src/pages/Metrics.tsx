@@ -37,10 +37,14 @@ import {
   Speed,
   Timer,
   Assessment,
+  Campaign,
+  LocationCity,
+  Share,
 } from '@mui/icons-material';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, LabelList, Legend, Pie as PieCell } from 'recharts';
 import { useAuth } from '../hooks/useAuth';
 import { getTableStats } from '../api/servicios/dynamicTableServices';
+import { keyframes } from '@mui/system';
 
 // Mock data para las métricas - COMENTADO PARA USAR DATOS REALES
 /*
@@ -463,11 +467,103 @@ const QuickLearningDonut = ({ data }: { data: { name: string; value: number; col
   </PieChart>
 );
 
+// Animación de entrada
+const fadeInUp = keyframes`
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: none; }
+`;
+
+// Card interna para cada métrica
+type MetricListCardProps = {
+  title: string;
+  icon: React.ReactNode;
+  items: { _id?: string; count: number }[];
+  color: string;
+};
+
+const MetricListCard = ({ title, icon, items, color }: MetricListCardProps) => {
+  if (!items || items.length === 0) {
+    return (
+      <Paper sx={{ p: 2, minHeight: 180, maxHeight: 260, bgcolor: '#f8fafc', borderRadius: 3, boxShadow: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color }}><Box component="span" sx={{ verticalAlign: 'middle', mr: 1 }}>{icon}</Box>{title}</Typography>
+        <Typography variant="body2" color="text.secondary">Sin datos</Typography>
+      </Paper>
+    );
+  }
+  // Encuentra el valor más alto para el badge TOP
+  const maxCount = Math.max(...items.map(i => i.count));
+  return (
+    <Paper sx={{ p: 2, minHeight: 180, maxHeight: 260, bgcolor: '#fff', borderRadius: 3, boxShadow: 3, transition: 'box-shadow 0.2s, transform 0.2s', '&:hover': { boxShadow: 6, transform: 'scale(1.03)' } }}>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1, color }}><Box component="span" sx={{ verticalAlign: 'middle', mr: 1 }}>{icon}</Box>{title}</Typography>
+      <Box sx={{ maxHeight: 180, overflowY: 'auto', pr: 1 }}>
+        {items.map((item, idx) => (
+          <Box key={item._id || idx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 1 }}>
+            <Tooltip title={item._id || `Sin ${title.toLowerCase()}`} arrow>
+              <Typography variant="body2" noWrap sx={{ maxWidth: 120 }}>{item._id || `Sin ${title.toLowerCase()}`}</Typography>
+            </Tooltip>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: color }}>{item.count}</Typography>
+              {item.count === maxCount && items.length > 1 && (
+                <Chip label="TOP" size="small" color="primary" sx={{ ml: 0.5, fontWeight: 700, bgcolor: color, color: '#fff', fontSize: 10, height: 20 }} />
+              )}
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    </Paper>
+  );
+};
+
+// Card principal para cada grupo de métricas
+type MetricGroupCardProps = {
+  title: string;
+  icon: React.ReactNode;
+  color: string;
+  stats: {
+    campanaStats?: { _id?: string; count: number }[];
+    medioStats?: { _id?: string; count: number }[];
+    ciudadStats?: { _id?: string; count: number }[];
+  };
+};
+
+const MetricGroupCard = ({ title, icon, color, stats }: MetricGroupCardProps) => (
+  <Box sx={{
+    background: `linear-gradient(135deg, ${color}10 0%, #fff 100%)`,
+    borderRadius: 4,
+    boxShadow: `0 8px 32px ${color}20`,
+    borderLeft: `8px solid ${color}`,
+    mb: 5,
+    p: { xs: 2, md: 4 },
+    animation: `${fadeInUp} 0.7s cubic-bezier(.23,1.01,.32,1)`,
+    position: 'relative',
+    overflow: 'visible',
+    marginTop: 2,
+  }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+      <Avatar sx={{ bgcolor: color, width: 56, height: 56, mr: 2, boxShadow: `0 4px 16px ${color}30` }}>{icon}</Avatar>
+      <Typography variant="h4" sx={{ fontWeight: 900, background: `linear-gradient(90deg, ${color} 60%, #6366F1 100%)`, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', letterSpacing: 1, mr: 2 }}>{title}</Typography>
+    </Box>
+    <Grid container spacing={3}>
+      <Grid item xs={12} md={4}>
+        <MetricListCard title="Campaña" icon={<Campaign sx={{ color }} />} items={stats.campanaStats || []} color={color} />
+      </Grid>
+      <Grid item xs={12} md={4}>
+        <MetricListCard title="Medio" icon={<Share sx={{ color }} />} items={stats.medioStats || []} color={color} />
+      </Grid>
+      <Grid item xs={12} md={4}>
+        <MetricListCard title="Ciudad" icon={<LocationCity sx={{ color }} />} items={stats.ciudadStats || []} color={color} />
+      </Grid>
+    </Grid>
+  </Box>
+);
+
 const Metrics = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { currentCompany, user } = useAuth();
   const isQuickLearning = user?.companySlug === 'quicklearning';
+  // Elimina cualquier declaración previa de isAdmin y deja solo esta:
+  const isAdmin = user?.role === 'Administrador' as any;
 
   // Estado para el ciclo seleccionado
   const [selectedCycle, setSelectedCycle] = useState(getCurrentCycle());
@@ -476,6 +572,11 @@ const Metrics = () => {
   const [alumnos, setAlumnos] = useState<number>(0);
   const [sinContestar, setSinContestar] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [alumnosStats, setAlumnosStats] = useState<any>({});
+  const [sinContestarStats, setSinContestarStats] = useState<any>({});
+  const [campanaStats, setCampanaStats] = useState<any[]>([]);
+  const [medioStats, setMedioStats] = useState<any[]>([]);
+  const [ciudadStats, setCiudadStats] = useState<any[]>([]);
 
   // Cargar datos reales al montar y cuando cambie el ciclo
   useEffect(() => {
@@ -488,13 +589,17 @@ const Metrics = () => {
     Promise.all([
       getTableStats('alumnos', user),
       getTableStats('sin_contestar', user)
-    ]).then(([alumnosStats, sinContestarStats]) => {
-      setAlumnos(alumnosStats?.totalRecords || 0);
-      setSinContestar(sinContestarStats?.totalRecords || 0);
+    ]).then(([alumnosStatsRes, sinContestarStatsRes]) => {
+      setAlumnos(alumnosStatsRes?.totalRecords || 0);
+      setSinContestar(sinContestarStatsRes?.totalRecords || 0);
+      setAlumnosStats(alumnosStatsRes || {});
+      setSinContestarStats(sinContestarStatsRes || {});
     }).catch(error => {
       console.error('Error loading data:', error);
       setAlumnos(0);
       setSinContestar(0);
+      setAlumnosStats({});
+      setSinContestarStats({});
     }).finally(() => setLoading(false));
   }, [isQuickLearning, user, selectedCycle]);
 
@@ -514,7 +619,7 @@ const Metrics = () => {
     color: m.color
   }));
 
-  if (isQuickLearning) {
+  if (isQuickLearning && isAdmin) {
     return (
       <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
         <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
@@ -652,11 +757,23 @@ const Metrics = () => {
             </Box>
           </Grid>
         </Grid>
+        <MetricGroupCard
+          title="Métricas de Alumnos"
+          stats={alumnosStats}
+          color="#3B82F6"
+          icon={<People sx={{ fontSize: 36 }} />}
+        />
+        <MetricGroupCard
+          title="Métricas de Sin Contestar"
+          stats={sinContestarStats}
+          color="#EF4444"
+          icon={<Cancel sx={{ fontSize: 36 }} />}
+        />
       </Box>
     );
   }
 
-  // Para otras empresas, dejar mensaje de "Próximamente"
+  // Para otras empresas o si no es admin, dejar mensaje de "Próximamente"
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
       <Typography variant="h3" sx={{ fontWeight: 800, color: '#222', mb: 1 }}>

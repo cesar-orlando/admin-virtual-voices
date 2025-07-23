@@ -188,7 +188,7 @@ export default function TableRecords() {
       }}
     >
       
-      <Button
+{/*       <Button
         variant="outlined"
         startIcon={<UploadFileIcon />}
         onClick={handleOpenImportDialog}
@@ -201,7 +201,7 @@ export default function TableRecords() {
         onClose={handleCloseImportDialog}
         tableFields={table ? (table.fields as any[]).map(f => ({ key: f.key, label: f.label, required: f.required })) : []}
         onImport={handleImportExcel}
-      />
+      /> */}
      
       {/* Tabla dinámica */}
       <DynamicDataTable
