@@ -60,6 +60,7 @@ import {
 } from '../api/servicios';
 import { exportTableData } from '../utils/exportUtils';
 import type { DynamicTable, DynamicRecord, TableField, TableStats } from '../types';
+import * as XLSX from 'xlsx';
 
 interface DynamicDataTableProps {
   table: DynamicTable;
@@ -203,7 +204,6 @@ export default function DynamicDataTable({
       console.error('Error deleting record:', err);
     }
   };
-
   // Función para obtener todos los registros de la tabla
   const getAllRecordsForExport = async (): Promise<DynamicRecord[]> => {
     if (!user) return [];
@@ -264,6 +264,8 @@ export default function DynamicDataTable({
       setExporting(false);
       setExportProgress(0);
     }
+
+    handleMenuClose();
   };
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, record: DynamicRecord) => {
