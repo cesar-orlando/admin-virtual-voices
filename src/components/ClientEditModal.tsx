@@ -65,6 +65,7 @@ interface ClientEditModalProps {
   tableChanged?: boolean;
   reloadingTableParams?: boolean;
   onTableSlugChange?: (newTableSlug: string) => Promise<void>;
+  missingFields?: string[];
 }
 
 // Configuración de tipos de tabla con iconos y colores
@@ -117,7 +118,8 @@ export default function ClientEditModal({
   success = false,
   tableChanged = false,
   reloadingTableParams = false,
-  onTableSlugChange
+  onTableSlugChange,
+  missingFields: externalMissingFields = []
 }: ClientEditModalProps) {
   const theme = useTheme();
   const [formData, setFormData] = useState<any>({});
@@ -134,6 +136,45 @@ export default function ClientEditModal({
       setHasUnsavedChanges(false);
     }
   }, [initialData]);
+
+  // Actualizar formData cuando cambien los tableFields (nueva tabla seleccionada)
+  useEffect(() => {
+    if (tableFields.length > 0 && formData) {
+      // Crear nuevos datos con los campos de la nueva tabla
+      const newData: any = {};
+      tableFields.forEach((field: any) => {
+        // Mantener valores existentes si el campo existe en ambos
+        newData[field.name] = formData[field.name] ?? '';
+      });
+
+      // Mantener campos especiales que no están en la estructura de tabla
+      newData.tableSlug = formData.tableSlug || '';
+      newData.aiEnabled = formData.aiEnabled || false;
+      newData.lastMessageDate = formData.lastMessageDate || '';
+
+      // Asegurar que los campos especiales tengan valores por defecto
+      if (!newData.asesor && formData.asesor) {
+        newData.asesor = formData.asesor;
+      }
+
+      if (!newData.curso) {
+        newData.curso = formData.curso || 'virtual';
+      }
+
+      // Agregar campos específicos de Quick Learning
+      newData.campana = formData.campana || '';
+      newData.medio = formData.medio || '';
+      newData.comentario = formData.comentario || '';
+      newData.consecutivo = formData.consecutivo || '';
+
+      setFormData(newData);
+    }
+  }, [tableFields]);
+
+  // Sincronizar campos faltantes externos
+  useEffect(() => {
+    setMissingFields(externalMissingFields);
+  }, [externalMissingFields]);
 
   // Validar email
   const isValidEmail = (email: string) => {
@@ -154,7 +195,10 @@ export default function ClientEditModal({
     setShowConfetti(true);
     setTimeout(() => setShowConfetti(false), 2000);
     
-    handleFieldChange('tableSlug', newType);
+    // Actualizar formData inmediatamente
+    const updatedFormData = { ...formData, tableSlug: newType };
+    setFormData(updatedFormData);
+    setHasUnsavedChanges(true);
     
     // Llamar a la función para recargar parámetros si está disponible
     if (onTableSlugChange) {
@@ -221,100 +265,137 @@ export default function ClientEditModal({
     const isMissing = missingFields.includes(field.name);
     const isRequired = field.required;
 
+    // Estilo para campos faltantes
+    const missingFieldStyle = isMissing ? {
+      border: `2px solid ${theme.palette.error.main}`,
+      borderRadius: 2,
+      backgroundColor: theme.palette.error.light + '10',
+      '& .MuiInputLabel-root': {
+        color: theme.palette.error.main,
+        fontWeight: 600
+      },
+      '& .MuiOutlinedInput-root': {
+        '& fieldset': {
+          borderColor: theme.palette.error.main,
+        },
+        '&:hover fieldset': {
+          borderColor: theme.palette.error.dark,
+        },
+        '&.Mui-focused fieldset': {
+          borderColor: theme.palette.error.main,
+        }
+      }
+    } : {};
+
     // Campo especial: Tipo de tabla
     if (field.name === 'tableSlug') {
       return (
-        <FormControl fullWidth key={field.name} sx={{ mb: 3 }}>
-          <InputLabel id="tipo-cliente-label">Tipo de Cliente</InputLabel>
-          <Select
-            labelId="tipo-cliente-label"
-            value={value}
-            label="Tipo de Cliente"
-            onChange={e => handleTypeChange(e.target.value)}
-            startAdornment={
-              <InputAdornment position="start">
-                {TABLE_TYPES.find(t => t.value === value)?.icon || <PersonIcon color="action" />}
-              </InputAdornment>
-            }
-          >
-            {TABLE_TYPES.map(type => (
-              <MenuItem key={type.value} value={type.value}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {type.icon}
-                  <Box>
-                    <Typography variant="body2" fontWeight={600}>{type.label}</Typography>
-                    <Typography variant="caption" sx={{ opacity: 0.7 }}>{type.description}</Typography>
+        <Box key={field.name} sx={{ mb: 3, position: 'relative' }}>
+          <FormControl fullWidth error={isMissing} sx={missingFieldStyle}>
+            <InputLabel id="tipo-cliente-label">
+              Tipo de Cliente {isRequired && '*'}
+            </InputLabel>
+            <Select
+              labelId="tipo-cliente-label"
+              value={value}
+              label="Tipo de Cliente"
+              onChange={e => handleTypeChange(e.target.value)}
+              startAdornment={
+                <InputAdornment position="start">
+                  {TABLE_TYPES.find(t => t.value === value)?.icon || <PersonIcon color="action" />}
+                </InputAdornment>
+              }
+            >
+              {TABLE_TYPES.map(type => (
+                <MenuItem key={type.value} value={type.value}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {type.icon}
+                    <Box>
+                      <Typography variant="body2" fontWeight={600}>{type.label}</Typography>
+                      <Typography variant="caption" sx={{ opacity: 0.7 }}>{type.description}</Typography>
+                    </Box>
                   </Box>
-                </Box>
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          {isMissing && (
+            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block', fontWeight: 600 }}>
+              ⚠️ Campo obligatorio
+            </Typography>
+          )}
+        </Box>
       );
     }
 
     // Campo especial: Asesor
     if (field.name === 'asesor') {
       return (
-        <FormControl fullWidth key={field.name} error={isMissing}>
-          <InputLabel>Asesor</InputLabel>
-          <Select
-            value={value || ''}
-            label="Asesor"
-            onChange={(e) => handleFieldChange(field.name, e.target.value)}
-            startAdornment={
-              <InputAdornment position="start">
-                <GroupIcon color="action" />
-              </InputAdornment>
-            }
-          >
-            <MenuItem value="">
-              <em>Sin asesor asignado</em>
-            </MenuItem>
-            {asesores.map((asesor: any) => (
-              <MenuItem key={asesor._id || asesor.id} value={asesor._id || asesor.id}>
-                {asesor.nombre || asesor.name || asesor.email}
-                {asesor.apellido ? ` ${asesor.apellido}` : ''}
+        <Box key={field.name} sx={{ mb: 3, position: 'relative' }}>
+          <FormControl fullWidth error={isMissing} sx={missingFieldStyle}>
+            <InputLabel>
+              Asesor {isRequired && '*'}
+            </InputLabel>
+            <Select
+              value={value || ''}
+              label="Asesor"
+              onChange={(e) => handleFieldChange(field.name, e.target.value)}
+              startAdornment={
+                <InputAdornment position="start">
+                  <GroupIcon color="action" />
+                </InputAdornment>
+              }
+            >
+              <MenuItem value="">
+                <em>Sin asesor asignado</em>
               </MenuItem>
-            ))}
-          </Select>
+              {asesores.map((asesor: any) => (
+                <MenuItem key={asesor._id || asesor.id} value={asesor._id || asesor.id}>
+                  {asesor.nombre || asesor.name || asesor.email}
+                  {asesor.apellido ? ` ${asesor.apellido}` : ''}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           {isMissing && (
-            <Typography variant="caption" color="error">
-              Este campo es obligatorio
+            <Typography variant="caption" color="error" sx={{ mt: 0.5, display: 'block', fontWeight: 600 }}>
+              ⚠️ Campo obligatorio
             </Typography>
           )}
-        </FormControl>
+        </Box>
       );
     }
 
     // Campo especial: Email con validación
     if (field.name === 'email') {
       return (
-        <TextField
-          key={field.name}
-          label={field.label || field.name}
-          value={value}
-          onChange={(e) => handleFieldChange(field.name, e.target.value)}
-          fullWidth
-          error={isMissing || (value && !isValidEmail(value))}
-          helperText={isMissing ? 'Campo obligatorio' : (value && !isValidEmail(value) ? 'Email inválido' : '')}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <EmailIcon color="action" />
-              </InputAdornment>
-            ),
-            endAdornment: value && (
-              <InputAdornment position="end">
-                {isValidEmail(value) ? (
-                  <CheckCircleIcon color="success" />
-                ) : (
-                  <ErrorIcon color="error" />
-                )}
-              </InputAdornment>
-            )
-          }}
-        />
+        <Box key={field.name} sx={{ mb: 3, position: 'relative' }}>
+          <TextField
+            label={`${field.label || field.name} ${isRequired ? '*' : ''}`}
+            value={value}
+            onChange={(e) => handleFieldChange(field.name, e.target.value)}
+            fullWidth
+            error={isMissing || (value && !isValidEmail(value))}
+            helperText={isMissing ? '⚠️ Campo obligatorio' : (value && !isValidEmail(value) ? 'Email inválido' : '')}
+            sx={missingFieldStyle}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <EmailIcon color="action" />
+                </InputAdornment>
+              ),
+              endAdornment: value && (
+                <InputAdornment position="end">
+                  {isValidEmail(value) ? (
+                    <CheckCircleIcon color="success" />
+                  ) : (
+                    <ErrorIcon color="error" />
+                  )}
+                </InputAdornment>
+              )
+            }}
+          />
+        </Box>
       );
     }
 
@@ -475,15 +556,17 @@ export default function ClientEditModal({
 
     // Campo genérico
     return (
-      <TextField
-        key={field.name}
-        label={field.label || field.name}
-        value={value}
-        onChange={(e) => handleFieldChange(field.name, e.target.value)}
-        fullWidth
-        error={isMissing}
-        helperText={isMissing ? 'Campo obligatorio' : ''}
-      />
+      <Box key={field.name} sx={{ mb: 3, position: 'relative' }}>
+        <TextField
+          label={`${field.label || field.name} ${isRequired ? '*' : ''}`}
+          value={value}
+          onChange={(e) => handleFieldChange(field.name, e.target.value)}
+          fullWidth
+          error={isMissing}
+          helperText={isMissing ? '⚠️ Campo obligatorio' : ''}
+          sx={missingFieldStyle}
+        />
+      </Box>
     );
   };
 
@@ -578,6 +661,34 @@ export default function ClientEditModal({
             <Fade in={hasUnsavedChanges}>
               <Alert severity="warning" sx={{ mb: 2 }}>
                 Tienes cambios sin guardar. Haz clic en "Guardar Cambios" para conservarlos.
+              </Alert>
+            </Fade>
+          )}
+
+          {missingFields.length > 0 && (
+            <Fade in={missingFields.length > 0}>
+              <Alert severity="error" sx={{ mb: 2 }}>
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>
+                    ⚠️ Campos obligatorios faltantes:
+                  </Typography>
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    {missingFields.map((fieldName, index) => {
+                      const field = tableFields.find((f: any) => f.name === fieldName);
+                      const fieldLabel = field?.label || fieldName;
+                      return (
+                        <Chip
+                          key={index}
+                          label={fieldLabel}
+                          color="error"
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontWeight: 600 }}
+                        />
+                      );
+                    })}
+                  </Box>
+                </Box>
               </Alert>
             </Fade>
           )}

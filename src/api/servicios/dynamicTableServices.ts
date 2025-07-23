@@ -251,11 +251,13 @@ export const getRecordWithTable = async (recordId: string, user: UserProfile) =>
 // Actualizar un registro
 export const updateRecord = async (recordId: string, recordData: UpdateRecordRequest, user: UserProfile) => {
   try {
-    const response = await api.put(`/records/${recordId}`, {
+    const requestData = {
       ...recordData,
       c_name: user.companySlug,
       updatedBy: user.id
-    });
+    };
+    
+    const response = await api.put(`/records/${recordId}`, requestData);
     return response.data;
   } catch (error) {
     handleError(error as any);

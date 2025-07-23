@@ -665,7 +665,17 @@ const QuickLearningDashboard: React.FC = () => {
       });
       setMissingFields(missing);
       if (missing.length > 0) {
-        setSaveError('Faltan campos requeridos.');
+        // Crear mensaje específico con los campos que faltan
+        const missingFieldLabels = missing.map(fieldName => {
+          const field = tableFields.find((f: any) => f.name === fieldName);
+          return field?.label || fieldName;
+        });
+        
+        const errorMessage = missing.length === 1 
+          ? `Falta el campo obligatorio: ${missingFieldLabels[0]}`
+          : `Faltan los campos obligatorios: ${missingFieldLabels.join(', ')}`;
+        
+        setSaveError(errorMessage);
         setSavingProspect(false);
         return;
       }
@@ -694,7 +704,12 @@ const QuickLearningDashboard: React.FC = () => {
 
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       const recordId = selectedProspect._id;
-      const updateData = { data: dataToSave };
+      
+      // El backend extrae tableSlug de data, así que lo incluimos ahí
+      const updateData = { 
+        data: dataToSave // Incluir tableSlug dentro de data
+      };
+      
       const response = await updateRecord(recordId, updateData, user);
       
       // Verificar si se cambió de tabla
@@ -1654,6 +1669,7 @@ const QuickLearningDashboard: React.FC = () => {
         tableChanged={tableChanged}
         reloadingTableParams={reloadingTableParams}
         onTableSlugChange={reloadTableParameters}
+        missingFields={missingFields}
       />
 
       {/* Dialog para mostrar la imagen en grande */}
