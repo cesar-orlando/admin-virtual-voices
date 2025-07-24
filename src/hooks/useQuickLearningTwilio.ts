@@ -414,22 +414,30 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
         
         // Actualizar el último mensaje en la lista de prospectos
         console.log('📝 Actualizando lista de prospectos');
-        setProspects(prev => prev.map(prospect => {
-          const prospectPhone = formatPhoneNumber(prospect.data?.telefono || '');
-          if (prospectPhone === formattedPhone) {
-            return {
-              ...prospect,
-              data: {
-                ...prospect.data,
-                ultimo_mensaje: message.body,
-                lastMessageDate: notificationData.timestamp
-              }
-            };
-          }
-          return prospect;
-        }));
-        
-        loadProspects();
+        setProspects(prev => {
+          // Actualiza el prospecto afectado y lo sube arriba
+          const updated = prev.map(prospect => {
+            const prospectPhone = formatPhoneNumber(prospect.data?.telefono || '');
+            if (prospectPhone === formattedPhone) {
+              return {
+                ...prospect,
+                data: {
+                  ...prospect.data,
+                  ultimo_mensaje: message.body,
+                  lastMessageDate: notificationData.timestamp
+                }
+              };
+            }
+            return prospect;
+          });
+          // Encuentra el prospecto actualizado
+          const moved = updated.find(p => formatPhoneNumber(p.data?.telefono || '') === formattedPhone);
+          const rest = updated.filter(p => formatPhoneNumber(p.data?.telefono || '') !== formattedPhone);
+          // Si lo encontró, lo sube arriba
+          return moved ? [moved, ...rest] : updated;
+        });
+        // Quitar la recarga completa de loadProspects();
+        // loadProspects(); // <-- Eliminar esta línea para evitar recarga global
         
         console.log('✅ Procesamiento del mensaje completado');
       } catch (error) {
