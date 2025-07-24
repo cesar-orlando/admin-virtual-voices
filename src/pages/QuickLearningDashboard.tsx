@@ -42,6 +42,8 @@ import { fetchCompanyUsers } from '../api/servicios';
 import { updateRecord } from '../api/servicios';
 import { useDebounce } from '../hooks/useDebounce';
 import ClientEditModal from '../components/ClientEditModal';
+import { FixedSizeList as VirtualizedList } from 'react-window';
+import type { ListChildComponentProps } from 'react-window';
 // import TemplateModal from '../../components/Record/';
 
 // TemplateModal local para plantillas (basado en ProspectDrawer)
@@ -868,6 +870,16 @@ const QuickLearningDashboard: React.FC = () => {
     }
   };
 
+  // Tipos para los datos de la lista virtualizada
+  interface ProspectListItemData {
+    items: any[];
+    selectedProspect: any;
+    selectProspect: (prospect: any) => void;
+    unreadMessages: Map<string, number>;
+    formatPhoneNumber: (phone: string) => string;
+    theme: any;
+  }
+
   return (
     <Box sx={{ 
       width: '90vw', 
@@ -1054,199 +1066,206 @@ const QuickLearningDashboard: React.FC = () => {
                 </Typography>
               </Box>
             ) : (
-              <List>
-                {(isGlobalSearch ? searchResults : filteredProspects).map(prospect => (
-                  <ListItem
-                    key={prospect._id}
-                    button
-                    selected={selectedProspect?._id === prospect._id}
-                    onClick={() => {
-                      selectProspect(prospect);
-                      // NO marcar como leído aquí - selectProspect ya lo hace internamente
-                    }}
-                    sx={{
-                      borderRadius: 2,
-                      mb: 0.5,
-                      px: 1,
-                      py: 1.5, // más espacio vertical
-                      minHeight: 56, // más alto
-                      background: selectedProspect?._id === prospect._id ? (theme.palette.mode === 'dark' ? theme.palette.action.selected : theme.palette.action.selected) : 'transparent',
-                      boxShadow: selectedProspect?._id === prospect._id ? 2 : 0,
-                      transition: 'background 0.2s, box-shadow 0.2s',
-                      '&:hover, &:focus': {
-                        background: theme.palette.action.hover,
-                        boxShadow: 2
-                      }
-                    }}
-                  >
-                    <ListItemAvatar>
-                      <Badge
-                        overlap="circular"
-                        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                        badgeContent={
-                          (() => {
-                            const phone = formatPhoneNumber(prospect.data?.telefono || '');
-                            const unreadCount = unreadMessages.get(phone) || 0;
-                            return unreadCount > 0 ? (
-                              <Box
-                                sx={{
-                                  minWidth: 20,
-                                  height: 20,
-                                  borderRadius: '10px',
-                                  bgcolor: theme.palette.error.main,
-                                  border: `2px solid ${theme.palette.background.paper}`,
-                                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '11px',
-                                  fontWeight: 700,
-                                  color: 'white'
-                                }}
-                              >
-                                {unreadCount > 99 ? '99+' : unreadCount}
-                              </Box>
-                            ) : null;
-                          })()
-                        }
-                      >
-                        <Avatar sx={{ bgcolor: theme.palette.success.main, width: 32, height: 32, color: theme.palette.getContrastText(theme.palette.success.main) }}>
-                          <PersonIcon fontSize="small" />
-                        </Avatar>
-                      </Badge>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography
-                            component="span"
-                            fontWeight={(() => {
-                              const phone = formatPhoneNumber(prospect.data?.telefono || '');
-                              const unreadCount = unreadMessages.get(phone) || 0;
-                              return unreadCount > 0 ? 800 : 700;
-                            })()}
-                            fontSize={15}
-                            noWrap
-                            color={(() => {
-                              const phone = formatPhoneNumber(prospect.data?.telefono || '');
-                              const unreadCount = unreadMessages.get(phone) || 0;
-                              return unreadCount > 0 ? theme.palette.primary.main : theme.palette.text.primary;
-                            })()}
-                            sx={{ 
-                              flex: 1, 
-                              textOverflow: 'ellipsis', 
-                              overflow: 'hidden', 
-                              whiteSpace: 'nowrap',
-                              ...(() => {
-                                const phone = formatPhoneNumber(prospect.data?.telefono || '');
-                                const unreadCount = unreadMessages.get(phone) || 0;
-                                return unreadCount > 0 ? {
-                                  textShadow: '0 0 1px rgba(0,0,0,0.1)'
-                                } : {};
-                              })()
-                            }}
-                          >
-                            {prospect.data?.nombre ? prospect.data.nombre.trim() : (prospect.data?.telefono || '-')}
-                          </Typography>
-                          {(() => {
-                            const phone = formatPhoneNumber(prospect.data?.telefono || '');
-                            const unreadCount = unreadMessages.get(phone) || 0;
-                            return unreadCount > 0 ? (
-                              <Box
-                                sx={{
-                                  width: 8,
-                                  height: 8,
-                                  borderRadius: '50%',
-                                  bgcolor: theme.palette.error.main,
-                                  flexShrink: 0,
-                                  animation: 'pulse 2s infinite'
-                                }}
-                              />
-                            ) : null;
-                          })()}
-                        </Box>
-                      }
-                      secondary={
-                        <>
-                          <Typography
-                            component="div"
-                            fontSize={13}
-                            color="text.secondary"
-                            noWrap
-                            sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
-                          >
-                            {prospect.data?.telefono || ''}
-                          </Typography>
-                          {prospect.data?.ultimo_mensaje && (
-                            <Typography
-                              component="div"
-                              fontSize={13}
-                              color="text.secondary"
-                              noWrap
-                              sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
-                            >
-                              {prospect.data.ultimo_mensaje}
-                            </Typography>
-                          )}
-                        </>
-                      }
-                    />
-                    <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
-                      <Typography
-                        variant="caption"
+              <VirtualizedList
+                height={520}
+                itemCount={(isGlobalSearch ? searchResults : filteredProspects).length}
+                itemSize={76}
+                width={340}
+                overscanCount={6}
+                itemData={{
+                  items: isGlobalSearch ? searchResults : filteredProspects,
+                  selectedProspect,
+                  selectProspect,
+                  unreadMessages,
+                  formatPhoneNumber,
+                  theme
+                } as ProspectListItemData}
+                onScroll={(params: { scrollOffset: number; scrollDirection: 'forward' | 'backward' }) => {
+                  const totalItems = (isGlobalSearch ? searchResults : filteredProspects).length;
+                  if (!isGlobalSearch && hasMoreProspects && !isLoadingMoreProspects && params.scrollDirection === 'forward') {
+                    const visibleRows = Math.ceil(520 / 76);
+                    if (params.scrollOffset / 76 + visibleRows >= totalItems - 2) {
+                      loadMoreProspects();
+                    }
+                  }
+                }}
+              >
+                {({ index, style, data }: ListChildComponentProps<ProspectListItemData>) => {
+                  const prospect = data.items[index];
+                  const { selectedProspect, selectProspect, unreadMessages, formatPhoneNumber, theme } = data;
+                  return (
+                    <div style={style}>
+                      <ListItem
+                        key={prospect._id}
+                        button
+                        selected={selectedProspect?._id === prospect._id}
+                        onClick={() => selectProspect(prospect)}
                         sx={{
-                          fontWeight: 700,
-                          fontSize: 13,
                           borderRadius: 2,
-                          px: 2,
-                          py: 0.5,
-                          bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[200],
-                          color: theme.palette.text.secondary,
-                          display: 'flex',
-                          alignItems: 'center',
-                          minWidth: 60,
-                          justifyContent: 'center'
+                          mb: 0.5,
+                          px: 1,
+                          py: 1.5,
+                          minHeight: 56,
+                          background: selectedProspect?._id === prospect._id ? (theme.palette.mode === 'dark' ? theme.palette.action.selected : theme.palette.action.selected) : 'transparent',
+                          boxShadow: selectedProspect?._id === prospect._id ? 2 : 0,
+                          transition: 'background 0.2s, box-shadow 0.2s',
+                          '&:hover, &:focus': {
+                            background: theme.palette.action.hover,
+                            boxShadow: 2
+                          }
                         }}
                       >
-                        {prospect.tableSlug}
-                        {typeof prospect.aiEnabled !== 'undefined' && (
-                          <Tooltip title={prospect.aiEnabled ? 'IA activada' : 'IA desactivada'}>
-                            <span>
-                              <AIIcon
-                                sx={{
-                                  ml: 1,
-                                  fontSize: 18,
-                                  color: prospect.aiEnabled ? theme.palette.success.main : theme.palette.grey[500],
-                                  verticalAlign: 'middle'
+                        <ListItemAvatar>
+                          <Badge
+                            overlap="circular"
+                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                            badgeContent={
+                              (() => {
+                                const phone = formatPhoneNumber(prospect.data?.telefono || '');
+                                const unreadCount = unreadMessages.get(phone) || 0;
+                                return unreadCount > 0 ? (
+                                  <Box
+                                    sx={{
+                                      minWidth: 20,
+                                      height: 20,
+                                      borderRadius: '10px',
+                                      bgcolor: theme.palette.error.main,
+                                      border: `2px solid ${theme.palette.background.paper}`,
+                                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '11px',
+                                      fontWeight: 700,
+                                      color: 'white'
+                                    }}
+                                  >
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                  </Box>
+                                ) : null;
+                              })()
+                            }
+                          >
+                            <Avatar sx={{ bgcolor: theme.palette.success.main, width: 32, height: 32, color: theme.palette.getContrastText(theme.palette.success.main) }}>
+                              <PersonIcon fontSize="small" />
+                            </Avatar>
+                          </Badge>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Typography
+                                component="span"
+                                fontWeight={(() => {
+                                  const phone = formatPhoneNumber(prospect.data?.telefono || '');
+                                  const unreadCount = unreadMessages.get(phone) || 0;
+                                  return unreadCount > 0 ? 800 : 700;
+                                })()}
+                                fontSize={15}
+                                noWrap
+                                color={(() => {
+                                  const phone = formatPhoneNumber(prospect.data?.telefono || '');
+                                  const unreadCount = unreadMessages.get(phone) || 0;
+                                  return unreadCount > 0 ? theme.palette.primary.main : theme.palette.text.primary;
+                                })()}
+                                sx={{ 
+                                  flex: 1, 
+                                  textOverflow: 'ellipsis', 
+                                  overflow: 'hidden', 
+                                  whiteSpace: 'nowrap',
+                                  ...(() => {
+                                    const phone = formatPhoneNumber(prospect.data?.telefono || '');
+                                    const unreadCount = unreadMessages.get(phone) || 0;
+                                    return unreadCount > 0 ? {
+                                      textShadow: '0 0 1px rgba(0,0,0,0.1)'
+                                    } : {};
+                                  })()
                                 }}
-                              />
-                            </span>
-                          </Tooltip>
-                        )}
-                      </Typography>
-                    </Box>
-                  </ListItem>
-                ))}
-                
-                {/* Indicador de carga para infinite scroll */}
-                {isLoadingMoreProspects && !isGlobalSearch && (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', py: 2 }}>
-                    <CircularProgress size={24} />
-                    <Typography variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                      Cargando más prospectos...
-                    </Typography>
-                  </Box>
-                )}
-                
-                {/* Indicador de fin de lista */}
-                {!hasMoreProspects && prospects.length > 0 && !isGlobalSearch && (
-                  <Box sx={{ textAlign: 'center', py: 2 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      No hay más prospectos para cargar
-                    </Typography>
-                  </Box>
-                )}
-              </List>
+                              >
+                                {prospect.data?.nombre ? prospect.data.nombre.trim() : (prospect.data?.telefono || '-')}
+                              </Typography>
+                              {(() => {
+                                const phone = formatPhoneNumber(prospect.data?.telefono || '');
+                                const unreadCount = unreadMessages.get(phone) || 0;
+                                return unreadCount > 0 ? (
+                                  <Box
+                                    sx={{
+                                      width: 8,
+                                      height: 8,
+                                      borderRadius: '50%',
+                                      bgcolor: theme.palette.error.main,
+                                      flexShrink: 0,
+                                      animation: 'pulse 2s infinite'
+                                    }}
+                                  />
+                                ) : null;
+                              })()}
+                            </Box>
+                          }
+                          secondary={
+                            <>
+                              <Typography
+                                component="div"
+                                fontSize={13}
+                                color="text.secondary"
+                                noWrap
+                                sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                              >
+                                {prospect.data?.telefono || ''}
+                              </Typography>
+                              {prospect.data?.ultimo_mensaje && (
+                                <Typography
+                                  component="div"
+                                  fontSize={13}
+                                  color="text.secondary"
+                                  noWrap
+                                  sx={{ textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                                >
+                                  {prospect.data.ultimo_mensaje}
+                                </Typography>
+                              )}
+                            </>
+                          }
+                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: 13,
+                              borderRadius: 2,
+                              px: 2,
+                              py: 0.5,
+                              bgcolor: theme.palette.mode === 'dark' ? theme.palette.grey[900] : theme.palette.grey[200],
+                              color: theme.palette.text.secondary,
+                              display: 'flex',
+                              alignItems: 'center',
+                              minWidth: 60,
+                              justifyContent: 'center'
+                            }}
+                          >
+                            {prospect.tableSlug}
+                            {typeof prospect.aiEnabled !== 'undefined' && (
+                              <Tooltip title={prospect.aiEnabled ? 'IA activada' : 'IA desactivada'}>
+                                <span>
+                                  <AIIcon
+                                    sx={{
+                                      ml: 1,
+                                      fontSize: 18,
+                                      color: prospect.aiEnabled ? theme.palette.success.main : theme.palette.grey[500],
+                                      verticalAlign: 'middle'
+                                    }}
+                                  />
+                                </span>
+                              </Tooltip>
+                            )}
+                          </Typography>
+                        </Box>
+                      </ListItem>
+                    </div>
+                  );
+                }}
+              </VirtualizedList>
             )}
           </Box>
         </Card>
