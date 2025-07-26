@@ -50,7 +50,7 @@ export const deleteSession = async (sessionId: string, user: UserProfile) => {
 // Nueva función para obtener usuarios de WhatsApp
 export const fetchWhatsAppUsers = async (user: UserProfile, tableSlugs: string[] = ['prospectos', 'clientes', 'nuevo_ingreso']) => {
   try {
-    const response = await api.get(`/whatsapp/usuarios/${user.companySlug}?tableSlugs=${tableSlugs.join(',')}`);
+    const response = await api.get(`/whatsapp/usuarios/${user.companySlug}/${user.id}?tableSlugs=${tableSlugs.join(',')}`);
     return response.data.usuarios || [];
   } catch (error) {
     handleError(error as any);
@@ -59,9 +59,9 @@ export const fetchWhatsAppUsers = async (user: UserProfile, tableSlugs: string[]
 };
 
 // Función para obtener mensajes de un usuario específico
-export const fetchUserMessages = async (user: UserProfile, phone: string) => {
+export const fetchUserMessages = async (user: UserProfile, sessionId: string, phone: string) => {
   try {
-    const response = await api.get(`/whatsapp/messages/${user.companySlug}/${phone}`);
+    const response = await api.get(`/whatsapp/messages/${user.companySlug}/${sessionId}/${phone}`);
     return response.data;
   } catch (error) {
     handleError(error as any);
