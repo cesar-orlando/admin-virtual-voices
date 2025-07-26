@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import {
-  Box, Button, TextField, Stack, Card, Typography, IconButton, Dialog, DialogContent, Snackbar, Alert, CircularProgress, useTheme, MenuItem, Select, FormControl, InputLabel, Chip, Avatar, Divider, Grid, Paper, LinearProgress
+  Box, Button, TextField, Stack, Card, Typography, IconButton, Dialog, DialogContent, Snackbar, Alert, CircularProgress, useTheme, useMediaQuery, MenuItem, Select, FormControl, InputLabel, Chip, Avatar, Divider, Grid, Paper, LinearProgress
 } from '@mui/material';
 import { QRCodeCanvas } from "qrcode.react";
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -23,6 +23,8 @@ const LOADING_MESSAGES = [
 
 export default function Whatsapp() {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   const user = JSON.parse(localStorage.getItem("user") || "{}") as UserProfile;
   const [qr, setQr] = useState("");
   const [showQR, setShowQR] = useState(false);
@@ -148,74 +150,75 @@ export default function Whatsapp() {
     });
 
     const loadData = async () => {
-      const fetchedSessions = await fetchSessions(user);
-      setSessions(fetchedSessions);
-      const data = await fetchAllAiConfigs(user);
-      setAiConfigs(data);
-      setLoading(false);
+      try {
+        setLoading(true);
+        const [fetchedSessions, fetchedAiConfigs] = await Promise.all([
+          fetchSessions(user),
+          fetchAllAiConfigs(user)
+        ]);
+        setSessions(fetchedSessions);
+        setAiConfigs(fetchedAiConfigs);
+      } catch (err) {
+        console.error('Error loading data:', err);
+        setError('Error al cargar los datos');
+      } finally {
+        setLoading(false);
+      }
     };
+
     loadData();
 
     return () => {
       socket.disconnect();
+      if (loadingMsgInterval.current) clearInterval(loadingMsgInterval.current);
+      if (dotInterval.current) clearInterval(dotInterval.current);
     };
-  }, [user.companySlug, user.id]);
+  }, []);
 
-  // Animación de mensajes y puntos suspensivos
+  // Animación de los mensajes de carga y puntos
   useEffect(() => {
     if (showFullscreenLoading) {
-      let msgIdx = 0;
       loadingMsgInterval.current = setInterval(() => {
-        msgIdx = (msgIdx + 1) % LOADING_MESSAGES.length;
-        setDynamicLoadingMsg(LOADING_MESSAGES[msgIdx]);
-      }, 6000);
+        setDynamicLoadingMsg(prev => {
+          const currentIndex = LOADING_MESSAGES.indexOf(prev);
+          return LOADING_MESSAGES[(currentIndex + 1) % LOADING_MESSAGES.length];
+        });
+      }, 3000);
+
       dotInterval.current = setInterval(() => {
         setDotCount(prev => (prev % 3) + 1);
-      }, 500);
-    } else {
-      setDynamicLoadingMsg(LOADING_MESSAGES[0]);
-      setDotCount(1);
-      if (loadingMsgInterval.current) clearInterval(loadingMsgInterval.current);
-      if (dotInterval.current) clearInterval(dotInterval.current);
+      }, 800);
+
+      return () => {
+        if (loadingMsgInterval.current) clearInterval(loadingMsgInterval.current);
+        if (dotInterval.current) clearInterval(dotInterval.current);
+      };
     }
-    return () => {
-      if (loadingMsgInterval.current) clearInterval(loadingMsgInterval.current);
-      if (dotInterval.current) clearInterval(dotInterval.current);
-    };
   }, [showFullscreenLoading]);
 
-  // Modal QR: Solicitar y mostrar QR
   const handleRequestQr = async () => {
-    setQrLoading(true);
-    setShowFullscreenLoading(true);
-    setShowQR(false);
-    setQr("");
-    setError(null);
-    setLoadingMessage("Generando código QR...");
-    setLoadingPercent(0);
     try {
-      const sanitizedSessionName = sessionName.replace(/\s+/g, "_");
-      requestNewQr(sanitizedSessionName, user)
-        .then(async () => {
-          const fetchedSessions = await fetchSessions(user);
-          setSessions(fetchedSessions)
-        });
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error desconocido');
+      setQrLoading(true);
+      setError(null);
+      setShowFullscreenLoading(true);
+      setLoadingMessage("Preparando conexión...");
+      setLoadingPercent(0);
+      await requestNewQr(sessionName, user);
+      setSnackbar({ open: true, message: 'Código QR solicitado', severity: 'success' });
+    } catch (err) {
+      console.error('Error requesting QR:', err);
+      setError('Error al solicitar el código QR');
       setQrLoading(false);
       setShowFullscreenLoading(false);
-      setQrModalOpen(false);
-      setLoadingMessage("");
-      setLoadingPercent(0);
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'connected': return 'success';
-      case 'pending': return 'warning';
+      case 'connecting': return 'warning';
       case 'disconnected': return 'error';
-      case 'error': return 'error';
+      case 'waiting_qr': return 'info';
       default: return 'default';
     }
   };
@@ -223,24 +226,20 @@ export default function Whatsapp() {
   const getStatusText = (status: string) => {
     switch (status) {
       case 'connected': return 'Conectado';
-      case 'pending': return 'Conectando...';
+      case 'connecting': return 'Conectando';
       case 'disconnected': return 'Desconectado';
-      case 'error': return 'Error';
+      case 'waiting_qr': return 'Esperando QR';
       default: return 'Desconocido';
     }
   };
-  
+
   if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <Loading message="Cargando WhatsApp Manager..." />
-      </Box>
-    );
+    return <Loading message="Cargando WhatsApp Manager..." />;
   }
 
   return (
     <>
-      {/* Fullscreen Loading Overlay - SIEMPRE fuera del main y del Dialog */}
+      {/* Fullscreen Loading Component - Aparece cuando se solicita QR o autenticación */}
       {showFullscreenLoading && (
         <Box
           sx={{
@@ -249,54 +248,58 @@ export default function Whatsapp() {
             left: 0,
             width: '100vw',
             height: '100vh',
-            zIndex: 20000,
-            background: 'linear-gradient(135deg, #1e1e28 0%, #8B5CF6 100%)',
-            backdropFilter: 'blur(10px)',
+            backgroundColor: '#1e1e28',
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
+            zIndex: 9999,
+            overflow: 'hidden',
           }}
         >
           <Box
             sx={{
-              background: 'rgba(34, 34, 51, 0.92)',
-              borderRadius: 6,
-              boxShadow: '0 8px 40px 0 rgba(139,92,246,0.25)',
-              px: { xs: 3, sm: 6 },
-              py: { xs: 4, sm: 6 },
-              minWidth: 340,
-              maxWidth: '90vw',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              position: 'relative',
+              position: 'absolute',
+              width: '200%',
+              height: '200%',
+              backgroundImage: 'radial-gradient(circle, #E05EFF 1px, transparent 1px)',
+              backgroundSize: '50px 50px',
+              animation: 'moveDots 20s linear infinite',
+              opacity: 0.1,
+              '@keyframes moveDots': {
+                '0%': { transform: 'translate(0, 0)' },
+                '100%': { transform: 'translate(-50px, -50px)' },
+              },
+            }}
+          />
+          <Box
+            sx={{
+              textAlign: 'center',
+              zIndex: 10,
+              maxWidth: { xs: '90%', md: 400 },
+              px: { xs: 2, md: 0 }
             }}
           >
-            <Box
-              component="img"
-              src={Logo}
-              alt="Virtual Voices Logo"
-              sx={{
-                width: 120,
-                height: 120,
-                mb: 2,
-                filter: 'drop-shadow(0 4px 24px #8B5CF6cc)',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                p: 2,
-              }}
+            <img 
+              src={Logo} 
+              alt="Virtual Voice" 
+              style={{ 
+                width: isMobile ? 120 : 180, 
+                height: 'auto', 
+                marginBottom: 24, 
+                filter: 'drop-shadow(0 4px 16px rgba(224, 94, 255, 0.3))' 
+              }} 
             />
             <Typography
-              variant="h4"
+              variant={isMobile ? "h6" : "h5"}
               sx={{
                 color: '#fff',
-                fontWeight: 800,
+                fontWeight: 700,
+                mb: 2,
                 fontFamily: 'Montserrat, Arial, sans-serif',
                 letterSpacing: 1,
-                mb: 1.5,
                 textAlign: 'center',
-                textShadow: '0 2px 12px #8B5CF655',
-                lineHeight: 1.2,
+                fontSize: { xs: '1.25rem', md: '1.5rem' }
               }}
             >
               {dynamicLoadingMsg}
@@ -311,7 +314,7 @@ export default function Whatsapp() {
                   variant="determinate" 
                   value={loadingPercent} 
                   sx={{
-                    height: 10,
+                    height: { xs: 8, md: 10 },
                     borderRadius: 5,
                     backgroundColor: 'rgba(139, 92, 246, 0.12)',
                     '& .MuiLinearProgress-bar': {
@@ -323,7 +326,7 @@ export default function Whatsapp() {
               ) : (
                 <LinearProgress 
                   sx={{
-                    height: 10,
+                    height: { xs: 8, md: 10 },
                     borderRadius: 5,
                     backgroundColor: 'rgba(139, 92, 246, 0.12)',
                     '& .MuiLinearProgress-bar': {
@@ -342,7 +345,7 @@ export default function Whatsapp() {
                   mt: 1.5,
                   color: '#8B5CF6',
                   fontWeight: 700,
-                  fontSize: '1.1em',
+                  fontSize: { xs: '1rem', md: '1.1em' },
                   textAlign: 'center',
                   letterSpacing: 1,
                   textShadow: '0 2px 8px #1e1e28',
@@ -362,6 +365,7 @@ export default function Whatsapp() {
                 fontStyle: 'italic',
                 letterSpacing: 0.5,
                 opacity: 0.85,
+                fontSize: { xs: '0.875rem', md: '1rem' }
               }}
             >
               No cierres esta ventana, estamos preparando todo para ti 🚀
@@ -373,8 +377,9 @@ export default function Whatsapp() {
       <Box 
         component="main"
         sx={{
-          width: '90vw',
-          height: '80vh',
+          width: '100%',
+          minHeight: { xs: '100vh', md: '80vh' },
+          height: { xs: '100%', md: '80vh' },
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -384,13 +389,17 @@ export default function Whatsapp() {
         }}
       >
         {/* Header */}
-        <Box sx={{ p: 3, flexShrink: 0 }}>
+        <Box sx={{ 
+          p: { xs: 2, md: 3 }, 
+          flexShrink: 0 
+        }}>
           <Typography 
-            variant="h4" 
+            variant={isMobile ? "h5" : "h4"} 
             sx={{ 
               fontWeight: 700,
               color: theme.palette.mode === 'dark' ? '#fff' : '#1E1E28',
               fontFamily: 'Montserrat, Arial, sans-serif',
+              fontSize: { xs: '1.5rem', md: '2.125rem' }
             }}
           >
             WhatsApp Manager
@@ -398,23 +407,30 @@ export default function Whatsapp() {
           <Typography 
             variant="body1" 
             color="text.secondary"
+            sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
           >
             Gestiona tus sesiones de WhatsApp y configuraciones de IA de manera profesional
           </Typography>
         </Box>
 
         {/* Content */}
-        <Box sx={{ flex: 1, overflow: 'hidden', px:3, pb: 3, display: 'flex' }}>
-          <Grid container spacing={3} sx={{ height: '100%' }}>
+        <Box sx={{ 
+          flex: 1, 
+          overflow: 'hidden', 
+          px: { xs: 2, md: 3 }, 
+          pb: { xs: 2, md: 3 }, 
+          display: 'flex' 
+        }}>
+          <Grid container spacing={{ xs: 2, md: 3 }} sx={{ height: '100%' }}>
             {/* QR Request Section */}
             <Grid item xs={12} md={4} sx={{ height: '100%' }}>
               <Paper 
                 sx={{ 
-                  p: 3, 
+                  p: { xs: 2, md: 3 }, 
                   height: '100%',
                   display: 'flex',
                   flexDirection: 'column',
-                  borderRadius: 3,
+                  borderRadius: { xs: 2, md: 3 },
                   backgroundColor: theme.palette.mode === 'dark' ? 'rgba(30, 30, 40, 0.95)' : 'rgba(255, 255, 255, 0.95)',
                   backdropFilter: 'blur(16px)',
                   boxShadow: theme.palette.mode === 'dark'
@@ -422,50 +438,70 @@ export default function Whatsapp() {
                     : '0 4px 24px rgba(139, 92, 246, 0.05)',
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  mb: { xs: 2, md: 3 } 
+                }}>
                   <Avatar 
                     sx={{ 
-                      mr: 2,
+                      mr: { xs: 1.5, md: 2 },
                       background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                      width: 48,
-                      height: 48,
+                      width: { xs: 40, md: 48 },
+                      height: { xs: 40, md: 48 },
                       boxShadow: '0 4px 16px rgba(139, 92, 246, 0.3)',
                     }}
                   >
-                    <QrCodeIcon />
+                    <QrCodeIcon fontSize={isMobile ? "small" : "medium"} />
                   </Avatar>
                   <Box>
-                    <Typography variant="h6" fontWeight={600}>
+                    <Typography 
+                      variant={isMobile ? "subtitle1" : "h6"} 
+                      fontWeight={600}
+                      sx={{ fontSize: { xs: '1.125rem', md: '1.25rem' } }}
+                    >
                       Nueva Sesión
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography 
+                      variant="body2" 
+                      color="text.secondary"
+                      sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+                    >
                       Conecta un nuevo WhatsApp
                     </Typography>
                   </Box>
                 </Box>
                 
-                <Stack spacing={2.5}>
+                <Stack spacing={{ xs: 2, md: 2.5 }}>
                   <TextField
                     label="Nombre de la sesión"
                     value={sessionName}
                     onChange={e => setSessionName(e.target.value)}
                     fullWidth
+                    size={isMobile ? "small" : "medium"}
                     placeholder="Ej: Ventas Principal"
+                    sx={{
+                      '& .MuiInputBase-input': {
+                        fontSize: { xs: '0.875rem', md: '1rem' }
+                      }
+                    }}
                   />
                   <Button
                     variant="contained"
                     onClick={handleRequestQr}
                     disabled={!sessionName || qrLoading}
-                    startIcon={<QrCodeIcon />}
+                    startIcon={<QrCodeIcon fontSize={isMobile ? "small" : "medium"} />}
+                    size={isMobile ? "medium" : "large"}
                     sx={{
-                      py: 1.5,
+                      py: { xs: 1.2, md: 1.5 },
                       fontWeight: 600,
+                      fontSize: { xs: '0.875rem', md: '1rem' },
                       borderRadius: 2,
                       backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
                       boxShadow: '0 4px 24px rgba(139, 92, 246, 0.3)',
                       '&:hover': {
                         backgroundImage: 'linear-gradient(135deg, #8B5CF6 0%, #E05EFF 100%)',
-                        transform: 'translateY(-2px)',
+                        transform: { xs: 'scale(1.02)', md: 'translateY(-2px)' },
                         boxShadow: '0 8px 32px rgba(139, 92, 246, 0.4)',
                       },
                       transition: 'all 0.3s ease-out',
@@ -473,31 +509,65 @@ export default function Whatsapp() {
                   >
                     {qrLoading ? 'Generando QR...' : 'Solicitar QR'}
                   </Button>
-                  {error && <Alert severity="error">{error}</Alert>}
+                  {error && <Alert severity="error" sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}>{error}</Alert>}
                 </Stack>
 
                 {/* Stats */}
-                <Divider sx={{ my: 3 }} />
-                <Typography variant="h6" fontWeight={600} gutterBottom sx={{ mb: 2 }}>
+                <Divider sx={{ my: { xs: 2, md: 3 } }} />
+                <Typography 
+                  variant={isMobile ? "subtitle1" : "h6"} 
+                  fontWeight={600} 
+                  gutterBottom 
+                  sx={{ 
+                    mb: 2,
+                    fontSize: { xs: '1.125rem', md: '1.25rem' }
+                  }}
+                >
                   Estadísticas
                 </Typography>
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
-                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', borderRadius: 2 }}>
-                      <Typography variant="h4" color="success.main" fontWeight={700}>
+                    <Paper variant="outlined" sx={{ 
+                      p: { xs: 1.5, md: 2 }, 
+                      textAlign: 'center', 
+                      borderRadius: 2 
+                    }}>
+                      <Typography 
+                        variant={isMobile ? "h5" : "h4"} 
+                        color="success.main" 
+                        fontWeight={700}
+                        sx={{ fontSize: { xs: '1.5rem', md: '2.125rem' } }}
+                      >
                         {sessions.length}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary"
+                        sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+                      >
                         Sesiones
                       </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={6}>
-                    <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', borderRadius: 2 }}>
-                      <Typography variant="h4" color="primary.main" fontWeight={700}>
+                    <Paper variant="outlined" sx={{ 
+                      p: { xs: 1.5, md: 2 }, 
+                      textAlign: 'center', 
+                      borderRadius: 2 
+                    }}>
+                      <Typography 
+                        variant={isMobile ? "h5" : "h4"} 
+                        color="primary.main" 
+                        fontWeight={700}
+                        sx={{ fontSize: { xs: '1.5rem', md: '2.125rem' } }}
+                      >
                         {aiConfigs.length}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
+                      <Typography 
+                        variant="body2" 
+                        color="text.secondary"
+                        sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+                      >
                         Configs IA
                       </Typography>
                     </Paper>
@@ -507,11 +577,14 @@ export default function Whatsapp() {
             </Grid>
 
             {/* Sessions List Section */}
-            <Grid item xs={12} md={8} sx={{ height: '100%', overflowY: 'auto' }}>
+            <Grid item xs={12} md={8} sx={{ 
+              height: '100%', 
+              overflowY: 'auto'
+            }}>
               <Paper 
                 sx={{ 
-                  p: 3, 
-                  borderRadius: 3,
+                  p: { xs: 2, md: 3 }, 
+                  borderRadius: { xs: 2, md: 3 },
                   backgroundColor: theme.palette.mode === 'dark' ? 'rgba(30, 30, 40, 0.95)' : 'rgba(255, 255, 255, 0.95)',
                   backdropFilter: 'blur(16px)',
                   boxShadow: theme.palette.mode === 'dark'
@@ -519,35 +592,64 @@ export default function Whatsapp() {
                     : '0 4px 24px rgba(139, 92, 246, 0.05)',
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  mb: 2 
+                }}>
                   <Avatar 
                     sx={{ 
-                      mr: 2,
+                      mr: { xs: 1.5, md: 2 },
                       background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
-                      width: 48,
-                      height: 48,
+                      width: { xs: 40, md: 48 },
+                      height: { xs: 40, md: 48 },
                       boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)',
                     }}
                   >
-                    <WhatsAppIcon />
+                    <WhatsAppIcon fontSize={isMobile ? "small" : "medium"} />
                   </Avatar>
                   <Box>
-                    <Typography variant="h6" fontWeight={600}>
+                    <Typography 
+                      variant={isMobile ? "subtitle1" : "h6"} 
+                      fontWeight={600}
+                      sx={{ fontSize: { xs: '1.125rem', md: '1.25rem' } }}
+                    >
                       Sesiones Registradas
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography 
+                      variant="body2" 
+                      color="text.secondary"
+                      sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+                    >
                       {sessions.length} sesión(es) • {sessions.filter(s => s.status === 'connected').length} conectada(s)
                     </Typography>
                   </Box>
                 </Box>
 
                 {sessions.length === 0 ? (
-                  <Box sx={{ textAlign: 'center', py: 8 }}>
-                    <WhatsAppIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
-                    <Typography variant="h6" color="text.secondary" gutterBottom>
+                  <Box sx={{ 
+                    textAlign: 'center', 
+                    py: { xs: 4, md: 8 } 
+                  }}>
+                    <WhatsAppIcon sx={{ 
+                      fontSize: { xs: 48, md: 64 }, 
+                      color: 'text.secondary', 
+                      mb: 2, 
+                      opacity: 0.5 
+                    }} />
+                    <Typography 
+                      variant={isMobile ? "subtitle1" : "h6"} 
+                      color="text.secondary" 
+                      gutterBottom
+                      sx={{ fontSize: { xs: '1.125rem', md: '1.25rem' } }}
+                    >
                       No hay sesiones registradas
                     </Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography 
+                      variant="body2" 
+                      color="text.secondary"
+                      sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+                    >
                       Crea tu primera sesión para empezar
                     </Typography>
                   </Box>
@@ -558,7 +660,7 @@ export default function Whatsapp() {
                         <Card
                           variant='outlined'
                           sx={{
-                            p: 2.5,
+                            p: { xs: 2, md: 2.5 },
                             borderRadius: 3,
                             height: '100%',
                             display: 'flex',
@@ -566,23 +668,56 @@ export default function Whatsapp() {
                             justifyContent: 'space-between',
                             transition: 'all 0.3s ease-out',
                             '&:hover': {
-                              transform: 'translateY(-4px)',
+                              transform: { xs: 'none', md: 'translateY(-4px)' },
                               boxShadow: `0 8px 32px ${theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.2)' : 'rgba(139,92,246,0.15)'}`,
                               borderColor: '#8B5CF6'
                             },
                           }}
                         >
                           <Box>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                <Avatar sx={{ mr: 1.5, background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)' }}>
-                                  <WhatsAppIcon fontSize="small"/>
+                            <Box sx={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'flex-start', 
+                              mb: 2,
+                              flexWrap: { xs: 'wrap', sm: 'nowrap' },
+                              gap: { xs: 1, sm: 0 }
+                            }}>
+                              <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center',
+                                flex: 1,
+                                minWidth: 0
+                              }}>
+                                <Avatar sx={{ 
+                                  mr: 1.5, 
+                                  background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)',
+                                  width: { xs: 32, md: 40 },
+                                  height: { xs: 32, md: 40 }
+                                }}>
+                                  <WhatsAppIcon fontSize={isMobile ? "small" : "medium"}/>
                                 </Avatar>
-                                <Box>
-                                  <Typography variant="subtitle1" fontWeight={600}>
+                                <Box sx={{ minWidth: 0, flex: 1 }}>
+                                  <Typography 
+                                    variant="subtitle1" 
+                                    fontWeight={600}
+                                    sx={{ 
+                                      fontSize: { xs: '1rem', md: '1.125rem' },
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                  >
                                     {session.name}
                                   </Typography>
-                                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                                  <Typography 
+                                    variant="caption" 
+                                    color="text.secondary" 
+                                    sx={{ 
+                                      display: 'block',
+                                      fontSize: { xs: '0.7rem', md: '0.75rem' }
+                                    }}
+                                  >
                                     {session.user?.name || 'No asignado'}
                                   </Typography>
                                 </Box>
@@ -591,12 +726,19 @@ export default function Whatsapp() {
                                 label={getStatusText(session.status || 'disconnected')}
                                 color={getStatusColor(session.status || 'disconnected') as any}
                                 size="small"
-                                sx={{ fontWeight: 600, height: 24, fontSize: '0.7rem' }}
+                                sx={{ 
+                                  fontWeight: 600, 
+                                  height: { xs: 20, md: 24 }, 
+                                  fontSize: { xs: '0.6rem', md: '0.7rem' },
+                                  flexShrink: 0
+                                }}
                               />
                             </Box>
                             
-                            <FormControl fullWidth size="small">
-                              <InputLabel>Configuración IA</InputLabel>
+                            <FormControl fullWidth size={isMobile ? "small" : "small"}>
+                              <InputLabel sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
+                                Configuración IA
+                              </InputLabel>
                               <Select
                                 value={session.IA?.id || ''}
                                 label="Configuración IA"
@@ -615,6 +757,11 @@ export default function Whatsapp() {
                                     )
                                   );
                                 }}
+                                sx={{
+                                  '& .MuiSelect-select': {
+                                    fontSize: { xs: '0.875rem', md: '1rem' }
+                                  }
+                                }}
                               >
                                 <MenuItem value=""><em>Sin config</em></MenuItem>
                                 {aiConfigs.map(cfg => (
@@ -624,7 +771,14 @@ export default function Whatsapp() {
                             </FormControl>
                           </Box>
                           
-                          <Stack direction="row" spacing={1} sx={{ mt: 2, alignSelf: 'flex-end' }}>
+                          <Stack 
+                            direction="row" 
+                            spacing={1} 
+                            sx={{ 
+                              mt: 2, 
+                              alignSelf: 'flex-end' 
+                            }}
+                          >
                             <IconButton
                               size="small"
                               onClick={() => {
@@ -632,8 +786,11 @@ export default function Whatsapp() {
                                   setSnackbar({ open: true, message: 'Sesión actualizada', severity: 'success' });
                                 });
                               }}
+                              sx={{ 
+                                fontSize: { xs: 18, md: 20 }
+                              }}
                             >
-                              <SaveIcon />
+                              <SaveIcon fontSize={isMobile ? "small" : "medium"} />
                             </IconButton>
                             
                             <IconButton
@@ -648,8 +805,11 @@ export default function Whatsapp() {
                                   });
                                 }
                               }}
+                              sx={{ 
+                                fontSize: { xs: 18, md: 20 }
+                              }}
                             >
-                              <DeleteIcon />
+                              <DeleteIcon fontSize={isMobile ? "small" : "medium"} />
                             </IconButton>
                           </Stack>
                         </Card>
@@ -668,24 +828,46 @@ export default function Whatsapp() {
           onClose={() => setQrModalOpen(false)} 
           maxWidth="xs"
           fullWidth
+          fullScreen={isMobile}
           PaperProps={{
             sx: {
-              borderRadius: 3,
+              borderRadius: { xs: 0, md: 3 },
               backgroundColor: theme.palette.mode === 'dark' ? 'rgba(30, 30, 40, 0.95)' : 'rgba(255, 255, 255, 0.95)',
               backdropFilter: 'blur(16px)',
             },
           }}
         >
-          <DialogContent sx={{ p: 4, textAlign: 'center' }}>
-            <Avatar sx={{ mx: 'auto', mb: 2, width: 64, height: 64, background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)' }}>
-              <QrCodeIcon sx={{ fontSize: 32 }} />
+          <DialogContent sx={{ 
+            p: { xs: 3, md: 4 }, 
+            textAlign: 'center' 
+          }}>
+            <Avatar sx={{ 
+              mx: 'auto', 
+              mb: 2, 
+              width: { xs: 56, md: 64 }, 
+              height: { xs: 56, md: 64 }, 
+              background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)' 
+            }}>
+              <QrCodeIcon sx={{ fontSize: { xs: 28, md: 32 } }} />
             </Avatar>
             
-            <Typography variant="h5" fontWeight={600} gutterBottom>
+            <Typography 
+              variant={isMobile ? "h6" : "h5"} 
+              fontWeight={600} 
+              gutterBottom
+              sx={{ fontSize: { xs: '1.25rem', md: '1.5rem' } }}
+            >
               Escanea el código QR
             </Typography>
             
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            <Typography 
+              variant="body2" 
+              color="text.secondary" 
+              sx={{ 
+                mb: 3,
+                fontSize: { xs: '0.875rem', md: '1rem' }
+              }}
+            >
               Abre WhatsApp en tu teléfono para conectar la sesión
             </Typography>
             
@@ -694,16 +876,28 @@ export default function Whatsapp() {
               display: 'flex', 
               justifyContent: 'center', 
               alignItems: 'center',
-              minHeight: 280,
+              minHeight: { xs: 220, md: 280 },
               borderRadius: 2,
               p: 2,
               backgroundColor: 'white',
               mb: 3
             }}>
-              {showQR && qr ? <QRCodeCanvas value={qr} size={256} /> : null}
+              {showQR && qr ? (
+                <QRCodeCanvas 
+                  value={qr} 
+                  size={isMobile ? 200 : 256} 
+                />
+              ) : null}
             </Box>
             
-            <Button onClick={() => setQrModalOpen(false)} sx={{ color: '#8B5CF6' }}>
+            <Button 
+              onClick={() => setQrModalOpen(false)} 
+              sx={{ 
+                color: '#8B5CF6',
+                fontSize: { xs: '0.875rem', md: '1rem' }
+              }}
+              size={isMobile ? "medium" : "large"}
+            >
               Cerrar
             </Button>
           </DialogContent>
@@ -721,7 +915,12 @@ export default function Whatsapp() {
             variant="filled" 
             onClose={() => setSnackbar({ ...snackbar, open: false })} 
             severity={snackbar.severity}
-            sx={{ borderRadius: 2, backgroundColor: snackbar.severity === 'success' ? '#8B5CF6' : undefined }}
+            sx={{ 
+              borderRadius: 2, 
+              backgroundColor: snackbar.severity === 'success' ? '#8B5CF6' : undefined,
+              fontSize: { xs: '0.875rem', md: '1rem' },
+              minWidth: { xs: 280, md: 320 }
+            }}
           >
             {snackbar.message}
           </Alert>

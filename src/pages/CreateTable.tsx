@@ -26,6 +26,7 @@ import {
   StepLabel,
   Paper,
   useTheme,
+  useMediaQuery,
   List,
   ListItem,
   ListItemText,
@@ -138,6 +139,13 @@ const detectAndRemoveDuplicates = (records: Record<string, any>[], fields: Table
 };
 
 export default function CreateTable() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [activeStep, setActiveStep] = useState(0);
   const [tableName, setTableName] = useState('');
   const [tableSlug, setTableSlug] = useState('');
@@ -148,238 +156,209 @@ export default function CreateTable() {
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [formErrors, setFormErrors] = useState<{ slug?: string; general?: string }>({});
-  const [importReport, setImportReport] = useState<ImportReport | null>(null);
   const [showIconPicker, setShowIconPicker] = useState(false);
-  const [selectOptionsInputs, setSelectOptionsInputs] = useState<{ [index: number]: string }>({});
-  const [duplicateReport, setDuplicateReport] = useState<{
-    duplicatesRemoved: number;
-    duplicateFields: { fieldName: string; count: number }[];
-    originalCount: number;
-    finalCount: number;
-  } | null>(null);
+  const [selectOptionsInputs, setSelectOptionsInputs] = useState<{ [key: number]: string }>({});
+  const [duplicateReport, setDuplicateReport] = useState<any>(null);
+  const [importReport, setImportReport] = useState<ImportReport | null>(null);
 
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const theme = useTheme();
-  const navigate = useNavigate();
-  const { user } = useAuth();
+  // Generate slug from name
+  const generateSlug = (name: string) => {
+    return name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+  };
 
+  // Handle name change and auto-generate slug
+  const handleNameChange = (name: string) => {
+    setTableName(name);
+    if (!name.trim()) {
+      setTableSlug('');
+      return;
+    }
+    const slug = generateSlug(name);
+    setTableSlug(slug);
+  };
+
+  // Navigation handlers
   const handleNext = () => {
     if (activeStep === 0) {
-      if (!tableName || !tableSlug) {
-        setFormErrors({ general: 'Por favor completa todos los campos requeridos' });
+      // Validate basic info
+      if (!tableName.trim()) {
+        setFormErrors({ general: 'El nombre de la tabla es requerido' });
         return;
       }
-    }
-    if (activeStep === 1) {
+      if (!tableSlug.trim()) {
+        setFormErrors({ general: 'El slug de la tabla es requerido' });
+        return;
+      }
+      setFormErrors({});
+    } else if (activeStep === 1) {
+      // Validate fields
       if (fields.length === 0) {
         setFormErrors({ general: 'Debes agregar al menos un campo' });
         return;
       }
+      if (fields.some(field => !field.label.trim())) {
+        setFormErrors({ general: 'Todos los campos deben tener una etiqueta' });
+        return;
+      }
+      setFormErrors({});
     }
-    setFormErrors({});
-    setActiveStep((prevStep) => prevStep + 1);
+    setActiveStep((prev) => prev + 1);
   };
 
   const handleBack = () => {
-    setActiveStep((prevStep) => prevStep - 1);
+    setActiveStep((prev) => prev - 1);
   };
 
+  // Field management
   const handleAddField = () => {
     const newField: TableField = {
-      name: '',
+      name: `campo_${fields.length + 1}`,
       label: '',
       type: 'text',
       required: false,
-      order: fields.length + 1,
-      width: 150,
     };
     setFields([...fields, newField]);
   };
 
-  // Normaliza el nombre del campo a formato slug
-  function normalizeFieldName(label: string): string {
-    return label
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/ñ/g, 'n')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_+|_+$/g, '');
-  }
-
-const handleUpdateField = (index: number, field: Partial<TableField>) => {
-  const updatedFields = [...fields];
-  // Si cambia la etiqueta, actualiza el nombre automáticamente
-  if (field.label !== undefined) {
-    updatedFields[index] = {
-      ...updatedFields[index],
-      ...field,
-      name: normalizeFieldName(field.label)
-    };
-  } else {
-    updatedFields[index] = { ...updatedFields[index], ...field };
-  }
-  setFields(updatedFields);
-
-  // Si se actualiza el tipo a 'select', inicializa el input de opciones si no existe
-  if (field.type === 'select' && selectOptionsInputs[index] === undefined) {
-    setSelectOptionsInputs((prev) => ({
-      ...prev,
-      [index]: updatedFields[index].options?.join(', ') || '',
+  const handleUpdateField = (index: number, updates: Partial<TableField>) => {
+    setFields(fields.map((field, i) => {
+      if (i === index) {
+        const updatedField = { ...field, ...updates };
+        // Auto-generate name from label
+        if (updates.label !== undefined) {
+          updatedField.name = generateSlug(updates.label) || `campo_${index + 1}`;
+        }
+        return updatedField;
+      }
+      return field;
     }));
-  }
-};
+  };
 
   const handleRemoveField = (index: number) => {
-    const updatedFields = fields.filter((_, i) => i !== index);
-    // Reordenar los campos
-    updatedFields.forEach((field, i) => {
-      field.order = i + 1;
-    });
-    setFields(updatedFields);
+    setFields(fields.filter((_, i) => i !== index));
   };
 
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // File upload and import
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (!file) return;
 
-    setFormErrors({});
-    setDuplicateReport(null);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = event.target?.result;
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        if (!rows || rows.length === 0) throw new Error('El archivo está vacío.');
-
-        // ¿La primera fila es encabezado?
-        let headers = rows[0];
-        let dataStart = 1;
-        let hasHeader = headers.every(h => typeof h === 'string' && h.trim() !== '');
-        if (!hasHeader) {
-          // Si la primera fila no es encabezado, genera nombres genéricos
-          headers = Array.from({ length: rows[0].length }, (_, i) => `campo_${i + 1}`);
-          dataStart = 0;
-        }
-        // Normaliza encabezados y asegura unicidad
-        const existing: Set<string> = new Set();
-        const normalizedHeaders = headers.map((h: string, i: number) => normalizeHeader(h, i, existing));
-
-        // Extrae columnas para detección de tipo
-        const columns = normalizedHeaders.map((_, colIdx) => rows.slice(dataStart).map(row => row[colIdx]));
-        const types = columns.map(col => detectType(col));
-
-        // Crea los campos sugeridos
-        const newFields: TableField[] = normalizedHeaders.map((name, i) => ({
-          name,
-          label: headers[i] || name,
-          type: types[i] as FieldType,
-          required: false,
-          order: i + 1,
-          width: 150,
-        }));
-        setFields(newFields);
-
-        // Mapear los datos de los registros para usar los nombres de campo internos (slugs)
-        const allRecordsData: any[] = rows.slice(dataStart).map(row => {
-          const newRow: Record<string, any> = {};
-          normalizedHeaders.forEach((name, i) => {
-            newRow[name] = row[i];
-          });
-          return newRow;
-        });
-
-        // Detectar y eliminar duplicados
-        const { uniqueRecords, duplicatesRemoved, duplicateFields } = detectAndRemoveDuplicates(allRecordsData, newFields);
-        
-        setImportedRecords(uniqueRecords);
-        
-        // Mostrar reporte de duplicados
-        if (duplicatesRemoved > 0) {
-          setDuplicateReport({
-            duplicatesRemoved,
-            duplicateFields,
-            originalCount: allRecordsData.length,
-            finalCount: uniqueRecords.length
-          });
-        }
-
-        // Sugerir nombre de tabla basado en el nombre del archivo
-        handleNameChange(file.name.replace(/\.(xlsx|xls|csv)$/, ''));
-      } catch (err) {
-        setFormErrors({ general: err instanceof Error ? err.message : 'Error al procesar el archivo. Asegúrate de que sea un formato válido.' });
-      } finally {
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  // Al guardar (handleCreateTable), antes de enviar los fields al backend, genera el nombre interno:
-  const prepareFieldsForBackend = (fields: TableField[]) =>
-    fields.map(f => ({
-      ...f,
-      name: normalizeFieldName(f.label)
-    }));
-
-  const handleCreateTable = async () => {
-    if (!user) {
-      setFormErrors({ general: 'Usuario no autenticado' });
-      return;
-    }
+    setLoading(true);
+    setLoadingMessage('Procesando archivo Excel...');
 
     try {
-      setLoading(true);
-      setLoadingMessage('Creando tabla...');
-      setFormErrors({});
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const sheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
+          if (jsonData.length < 2) {
+            setFormErrors({ general: 'El archivo debe tener al menos una fila de encabezados y una fila de datos' });
+            setLoading(false);
+            return;
+          }
+
+          const headers = jsonData[0] as string[];
+          const rows = jsonData.slice(1) as any[][];
+
+          // Generate fields from headers
+          const existingNames = new Set<string>();
+          const newFields: TableField[] = headers.map((header, index) => {
+            const name = normalizeHeader(header, index, existingNames);
+            const columnValues = rows.map(row => row[index]);
+            const type = detectType(columnValues) as FieldType;
+
+            return {
+              name,
+              label: header || `Campo ${index + 1}`,
+              type,
+              required: false,
+            };
+          });
+
+          // Convert rows to records
+          const records = rows
+            .filter(row => row.some(cell => cell !== undefined && cell !== null && cell !== ''))
+            .map(row => {
+              const record: Record<string, any> = {};
+              newFields.forEach((field, index) => {
+                record[field.name] = row[index] || '';
+              });
+              return record;
+            });
+
+          // Detect and remove duplicates
+          const { uniqueRecords, duplicatesRemoved } = detectAndRemoveDuplicates(records, newFields);
+
+          setFields(newFields);
+          setImportedRecords(uniqueRecords);
+          
+          if (duplicatesRemoved > 0) {
+            setDuplicateReport({
+              originalCount: records.length,
+              finalCount: uniqueRecords.length,
+              duplicatesRemoved,
+              duplicateFields: []
+            });
+          }
+
+          setLoading(false);
+          setLoadingMessage('');
+        } catch (error) {
+          console.error('Error processing Excel file:', error);
+          setFormErrors({ general: 'Error al procesar el archivo Excel' });
+          setLoading(false);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      console.error('Error reading file:', error);
+      setFormErrors({ general: 'Error al leer el archivo' });
+      setLoading(false);
+    }
+
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // Create table
+  const handleCreateTable = async () => {
+    setLoading(true);
+    setLoadingMessage('Creando tabla...');
+
+    try {
       const tableData = {
         name: tableName,
         slug: tableSlug,
-        icon: tableIcon,
         description: tableDescription,
-        fields: prepareFieldsForBackend(fields),
+        icon: tableIcon,
+        fields,
         isActive: true,
       };
 
-      const newTableResponse = await createTable(tableData, user);
+      const result = await createTable(tableData, user);
 
-      if (importedRecords.length > 0 && newTableResponse?.table?.slug) {
-        setLoadingMessage(`Importando ${importedRecords.length} registros...`);
-        const recordsToImport = importedRecords.map(record => ({ data: record }));
-        const importResponse = await importRecords(newTableResponse.table.slug, recordsToImport, user);
-        
-        if (importResponse.summary) {
-          setImportReport({
-            successful: importResponse.summary.successful,
-            failed: importResponse.summary.failed,
-            total: importResponse.summary.total,
-            errors: importResponse.errors || [],
-            duplicatesRemoved: duplicateReport?.duplicatesRemoved || 0,
-            duplicateFields: duplicateReport?.duplicateFields || []
-          });
-        } else {
-          navigate('/tablas');
-        }
-
+      if (importedRecords.length > 0) {
+        setLoadingMessage('Importando registros...');
+        const importResult = await importRecords(result.slug, importedRecords, user);
+        setImportReport(importResult);
       } else {
         navigate('/tablas');
       }
-      
-    } catch (err: any) {
-      const errorMessage = err?.response?.data?.message || (err instanceof Error ? err.message : 'Ocurrió un error inesperado.');
-
-      if (errorMessage.includes('slug already exists')) {
-        setFormErrors({ slug: 'Este slug ya está en uso. Por favor, elige otro.' });
-      } else {
-        setFormErrors({ general: `Error: ${errorMessage}` });
-      }
+    } catch (error: any) {
+      console.error('Error creating table:', error);
+      setFormErrors({ general: error.message || 'Error al crear la tabla' });
     } finally {
       setLoading(false);
       setLoadingMessage('');
@@ -391,78 +370,85 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
     navigate('/tablas');
   };
 
-  const generateSlug = (name: string) => {
-    return name
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim();
-  };
-
-  const handleNameChange = (name: string) => {
-    setTableName(name);
-    setTableSlug(generateSlug(name));
-    if (formErrors.slug) {
-      setFormErrors({ ...formErrors, slug: undefined });
-    }
-  };
-
   const renderBasicInfo = () => (
     <Card>
-      <CardContent>
-        <Typography variant="h6" gutterBottom>
-          Información de la Tabla
+      <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+        <Typography 
+          variant={isMobile ? "h6" : "h5"} 
+          gutterBottom 
+          sx={{ 
+            fontWeight: 600,
+            fontSize: { xs: '1.25rem', md: '1.5rem' }
+          }}
+        >
+          Información Básica
         </Typography>
-        <Grid container spacing={3}>
-          <Grid item xs={12} md={6}>
+        
+        <Grid container spacing={{ xs: 2, md: 3 }}>
+          <Grid item xs={12} md={8}>
             <TextField
               fullWidth
-              label="Nombre de la tabla"
+              label="Nombre de la Tabla"
               value={tableName}
               onChange={(e) => handleNameChange(e.target.value)}
               required
-              helperText="Ej: Clientes, Productos, Ventas"
+              size={isMobile ? "small" : "medium"}
+              sx={{ mb: { xs: 2, md: 3 } }}
             />
-          </Grid>
-          <Grid item xs={12} md={6}>
+            
             <TextField
               fullWidth
-              label="Slug (identificador)"
+              label="Slug (Identificador único)"
               value={tableSlug}
-              InputProps={{ readOnly: true, startAdornment: <LockIcon sx={{ color: 'action.active', mr: 1 }} /> }}
+              onChange={(e) => setTableSlug(e.target.value)}
               required
-              error={!!formErrors.slug}
-              sx={{ background: '#f5f6fa' }}
-              helperText={formErrors.slug || "Este campo se llena automáticamente"}
+              size={isMobile ? "small" : "medium"}
+              helperText="Se genera automáticamente del nombre. Solo letras minúsculas, números y guiones."
+              sx={{ mb: { xs: 2, md: 3 } }}
             />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <Box>
-              <Button
-                variant="outlined"
-                onClick={() => setShowIconPicker(true)}
-                sx={{ mb: 1 }}
-              >
-                Seleccionar Ícono: {tableIcon}
-              </Button>
-              <Typography variant="caption" display="block" color="text.secondary">
-                El ícono se mostrará en el sidebar
-              </Typography>
-            </Box>
-          </Grid>
-          <Grid item xs={12}>
+            
             <TextField
               fullWidth
               label="Descripción (opcional)"
               value={tableDescription}
               onChange={(e) => setTableDescription(e.target.value)}
               multiline
-              rows={3}
-              helperText="Describe el propósito de esta tabla"
+              rows={isMobile ? 3 : 4}
+              size={isMobile ? "small" : "medium"}
+              sx={{ mb: { xs: 2, md: 3 } }}
             />
+          </Grid>
+          
+          <Grid item xs={12} md={4}>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography 
+                variant="subtitle1" 
+                gutterBottom
+                sx={{ fontSize: { xs: '1rem', md: '1.125rem' } }}
+              >
+                Ícono de la Tabla
+              </Typography>
+              <Button
+                variant="outlined"
+                onClick={() => setShowIconPicker(true)}
+                sx={{
+                  fontSize: { xs: 32, md: 48 },
+                  minWidth: { xs: 80, md: 100 },
+                  height: { xs: 80, md: 100 },
+                  mb: 2,
+                  borderStyle: 'dashed',
+                }}
+              >
+                {tableIcon}
+              </Button>
+              <Typography 
+                variant="body2" 
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+              >
+                Haz clic para cambiar
+              </Typography>
+            </Box>
           </Grid>
         </Grid>
       </CardContent>
@@ -471,48 +457,94 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
 
   const renderFieldBuilder = () => (
     <Card>
-      <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h6">
-            Campos de la Tabla ({fields.length})
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2 }}>
+      <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: { xs: 'flex-start', md: 'center' },
+          mb: 3,
+          flexDirection: { xs: 'column', md: 'row' },
+          gap: { xs: 2, md: 0 }
+        }}>
+          <Box>
+            <Typography 
+              variant={isMobile ? "h6" : "h5"} 
+              gutterBottom
+              sx={{ 
+                fontWeight: 600,
+                fontSize: { xs: '1.25rem', md: '1.5rem' }
+              }}
+            >
+              Definir Campos ({fields.length})
+            </Typography>
+            <Typography 
+              variant="body2" 
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+            >
+              Define la estructura de tu tabla agregando campos
+            </Typography>
+          </Box>
+          
+          <Box sx={{ 
+            display: 'flex', 
+            gap: { xs: 1, md: 2 },
+            flexDirection: { xs: 'column', sm: 'row' },
+            width: { xs: '100%', md: 'auto' }
+          }}>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileUpload}
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+            />
             <Button
               variant="outlined"
               startIcon={<UploadFileIcon />}
               onClick={() => fileInputRef.current?.click()}
+              size={isMobile ? "small" : "medium"}
+              sx={{ 
+                fontSize: { xs: '0.75rem', md: '0.875rem' },
+                flex: { xs: 1, sm: 'none' }
+              }}
             >
-              Importar desde Excel
+              {isMobile ? 'Importar Excel' : 'Importar desde Excel'}
             </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileImport}
-              style={{ display: 'none' }}
-              accept=".xlsx, .xls, .csv"
-            />
             <Button
               variant="contained"
               startIcon={<AddIcon />}
               onClick={handleAddField}
+              size={isMobile ? "small" : "medium"}
               sx={{
                 background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+                fontSize: { xs: '0.75rem', md: '0.875rem' },
+                flex: { xs: 1, sm: 'none' },
                 '&:hover': {
                   background: 'linear-gradient(135deg, #D04EFF 0%, #7A4CF6 100%)',
                 }
               }}
             >
-              Agregar Campo
+              {isMobile ? 'Agregar' : 'Agregar Campo'}
             </Button>
           </Box>
         </Box>
 
         {importedRecords.length > 0 && (
-          <Alert severity="info" sx={{ mb: 2 }}>
+          <Alert 
+            severity="info" 
+            sx={{ 
+              mb: 2,
+              fontSize: { xs: '0.875rem', md: '1rem' }
+            }}
+          >
             Se importarán {importedRecords.length} registros junto con la tabla.
             {duplicateReport && (
               <Box sx={{ mt: 1 }}>
-                <Typography variant="body2">
+                <Typography 
+                  variant="body2"
+                  sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+                >
                   <strong>Duplicados eliminados:</strong> {duplicateReport.duplicatesRemoved} de {duplicateReport.originalCount} registros originales
                 </Typography>
               </Box>
@@ -522,20 +554,45 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
 
         {/* Reporte de duplicados */}
         {duplicateReport && duplicateReport.duplicatesRemoved > 0 && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            <Typography variant="subtitle2" gutterBottom>
+          <Alert 
+            severity="warning" 
+            sx={{ 
+              mb: 2,
+              fontSize: { xs: '0.875rem', md: '1rem' }
+            }}
+          >
+            <Typography 
+              variant="subtitle2" 
+              gutterBottom
+              sx={{ fontSize: { xs: '1rem', md: '1.125rem' } }}
+            >
               📊 Reporte de Duplicados Eliminados
             </Typography>
-            <Typography variant="body2" gutterBottom>
+            <Typography 
+              variant="body2" 
+              gutterBottom
+              sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+            >
               <strong>Total eliminados:</strong> {duplicateReport.duplicatesRemoved} registros duplicados
             </Typography>
-            <Typography variant="body2" gutterBottom>
+            <Typography 
+              variant="body2" 
+              gutterBottom
+              sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+            >
               <strong>Registros únicos:</strong> {duplicateReport.finalCount} de {duplicateReport.originalCount} originales
             </Typography>
             
             {duplicateReport.duplicateFields.length > 0 && (
               <Box sx={{ mt: 1 }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    fontWeight: 600, 
+                    mb: 0.5,
+                    fontSize: { xs: '0.75rem', md: '0.875rem' }
+                  }}
+                >
                   Campos con más duplicados:
                 </Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -546,6 +603,7 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                       size="small"
                       color="warning"
                       variant="outlined"
+                      sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}
                     />
                   ))}
                 </Box>
@@ -555,19 +613,35 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
         )}
 
         {fields.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography variant="body1" color="text.secondary" gutterBottom>
+          <Box sx={{ 
+            textAlign: 'center', 
+            py: { xs: 3, md: 4 } 
+          }}>
+            <Typography 
+              variant="body1" 
+              color="text.secondary" 
+              gutterBottom
+              sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+            >
               No hay campos definidos
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography 
+              variant="body2" 
+              color="text.secondary"
+              sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+            >
               Agrega al menos un campo para definir la estructura de tu tabla
             </Typography>
           </Box>
         ) : (
-          <Grid container spacing={1}>
+          <Grid container spacing={{ xs: 1, md: 2 }}>
             {fields.map((field, index) => (
               <Grid item xs={12} key={index}>
-                <Paper sx={{ p: 1.5, border: '1px solid', borderColor: 'divider' }}>
+                <Paper sx={{ 
+                  p: { xs: 1.5, md: 2 }, 
+                  border: '1px solid', 
+                  borderColor: 'divider' 
+                }}>
                   <Grid container spacing={1} alignItems="center">
                     <Grid item xs={12} sm={6} md={7}>
                       <TextField
@@ -577,15 +651,27 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                         onChange={(e) => handleUpdateField(index, { label: e.target.value })}
                         size="small"
                         required
+                        sx={{
+                          '& .MuiInputBase-input': {
+                            fontSize: { xs: '0.875rem', md: '1rem' }
+                          }
+                        }}
                       />
                     </Grid>
                     <Grid item xs={6} sm={3} md={2}>
                       <FormControl fullWidth size="small">
-                        <InputLabel>Tipo</InputLabel>
+                        <InputLabel sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
+                          Tipo
+                        </InputLabel>
                         <Select
                           value={field.type}
                           onChange={(e) => handleUpdateField(index, { type: e.target.value as FieldType })}
                           label="Tipo"
+                          sx={{
+                            '& .MuiSelect-select': {
+                              fontSize: { xs: '0.875rem', md: '1rem' }
+                            }
+                          }}
                         >
                           {FIELD_TYPES.map((type) => (
                             <MenuItem key={type.value} value={type.value}>
@@ -604,10 +690,16 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                           <Switch
                             checked={field.required || false}
                             onChange={(e) => handleUpdateField(index, { required: e.target.checked })}
+                            size={isMobile ? "small" : "medium"}
                           />
                         }
                         label="Requerido"
-                        sx={{ ml: 0 }}
+                        sx={{ 
+                          ml: 0,
+                          '& .MuiFormControlLabel-label': {
+                            fontSize: { xs: '0.75rem', md: '0.875rem' }
+                          }
+                        }}
                       />
                     </Grid>
                     <Grid item xs={3} sm={1} md={1} sx={{ textAlign: 'right' }}>
@@ -616,7 +708,7 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                         onClick={() => handleRemoveField(index)}
                         size="small"
                       >
-                        <DeleteIcon />
+                        <DeleteIcon fontSize={isMobile ? "small" : "medium"} />
                       </IconButton>
                     </Grid>
                   </Grid>
@@ -633,10 +725,8 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                             ...prev,
                             [index]: value,
                           }));
-                          // No actualices field.options aquí, solo el input
                         }}
                         onBlur={() => {
-                          // Al salir del input, actualiza el campo real
                           const options = (selectOptionsInputs[index] ?? '')
                             .split(',')
                             .map(s => s.trim())
@@ -645,6 +735,14 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                         }}
                         size="small"
                         helperText="Ej: Opción 1, Opción 2, Opción 3"
+                        sx={{
+                          '& .MuiInputBase-input': {
+                            fontSize: { xs: '0.875rem', md: '1rem' }
+                          },
+                          '& .MuiFormHelperText-root': {
+                            fontSize: { xs: '0.7rem', md: '0.75rem' }
+                          }
+                        }}
                       />
                     </Box>
                   )}
@@ -659,18 +757,40 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
 
   const renderPreview = () => (
     <Card>
-      <CardContent>
-        <Typography variant="h6" gutterBottom>
+      <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+        <Typography 
+          variant={isMobile ? "h6" : "h5"} 
+          gutterBottom
+          sx={{ 
+            fontWeight: 600,
+            fontSize: { xs: '1.25rem', md: '1.5rem' }
+          }}
+        >
           Vista Previa de la Tabla
         </Typography>
         
         <Box sx={{ mb: 3 }}>
-          <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography 
+            variant={isMobile ? "h6" : "h5"} 
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 1,
+              fontSize: { xs: '1.25rem', md: '1.5rem' }
+            }}
+          >
             <span>{tableIcon}</span>
             {tableName}
           </Typography>
           {tableDescription && (
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            <Typography 
+              variant="body2" 
+              color="text.secondary" 
+              sx={{ 
+                mt: 1,
+                fontSize: { xs: '0.875rem', md: '1rem' }
+              }}
+            >
               {tableDescription}
             </Typography>
           )}
@@ -678,16 +798,37 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
 
         <Divider sx={{ my: 2 }} />
 
-        <Typography variant="subtitle1" gutterBottom>
+        <Typography 
+          variant="subtitle1" 
+          gutterBottom
+          sx={{ fontSize: { xs: '1rem', md: '1.125rem' } }}
+        >
           Estructura de Campos ({fields.length})
         </Typography>
         
-        <Grid container spacing={2}>
+        <Grid container spacing={{ xs: 1, md: 2 }}>
           {fields.map((field, index) => (
             <Grid item xs={12} sm={6} md={4} key={index}>
-              <Paper sx={{ p: 2, border: '1px solid', borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+              <Paper sx={{ 
+                p: { xs: 1.5, md: 2 }, 
+                border: '1px solid', 
+                borderColor: 'divider' 
+              }}>
+                <Box sx={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center', 
+                  mb: 1,
+                  flexWrap: 'wrap',
+                  gap: 1
+                }}>
+                  <Typography 
+                    variant="subtitle2" 
+                    sx={{ 
+                      fontWeight: 600,
+                      fontSize: { xs: '0.875rem', md: '1rem' }
+                    }}
+                  >
                     {field.label}
                   </Typography>
                   <Chip
@@ -695,9 +836,14 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                     size="small"
                     color="primary"
                     variant="outlined"
+                    sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}
                   />
                 </Box>
-                <Typography variant="caption" color="text.secondary">
+                <Typography 
+                  variant="caption" 
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}
+                >
                   {field.name}
                 </Typography>
                 {field.required && (
@@ -706,12 +852,20 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                     size="small"
                     color="error"
                     variant="outlined"
-                    sx={{ ml: 1 }}
+                    sx={{ 
+                      ml: 1,
+                      fontSize: { xs: '0.7rem', md: '0.75rem' },
+                      height: { xs: 20, md: 24 }
+                    }}
                   />
                 )}
                 {field.type === 'select' && field.options && (
                   <Box sx={{ mt: 1 }}>
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography 
+                      variant="caption" 
+                      color="text.secondary"
+                      sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}
+                    >
                       Opciones: {field.options.join(', ')}
                     </Typography>
                   </Box>
@@ -738,34 +892,72 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
   };
 
   return (
-    <Box sx={{ p: 3, width: '90vw', height: '80vh' }}>
+    <Box sx={{ 
+      p: { xs: 2, md: 3 }, 
+      width: '100%',
+      minHeight: { xs: '100vh', md: '80vh' }
+    }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <IconButton onClick={() => navigate('/tablas')} sx={{ mr: 2 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        mb: 3 
+      }}>
+        <IconButton 
+          onClick={() => navigate('/tablas')} 
+          sx={{ mr: { xs: 1, md: 2 } }}
+          size={isMobile ? "small" : "medium"}
+        >
           <ArrowBackIcon />
         </IconButton>
         <Box>
-          <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+          <Typography 
+            variant={isMobile ? "h5" : "h4"} 
+            gutterBottom 
+            sx={{ 
+              fontWeight: 700,
+              fontSize: { xs: '1.5rem', md: '2.125rem' }
+            }}
+          >
             Crear Nueva Tabla
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography 
+            variant="body1" 
+            color="text.secondary"
+            sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+          >
             Define la estructura de tu tabla personalizada
           </Typography>
         </Box>
       </Box>
 
       {/* Stepper */}
-      <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+      <Stepper 
+        activeStep={activeStep} 
+        sx={{ 
+          mb: 4,
+          '& .MuiStepLabel-label': {
+            fontSize: { xs: '0.75rem', md: '0.875rem' }
+          }
+        }}
+        orientation={isMobile ? "vertical" : "horizontal"}
+      >
         {steps.map((label) => (
           <Step key={label}>
-            <StepLabel>{label}</StepLabel>
+            <StepLabel>{isMobile ? label.split(' ')[0] : label}</StepLabel>
           </Step>
         ))}
       </Stepper>
 
       {/* Error Alert */}
       {formErrors.general && (
-        <Alert severity="error" sx={{ mb: 3 }}>
+        <Alert 
+          severity="error" 
+          sx={{ 
+            mb: 3,
+            fontSize: { xs: '0.875rem', md: '1rem' }
+          }}
+        >
           {formErrors.general}
         </Alert>
       )}
@@ -774,22 +966,36 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
       {renderStepContent()}
 
       {/* Navigation */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        mt: 4,
+        flexDirection: { xs: 'column', sm: 'row' },
+        gap: { xs: 2, sm: 0 }
+      }}>
         <Button
           disabled={activeStep === 0}
           onClick={handleBack}
+          size={isMobile ? "medium" : "large"}
+          sx={{ 
+            fontSize: { xs: '0.875rem', md: '1rem' },
+            order: { xs: 2, sm: 1 }
+          }}
         >
           Anterior
         </Button>
-        <Box>
+        <Box sx={{ order: { xs: 1, sm: 2 } }}>
           {activeStep === steps.length - 1 ? (
             <Button
               variant="contained"
               onClick={handleCreateTable}
               disabled={loading}
               startIcon={<SaveIcon />}
+              size={isMobile ? "medium" : "large"}
               sx={{
                 background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+                fontSize: { xs: '0.875rem', md: '1rem' },
+                width: { xs: '100%', sm: 'auto' },
                 '&:hover': {
                   background: 'linear-gradient(135deg, #D04EFF 0%, #7A4CF6 100%)',
                 }
@@ -802,8 +1008,11 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
               variant="contained"
               onClick={handleNext}
               startIcon={<PreviewIcon />}
+              size={isMobile ? "medium" : "large"}
               sx={{
                 background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+                fontSize: { xs: '0.875rem', md: '1rem' },
+                width: { xs: '100%', sm: 'auto' },
                 '&:hover': {
                   background: 'linear-gradient(135deg, #D04EFF 0%, #7A4CF6 100%)',
                 }
@@ -816,8 +1025,16 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
       </Box>
 
       {/* Icon Picker Dialog */}
-      <Dialog open={showIconPicker} onClose={() => setShowIconPicker(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Seleccionar Ícono</DialogTitle>
+      <Dialog 
+        open={showIconPicker} 
+        onClose={() => setShowIconPicker(false)} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <DialogTitle sx={{ fontSize: { xs: '1.25rem', md: '1.5rem' } }}>
+          Seleccionar Ícono
+        </DialogTitle>
         <DialogContent>
           <Grid container spacing={1}>
             {ICONS.map((icon) => (
@@ -828,7 +1045,11 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                     setTableIcon(icon);
                     setShowIconPicker(false);
                   }}
-                  sx={{ minWidth: 48, height: 48, fontSize: 20 }}
+                  sx={{ 
+                    minWidth: { xs: 40, md: 48 }, 
+                    height: { xs: 40, md: 48 }, 
+                    fontSize: { xs: 16, md: 20 }
+                  }}
                 >
                   {icon}
                 </Button>
@@ -837,60 +1058,112 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
           </Grid>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setShowIconPicker(false)}>Cancelar</Button>
+          <Button 
+            onClick={() => setShowIconPicker(false)}
+            size={isMobile ? "medium" : "large"}
+          >
+            Cancelar
+          </Button>
         </DialogActions>
       </Dialog>
 
       {/* Loading Modal */}
       <Dialog open={loading}>
-        <DialogContent sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 3 }}>
-          <CircularProgress />
-          <Typography>{loadingMessage || 'Procesando...'}</Typography>
+        <DialogContent sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 2, 
+          p: { xs: 2, md: 3 }
+        }}>
+          <CircularProgress size={isMobile ? 20 : 24} />
+          <Typography sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
+            {loadingMessage || 'Procesando...'}
+          </Typography>
         </DialogContent>
       </Dialog>
 
       {/* Import Report Modal */}
-      <Dialog open={!!importReport} onClose={handleCloseReport} maxWidth="md" fullWidth>
-        <DialogTitle>Reporte de Importación</DialogTitle>
-        <DialogContent dividers>
+      <Dialog 
+        open={!!importReport} 
+        onClose={handleCloseReport} 
+        maxWidth="md" 
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <DialogTitle sx={{ fontSize: { xs: '1.25rem', md: '1.5rem' } }}>
+          Reporte de Importación
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: { xs: 2, md: 3 } }}>
           {importReport && (
             <Box>
-              <Typography variant="h6" gutterBottom>
+              <Typography 
+                variant={isMobile ? "subtitle1" : "h6"} 
+                gutterBottom
+                sx={{ fontSize: { xs: '1.125rem', md: '1.25rem' } }}
+              >
                 Resumen: {importReport.successful} de {importReport.total} registros importados.
               </Typography>
-              <Chip 
-                icon={<CheckCircleIcon />} 
-                label={`${importReport.successful} exitosos`} 
-                color="success" 
-                sx={{ mr: 1 }} 
-              />
-              <Chip 
-                icon={<ErrorIcon />} 
-                label={`${importReport.failed} con errores`} 
-                color="error" 
-                sx={{ mr: 1 }}
-              />
-              {importReport.duplicatesRemoved > 0 && (
+              <Box sx={{ 
+                display: 'flex', 
+                flexWrap: 'wrap', 
+                gap: 1, 
+                mb: 2 
+              }}>
+                <Chip 
+                  icon={<CheckCircleIcon />} 
+                  label={`${importReport.successful} exitosos`} 
+                  color="success" 
+                  size={isMobile ? "small" : "medium"}
+                />
                 <Chip 
                   icon={<ErrorIcon />} 
-                  label={`${importReport.duplicatesRemoved} duplicados eliminados`} 
-                  color="warning" 
+                  label={`${importReport.failed} con errores`} 
+                  color="error" 
+                  size={isMobile ? "small" : "medium"}
                 />
-              )}
+                {importReport.duplicatesRemoved > 0 && (
+                  <Chip 
+                    icon={<ErrorIcon />} 
+                    label={`${importReport.duplicatesRemoved} duplicados eliminados`} 
+                    color="warning" 
+                    size={isMobile ? "small" : "medium"}
+                  />
+                )}
+              </Box>
               
               {/* Mostrar información de duplicados */}
               {importReport.duplicatesRemoved > 0 && (
-                <Box sx={{ mt: 2, p: 2, bgcolor: 'warning.50', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" gutterBottom>
+                <Box sx={{ 
+                  mt: 2, 
+                  p: 2, 
+                  bgcolor: 'warning.50', 
+                  borderRadius: 1 
+                }}>
+                  <Typography 
+                    variant="subtitle2" 
+                    gutterBottom
+                    sx={{ fontSize: { xs: '1rem', md: '1.125rem' } }}
+                  >
                     📊 Duplicados Eliminados
                   </Typography>
-                  <Typography variant="body2" gutterBottom>
+                  <Typography 
+                    variant="body2" 
+                    gutterBottom
+                    sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+                  >
                     Se eliminaron {importReport.duplicatesRemoved} registros duplicados antes de la importación.
                   </Typography>
                   
                   {importReport.duplicateFields.length > 0 && (
                     <Box sx={{ mt: 1 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          fontWeight: 600, 
+                          mb: 0.5,
+                          fontSize: { xs: '0.875rem', md: '1rem' }
+                        }}
+                      >
                         Campos con más duplicados:
                       </Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
@@ -901,6 +1174,7 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                             size="small"
                             color="warning"
                             variant="outlined"
+                            sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}
                           />
                         ))}
                       </Box>
@@ -910,8 +1184,18 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
               )}
               
               {importReport.failed > 0 && (
-                <Box sx={{ mt: 3, maxHeight: 400, overflow: 'auto' }}>
-                  <Typography variant="subtitle1" gutterBottom>Detalle de errores:</Typography>
+                <Box sx={{ 
+                  mt: 3, 
+                  maxHeight: { xs: 200, md: 400 }, 
+                  overflow: 'auto' 
+                }}>
+                  <Typography 
+                    variant="subtitle1" 
+                    gutterBottom
+                    sx={{ fontSize: { xs: '1rem', md: '1.125rem' } }}
+                  >
+                    Detalle de errores:
+                  </Typography>
                   <List dense>
                     {importReport.errors.map((err, index) => (
                       <ListItem key={index}>
@@ -919,8 +1203,14 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
                           <ErrorIcon color="error" fontSize="small" />
                         </ListItemIcon>
                         <ListItemText 
-                          primary={`Fila ${err.index + 2}: ${err.error}`} 
+                          primary={`Fila ${err.index + 2}: ${err.error}`}
                           secondary="Revisa esta fila en tu archivo Excel."
+                          primaryTypographyProps={{
+                            fontSize: { xs: '0.875rem', md: '1rem' }
+                          }}
+                          secondaryTypographyProps={{
+                            fontSize: { xs: '0.75rem', md: '0.875rem' }
+                          }}
                         />
                       </ListItem>
                     ))}
@@ -930,8 +1220,13 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseReport}>Cerrar</Button>
+        <DialogActions sx={{ p: { xs: 2, md: 3 } }}>
+          <Button 
+            onClick={handleCloseReport}
+            size={isMobile ? "medium" : "large"}
+          >
+            Cerrar
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

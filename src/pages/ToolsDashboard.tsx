@@ -11,6 +11,8 @@ import {
   Paper,
   CircularProgress,
   Alert,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Build as BuildIcon,
@@ -34,75 +36,157 @@ interface StatCardProps {
   subtitle?: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color, subtitle }) => (
-  <Card elevation={2}>
-    <CardContent>
-      <Box display="flex" alignItems="center" justifyContent="space-between">
-        <Box>
-          <Typography variant="h4" component="div" color={`${color}.main`} fontWeight="bold">
-            {value}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" gutterBottom>
-            {title}
-          </Typography>
-          {subtitle && (
-            <Typography variant="caption" color="text.secondary">
-              {subtitle}
+const StatCard: React.FC<StatCardProps> = ({ title, value, icon, color, subtitle }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
+  return (
+    <Card elevation={2}>
+      <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+        <Box display="flex" alignItems="center" justifyContent="space-between">
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography 
+              variant={isMobile ? "h5" : "h4"} 
+              component="div" 
+              color={`${color}.main`} 
+              fontWeight="bold"
+              sx={{ 
+                fontSize: { xs: '1.5rem', md: '2.125rem' },
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {value}
             </Typography>
-          )}
+            <Typography 
+              variant="body2" 
+              color="text.secondary" 
+              gutterBottom
+              sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+            >
+              {title}
+            </Typography>
+            {subtitle && (
+              <Typography 
+                variant="caption" 
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}
+              >
+                {subtitle}
+              </Typography>
+            )}
+          </Box>
+          <IconButton 
+            size={isMobile ? "medium" : "large"}
+            sx={{ 
+              backgroundColor: `${color}.light`, 
+              color: `${color}.main`,
+              width: { xs: 40, md: 48 },
+              height: { xs: 40, md: 48 },
+              '&:hover': { backgroundColor: `${color}.main`, color: 'white' }
+            }}
+          >
+            {icon}
+          </IconButton>
         </Box>
-        <IconButton 
-          size="large" 
-          sx={{ 
-            backgroundColor: `${color}.light`, 
-            color: `${color}.main`,
-            '&:hover': { backgroundColor: `${color}.main`, color: 'white' }
-          }}
-        >
-          {icon}
-        </IconButton>
-      </Box>
-    </CardContent>
-  </Card>
-);
+      </CardContent>
+    </Card>
+  );
+};
 
 interface TopToolCardProps {
   tool: ToolAnalytics['stats'][0];
   rank: number;
 }
 
-const TopToolCard: React.FC<TopToolCardProps> = ({ tool, rank }) => (
-  <Paper elevation={1} sx={{ p: 2, mb: 1 }}>
-    <Box display="flex" alignItems="center" justifyContent="space-between">
-      <Box display="flex" alignItems="center" gap={2}>
-        <Typography variant="h6" color="primary" fontWeight="bold">
-          #{rank}
-        </Typography>
-        <Box>
-          <Typography variant="body1" fontWeight="medium">
-            {tool.displayName}
+const TopToolCard: React.FC<TopToolCardProps> = ({ tool, rank }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
+  return (
+    <Paper elevation={1} sx={{ p: { xs: 1.5, md: 2 }, mb: 1 }}>
+      <Box 
+        display="flex" 
+        alignItems="center" 
+        justifyContent="space-between"
+        flexDirection={{ xs: 'column', sm: 'row' }}
+        gap={{ xs: 1, sm: 0 }}
+      >
+        <Box 
+          display="flex" 
+          alignItems="center" 
+          gap={{ xs: 1.5, md: 2 }}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
+        >
+          <Typography 
+            variant={isMobile ? "subtitle1" : "h6"} 
+            color="primary" 
+            fontWeight="bold"
+            sx={{ 
+              fontSize: { xs: '1.125rem', md: '1.25rem' },
+              minWidth: 'fit-content'
+            }}
+          >
+            #{rank}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {tool.toolName}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography 
+              variant="body1" 
+              fontWeight="medium"
+              sx={{ 
+                fontSize: { xs: '0.875rem', md: '1rem' },
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              {tool.displayName}
+            </Typography>
+            <Typography 
+              variant="caption" 
+              color="text.secondary"
+              sx={{ 
+                fontSize: { xs: '0.7rem', md: '0.75rem' },
+                display: 'block'
+              }}
+            >
+              {tool.toolName}
+            </Typography>
+          </Box>
+        </Box>
+        <Box 
+          textAlign={{ xs: 'center', sm: 'right' }}
+          sx={{ width: { xs: '100%', sm: 'auto' } }}
+        >
+          <Typography 
+            variant="body2" 
+            fontWeight="bold"
+            sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+          >
+            {tool.totalExecutions} ejecuciones
           </Typography>
+          <Chip 
+            label={`${Math.round((tool.successfulExecutions / tool.totalExecutions) * 100)}% éxito`}
+            size="small"
+            color={tool.successfulExecutions / tool.totalExecutions >= 0.9 ? 'success' : tool.successfulExecutions / tool.totalExecutions >= 0.7 ? 'warning' : 'error'}
+            sx={{ 
+              fontSize: { xs: '0.7rem', md: '0.75rem' },
+              height: { xs: 20, md: 24 }
+            }}
+          />
         </Box>
       </Box>
-      <Box textAlign="right">
-        <Typography variant="body2" fontWeight="bold">
-          {tool.totalExecutions} ejecuciones
-        </Typography>
-        <Chip 
-          label={`${Math.round((tool.successfulExecutions / tool.totalExecutions) * 100)}% éxito`}
-          size="small"
-          color={tool.successfulExecutions / tool.totalExecutions >= 0.9 ? 'success' : tool.successfulExecutions / tool.totalExecutions >= 0.7 ? 'warning' : 'error'}
-        />
-      </Box>
-    </Box>
-  </Paper>
-);
+    </Paper>
+  );
+};
 
 const ToolsDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
   const { useToolsList, useAnalytics } = useTools();
   const { useCategoriesList } = useCategories();
 
@@ -158,22 +242,34 @@ const ToolsDashboard: React.FC = () => {
 
   if (isLoading && !dashboardStats) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
+      <Box 
+        display="flex" 
+        justifyContent="center" 
+        alignItems="center" 
+        minHeight="400px"
+        sx={{ p: { xs: 2, md: 0 } }}
+      >
+        <CircularProgress size={isMobile ? 40 : 60} />
       </Box>
     );
   }
 
   if (analyticsError) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: { xs: 2, md: 3 } }}>
         <Alert 
           severity="error" 
           action={
-            <Button onClick={refetchAll} startIcon={<RefreshIcon />}>
-              Reintentar
+            <Button 
+              onClick={refetchAll} 
+              startIcon={<RefreshIcon />}
+              size={isMobile ? "small" : "medium"}
+              sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+            >
+              {isMobile ? 'Reintentar' : 'Reintentar'}
             </Button>
           }
+          sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
         >
           Error al cargar las estadísticas: {analyticsError.message || 'Error desconocido'}
         </Alert>
@@ -183,59 +279,120 @@ const ToolsDashboard: React.FC = () => {
 
   if (!dashboardStats || dashboardStats.totalTools === 0) {
     return (
-      <Box sx={{ p: 3, textAlign: 'center', py: 8 }}>
-        <WarningIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 3 }} />
-        <Typography variant="h5" color="text.secondary" gutterBottom>
+      <Box sx={{ 
+        p: { xs: 2, md: 3 }, 
+        textAlign: 'center', 
+        py: { xs: 4, md: 8 } 
+      }}>
+        <WarningIcon sx={{ 
+          fontSize: { xs: 48, md: 64 }, 
+          color: 'text.secondary', 
+          mb: 3 
+        }} />
+        <Typography 
+          variant={isMobile ? "h6" : "h5"} 
+          color="text.secondary" 
+          gutterBottom
+          sx={{ fontSize: { xs: '1.25rem', md: '1.5rem' } }}
+        >
           No hay herramientas creadas
         </Typography>
-        <Typography variant="body1" color="text.secondary" mb={4}>
+        <Typography 
+          variant="body1" 
+          color="text.secondary" 
+          mb={4}
+          sx={{ 
+            fontSize: { xs: '0.875rem', md: '1rem' },
+            px: { xs: 2, md: 0 }
+          }}
+        >
           Crea tu primera herramienta para comenzar a ver estadísticas y métricas de uso.
         </Typography>
         <Button
           variant="contained"
-          size="large"
+          size={isMobile ? "medium" : "large"}
           startIcon={<AddIcon />}
           onClick={() => navigate('/herramientas/nueva')}
+          sx={{ 
+            fontSize: { xs: '0.875rem', md: '1rem' },
+            px: { xs: 3, md: 4 },
+            py: { xs: 1, md: 1.5 }
+          }}
         >
-          Crear Primera Herramienta
+          {isMobile ? 'Crear Herramienta' : 'Crear Primera Herramienta'}
         </Button>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ 
+      p: { xs: 2, md: 3 },
+      width: '100%',
+      minHeight: { xs: '100vh', md: '80vh' }
+    }}>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box 
+        display="flex" 
+        justifyContent="space-between" 
+        alignItems={{ xs: 'flex-start', md: 'center' }}
+        mb={4}
+        flexDirection={{ xs: 'column', md: 'row' }}
+        gap={{ xs: 2, md: 0 }}
+      >
         <Box>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
+          <Typography 
+            variant={isMobile ? "h5" : "h4"} 
+            fontWeight="bold" 
+            gutterBottom
+            sx={{ fontSize: { xs: '1.5rem', md: '2.125rem' } }}
+          >
             Dashboard de Herramientas
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography 
+            variant="body1" 
+            color="text.secondary"
+            sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+          >
             Gestiona y monitorea tus herramientas dinámicas para IA
           </Typography>
         </Box>
-        <Box display="flex" gap={2}>
+        <Box 
+          display="flex" 
+          gap={{ xs: 1, md: 2 }}
+          flexDirection={{ xs: 'row', sm: 'row' }}
+          width={{ xs: '100%', md: 'auto' }}
+        >
           <Button
             variant="outlined"
-            startIcon={<RefreshIcon />}
+            startIcon={<RefreshIcon fontSize={isMobile ? "small" : "medium"} />}
             onClick={refetchAll}
+            size={isMobile ? "small" : "medium"}
+            sx={{ 
+              fontSize: { xs: '0.75rem', md: '0.875rem' },
+              flex: { xs: 1, md: 'none' }
+            }}
           >
-            Actualizar
+            {isMobile ? 'Actualizar' : 'Actualizar'}
           </Button>
           <Button
             variant="contained"
-            startIcon={<AddIcon />}
+            startIcon={<AddIcon fontSize={isMobile ? "small" : "medium"} />}
             onClick={() => navigate('/herramientas/nueva')}
+            size={isMobile ? "small" : "medium"}
+            sx={{ 
+              fontSize: { xs: '0.75rem', md: '0.875rem' },
+              flex: { xs: 1, md: 'none' }
+            }}
           >
-            Nueva Herramienta
+            {isMobile ? 'Nueva' : 'Nueva Herramienta'}
           </Button>
         </Box>
       </Box>
       
       {/* Stats Cards */}
-      <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
+      <Grid container spacing={{ xs: 2, md: 3 }} mb={4}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Total Herramientas"
             value={dashboardStats.totalTools}
@@ -243,7 +400,7 @@ const ToolsDashboard: React.FC = () => {
             color="primary"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Herramientas Activas"
             value={dashboardStats.activeTools}
@@ -252,7 +409,7 @@ const ToolsDashboard: React.FC = () => {
             subtitle={`${dashboardStats.totalTools - dashboardStats.activeTools} inactivas`}
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Ejecuciones Hoy"
             value={dashboardStats.executionsToday}
@@ -260,7 +417,7 @@ const ToolsDashboard: React.FC = () => {
             color="info"
           />
         </Grid>
-        <Grid item xs={12} sm={6} md={3}>
+        <Grid item xs={6} sm={6} md={3}>
           <StatCard
             title="Tasa de Éxito"
             value={`${dashboardStats.successRate}%`}
@@ -272,8 +429,13 @@ const ToolsDashboard: React.FC = () => {
 
       {/* Main Content: Top Tools */}
       <Card elevation={2}>
-        <CardContent>
-          <Typography variant="h6" fontWeight="bold" gutterBottom>
+        <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+          <Typography 
+            variant={isMobile ? "subtitle1" : "h6"} 
+            fontWeight="bold" 
+            gutterBottom
+            sx={{ fontSize: { xs: '1.125rem', md: '1.25rem' } }}
+          >
             Herramientas Más Utilizadas
           </Typography>
           {dashboardStats.topTools.length > 0 ? (
@@ -283,8 +445,12 @@ const ToolsDashboard: React.FC = () => {
               ))}
             </Box>
           ) : (
-            <Box textAlign="center" py={4}>
-              <Typography variant="body2" color="text.secondary">
+            <Box textAlign="center" py={{ xs: 2, md: 4 }}>
+              <Typography 
+                variant="body2" 
+                color="text.secondary"
+                sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+              >
                 No hay herramientas con ejecuciones registradas.
               </Typography>
             </Box>
