@@ -9,6 +9,7 @@ import {
   IconButton,
   InputAdornment,
   useMediaQuery,
+  useTheme,
   FormControl,
   InputLabel,
   Select,
@@ -60,10 +61,12 @@ const validation = yup.object().shape({
 
 const Register = () => {
   const { registerUser } = useAuth();
+  const theme = useTheme();
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const isMobile = useMediaQuery("(max-width:600px)");
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   const [cardVisible, setCardVisible] = useState(false);
 
   React.useEffect(() => {
@@ -125,6 +128,8 @@ const Register = () => {
         zIndex: 1300,
         overflow: "hidden",
         fontFamily: 'Montserrat, Arial, sans-serif',
+        px: { xs: 1, sm: 2, md: 3 },
+        py: { xs: 2, sm: 3 },
         // Fondo animado tipo aurora
         "&::before": {
           content: '""',
@@ -147,12 +152,16 @@ const Register = () => {
         },
       }}
     >
-      <Box sx={{ width: isMobile ? '98vw' : 460, maxWidth: "98vw" }}>
+      <Box sx={{ 
+        width: { xs: '100%', sm: 420, md: 460 }, 
+        maxWidth: { xs: '100%', sm: 420, md: 460 },
+        mx: 'auto'
+      }}>
         <Paper
           elevation={0}
           sx={{
-            p: isMobile ? 2 : 4,
-            borderRadius: 5,
+            p: { xs: 2, sm: 3, md: 4 },
+            borderRadius: { xs: 3, sm: 4, md: 5 },
             boxShadow: "0 8px 32px 0 rgba(31, 38, 135, 0.37)",
             background: "rgba(30, 30, 40, 0.65)",
             backdropFilter: "blur(16px)",
@@ -164,27 +173,33 @@ const Register = () => {
             transition: 'opacity 0.7s cubic-bezier(.4,0,.2,1), transform 0.7s cubic-bezier(.4,0,.2,1)',
           }}
         >
-          <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", mb: 2 }}>
+          <Box sx={{ 
+            display: "flex", 
+            flexDirection: "column", 
+            alignItems: "center", 
+            mb: { xs: 2, md: 3 }
+          }}>
             <img
               src={LogoVoice2}
               alt="Logo Virtual Voices"
               style={{
-                width: 160,
+                width: isMobile ? 120 : isTablet ? 140 : 160,
                 height: 'auto',
-                marginBottom: 8,
+                marginBottom: isMobile ? 4 : 8,
                 display: 'block',
                 filter: 'drop-shadow(0 2px 8px #8B5CF6AA)'
               }}
             />
             <Typography
-              variant="h5"
+              variant={isMobile ? "h6" : "h5"}
               fontWeight={700}
               sx={{
                 color: "#fff",
                 fontFamily: 'Montserrat, Arial, sans-serif',
                 letterSpacing: 1,
                 textShadow: "0 2px 8px #3B82F6AA",
-                mb: 0.5
+                mb: 0.5,
+                fontSize: { xs: '1.25rem', md: '1.5rem' }
               }}
             >
               REGISTRO
@@ -194,7 +209,8 @@ const Register = () => {
               sx={{
                 color: "#BDBDBD",
                 fontFamily: 'Montserrat, Arial, sans-serif',
-                textAlign: "center"
+                textAlign: "center",
+                fontSize: { xs: 12, sm: 13, md: 14 }
               }}
             >
               Sistema Multi-Empresa
@@ -206,6 +222,7 @@ const Register = () => {
               label="Nombre completo"
               fullWidth
               margin="normal"
+              size={isMobile ? "small" : "medium"}
               autoFocus
               {...register("name")}
               error={!!errors.name}
@@ -215,23 +232,36 @@ const Register = () => {
                 input: {
                   color: "#fff",
                   fontFamily: 'Montserrat, Arial, sans-serif',
+                  fontSize: { xs: '0.875rem', md: '1rem' },
                 },
-                label: { color: "#BDBDBD" },
+                label: { 
+                  color: "#BDBDBD",
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                },
                 fieldset: { borderColor: errors.name ? "#E05EFF" : "#8B5CF6" },
-                mb: 2,
+                mb: { xs: 1, md: 2 },
                 transition: 'box-shadow 0.3s',
                 '& .Mui-focused fieldset': {
                   borderColor: "#E05EFF",
                   boxShadow: "0 0 8px 2px #E05EFF55",
                 },
               }}
-              InputLabelProps={{ style: { color: "#BDBDBD" } }}
+              InputLabelProps={{ 
+                style: { 
+                  color: "#BDBDBD",
+                  fontSize: isMobile ? '0.875rem' : '1rem'
+                } 
+              }}
+              FormHelperTextProps={{
+                sx: { fontSize: { xs: '0.75rem', md: '0.875rem' } }
+              }}
             />
 
             <TextField
               label="Correo electrónico"
               fullWidth
               margin="normal"
+              size={isMobile ? "small" : "medium"}
               autoComplete="email"
               {...register("email")}
               error={!!errors.email}
@@ -241,28 +271,45 @@ const Register = () => {
                 input: {
                   color: "#fff",
                   fontFamily: 'Montserrat, Arial, sans-serif',
+                  fontSize: { xs: '0.875rem', md: '1rem' },
                 },
-                label: { color: "#BDBDBD" },
+                label: { 
+                  color: "#BDBDBD",
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                },
                 fieldset: { borderColor: errors.email ? "#E05EFF" : "#8B5CF6" },
-                mb: 2,
+                mb: { xs: 1, md: 2 },
                 transition: 'box-shadow 0.3s',
                 '& .Mui-focused fieldset': {
                   borderColor: "#E05EFF",
                   boxShadow: "0 0 8px 2px #E05EFF55",
                 },
               }}
-              InputLabelProps={{ style: { color: "#BDBDBD" } }}
+              InputLabelProps={{ 
+                style: { 
+                  color: "#BDBDBD",
+                  fontSize: isMobile ? '0.875rem' : '1rem'
+                } 
+              }}
+              FormHelperTextProps={{
+                sx: { fontSize: { xs: '0.75rem', md: '0.875rem' } }
+              }}
             />
 
             {/* Role Selector */}
             <FormControl 
               fullWidth 
               margin="normal"
+              size={isMobile ? "small" : "medium"}
               error={!!errors.role}
+              sx={{ mb: { xs: 1, md: 2 } }}
             >
               <InputLabel 
                 id="role-selector-label"
-                sx={{ color: "#BDBDBD" }}
+                sx={{ 
+                  color: "#BDBDBD",
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                }}
               >
                 Rol de usuario
               </InputLabel>
@@ -273,6 +320,7 @@ const Register = () => {
                 onChange={(e) => setValue("role", e.target.value)}
                 sx={{
                   color: "#fff",
+                  fontSize: { xs: '0.875rem', md: '1rem' },
                   fieldset: { 
                     borderColor: errors.role ? "#E05EFF" : "#8B5CF6" 
                   },
@@ -289,7 +337,12 @@ const Register = () => {
                 <MenuItem value="">Usuario</MenuItem>
               </Select>
               {errors.role && (
-                <Typography variant="caption" sx={{ color: '#f44336', mt: 0.5, px: 1 }}>
+                <Typography variant="caption" sx={{ 
+                  color: '#f44336', 
+                  mt: 0.5, 
+                  px: 1,
+                  fontSize: { xs: '0.75rem', md: '0.875rem' }
+                }}>
                   {errors.role.message}
                 </Typography>
               )}
@@ -300,6 +353,7 @@ const Register = () => {
               type={showPassword ? "text" : "password"}
               fullWidth
               margin="normal"
+              size={isMobile ? "small" : "medium"}
               autoComplete="new-password"
               {...register("password")}
               error={!!errors.password}
@@ -309,17 +363,26 @@ const Register = () => {
                 input: {
                   color: "#fff",
                   fontFamily: 'Montserrat, Arial, sans-serif',
+                  fontSize: { xs: '0.875rem', md: '1rem' },
                 },
-                label: { color: "#BDBDBD" },
+                label: { 
+                  color: "#BDBDBD",
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                },
                 fieldset: { borderColor: errors.password ? "#E05EFF" : "#8B5CF6" },
-                mb: 2,
+                mb: { xs: 1, md: 2 },
                 transition: 'box-shadow 0.3s',
                 '& .Mui-focused fieldset': {
                   borderColor: "#E05EFF",
                   boxShadow: "0 0 8px 2px #E05EFF55",
                 },
               }}
-              InputLabelProps={{ style: { color: "#BDBDBD" } }}
+              InputLabelProps={{ 
+                style: { 
+                  color: "#BDBDBD",
+                  fontSize: isMobile ? '0.875rem' : '1rem'
+                } 
+              }}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
@@ -327,6 +390,7 @@ const Register = () => {
                       aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                       onClick={() => setShowPassword((show) => !show)}
                       edge="end"
+                      size={isMobile ? "small" : "medium"}
                       sx={{ color: "#8B5CF6" }}
                     >
                       {showPassword ? <VisibilityOff /> : <Visibility />}
@@ -334,12 +398,16 @@ const Register = () => {
                   </InputAdornment>
                 ),
               }}
+              FormHelperTextProps={{
+                sx: { fontSize: { xs: '0.75rem', md: '0.875rem' } }
+              }}
             />
 
             <TextField
               label="Nombre corto de la empresa"
               fullWidth
               margin="normal"
+              size={isMobile ? "small" : "medium"}
               autoComplete="companySlug"
               {...register("companySlug")}
               error={!!errors.companySlug}
@@ -349,21 +417,43 @@ const Register = () => {
                 input: {
                   color: "#fff",
                   fontFamily: 'Montserrat, Arial, sans-serif',
+                  fontSize: { xs: '0.875rem', md: '1rem' },
                 },
-                label: { color: "#BDBDBD" },
+                label: { 
+                  color: "#BDBDBD",
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                },
                 fieldset: { borderColor: errors.companySlug ? "#E05EFF" : "#8B5CF6" },
-                mb: 2,
+                mb: { xs: 1, md: 2 },
                 transition: 'box-shadow 0.3s',
                 '& .Mui-focused fieldset': {
                   borderColor: "#E05EFF",
                   boxShadow: "0 0 8px 2px #E05EFF55",
                 },
               }}
-              InputLabelProps={{ style: { color: "#BDBDBD" } }}
+              InputLabelProps={{ 
+                style: { 
+                  color: "#BDBDBD",
+                  fontSize: isMobile ? '0.875rem' : '1rem'
+                } 
+              }}
+              FormHelperTextProps={{
+                sx: { fontSize: { xs: '0.75rem', md: '0.875rem' } }
+              }}
             />
 
             {serverError && (
-              <Typography color="error" sx={{ mt: 1, mb: 1, textAlign: "center" }} role="alert" aria-live="assertive">
+              <Typography 
+                color="error" 
+                sx={{ 
+                  mt: 1, 
+                  mb: 1, 
+                  textAlign: "center",
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                }} 
+                role="alert" 
+                aria-live="assertive"
+              >
                 {serverError}
               </Typography>
             )}
@@ -372,17 +462,18 @@ const Register = () => {
               type="submit"
               fullWidth
               variant="contained"
+              size={isMobile ? "medium" : "large"}
               sx={{
-                mt: 2,
-                mb: 1,
+                mt: { xs: 2, md: 3 },
+                mb: { xs: 1, md: 2 },
                 fontWeight: 700,
-                fontSize: 18,
+                fontSize: { xs: 16, sm: 17, md: 18 },
                 letterSpacing: 1,
                 background: "linear-gradient(90deg, #8B5CF6 0%, #3B82F6 50%, #1976D2 100%)",
                 color: "#fff",
                 boxShadow: "0 2px 8px #3B82F6AA",
-                borderRadius: 3,
-                py: 1.5,
+                borderRadius: { xs: 2, md: 3 },
+                py: { xs: 1.2, md: 1.5 },
                 transition: "all 0.2s, box-shadow 0.3s",
                 '&:hover': {
                   background: "linear-gradient(90deg, #1976D2 0%, #3B82F6 50%, #8B5CF6 100%)",
@@ -396,11 +487,15 @@ const Register = () => {
               disabled={loading}
               endIcon={!loading && <Visibility sx={{ opacity: 0 }} />} // para mantener altura
             >
-              {loading ? <CircularProgress size={24} color="inherit" /> : "Registrarse"}
+              {loading ? <CircularProgress size={isMobile ? 20 : 24} color="inherit" /> : "Registrarse"}
             </Button>
           </form>
         </Paper>
-        <Box sx={{ mt: 2, textAlign: "center" }}>
+        <Box sx={{ 
+          mt: { xs: 2, md: 3 }, 
+          textAlign: "center",
+          px: { xs: 1, md: 0 }
+        }}>
           <Button
             component={RouterLink}
             to="/login"
@@ -410,14 +505,21 @@ const Register = () => {
               fontWeight: 600,
               textTransform: "none",
               fontFamily: 'Montserrat, Arial, sans-serif',
-              fontSize: 15,
+              fontSize: { xs: 14, sm: 15 },
               "&:hover": { textDecoration: "underline", background: "none" },
             }}
           >
             ¿Ya tienes cuenta? Inicia sesión aquí
           </Button>
         </Box>
-        <Box sx={{ mt: 3, textAlign: "center", color: "#BDBDBD", fontSize: 13, fontFamily: 'Montserrat, Arial, sans-serif' }}>
+        <Box sx={{ 
+          mt: { xs: 2, md: 3 }, 
+          textAlign: "center", 
+          color: "#BDBDBD", 
+          fontSize: { xs: 11, sm: 12, md: 13 }, 
+          fontFamily: 'Montserrat, Arial, sans-serif',
+          px: { xs: 1, md: 0 }
+        }}>
           © {new Date().getFullYear()} Virtual Voices. Todos los derechos reservados.
         </Box>
       </Box>
