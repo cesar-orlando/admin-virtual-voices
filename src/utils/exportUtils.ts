@@ -47,25 +47,28 @@ const formatValueForExport = (value: any, fieldType: string): string => {
 export const exportToCSV = (table: DynamicTable, records: DynamicRecord[], filename?: string) => {
   const tableName = filename || `${table.name}_${new Date().toISOString().split('T')[0]}`;
   
-  // Crear encabezados basados en los campos de la tabla
-  const headers = table.fields.map(field => field.label || field.name);
+  // Crear encabezados basados en los campos de la tabla + createdAt
+  const headers = [
+    ...table.fields.map(field => field.label || field.name),
+    'Fecha de Creación'
+  ];
   
   // Crear filas de datos
   const csvRows = [
     headers.join(','), // Encabezados
     ...records.map(record => 
-      table.fields.map(field => {
-        const value = record.data[field.name];
-        let formattedValue = formatValueForExport(value, field.type);
-        
-        // Escapar comillas y envolver en comillas si contiene comas
-        formattedValue = formattedValue.replace(/"/g, '""');
-        if (formattedValue.includes(',') || formattedValue.includes('\n') || formattedValue.includes('"')) {
-          formattedValue = `"${formattedValue}"`;
-        }
-        
-        return formattedValue;
-      }).join(',')
+      [
+        ...table.fields.map(field => {
+          const value = record.data[field.name];
+          let formattedValue = formatValueForExport(value, field.type);
+          formattedValue = formattedValue.replace(/"/g, '""');
+          if (formattedValue.includes(',') || formattedValue.includes('\n') || formattedValue.includes('"')) {
+            formattedValue = `"${formattedValue}"`;
+          }
+          return formattedValue;
+        }),
+        record.createdAt ? new Date(record.createdAt).toLocaleString('es-MX') : ''
+      ].join(',')
     )
   ];
   
@@ -78,9 +81,7 @@ export const exportToCSV = (table: DynamicTable, records: DynamicRecord[], filen
 export const exportToExcel = (table: DynamicTable, records: DynamicRecord[], filename?: string) => {
   const tableName = filename || `${table.name}_${new Date().toISOString().split('T')[0]}`;
   
-  // Necesitamos importar XLSX dinámicamente para evitar problemas de bundle
   import('xlsx').then(XLSX => {
-    // Crear datos para Excel
     const excelData = records.map(record => {
       const row: any = {};
       table.fields.forEach(field => {
@@ -89,8 +90,6 @@ export const exportToExcel = (table: DynamicTable, records: DynamicRecord[], fil
           row[field.label || field.name] = '';
           return;
         }
-        
-        // Formatear valores según el tipo de campo
         switch (field.type) {
           case 'date':
             row[field.label || field.name] = new Date(value);
@@ -117,15 +116,13 @@ export const exportToExcel = (table: DynamicTable, records: DynamicRecord[], fil
             row[field.label || field.name] = String(value);
         }
       });
+      // Agregar createdAt
+      row['Fecha de Creación'] = record.createdAt ? new Date(record.createdAt).toLocaleString('es-MX') : '';
       return row;
     });
-    
-    // Crear workbook y worksheet
     const ws = XLSX.utils.json_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, table.name);
-    
-    // Generar archivo
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
     const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     downloadFile(blob, `${tableName}.xlsx`);
