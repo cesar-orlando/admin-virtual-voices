@@ -12,6 +12,7 @@ import {
   TextField,
   IconButton,
   useTheme,
+  useMediaQuery,
   Tooltip,
   TableSortLabel,
   InputAdornment,
@@ -58,6 +59,9 @@ export default function DataTable({
   onFilterChange,
 }: DataTableProps) {
   const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'))
+  
   const [search, setSearch] = useState('')
   const [dateRange, setDateRange] = useState<[Date | null, Date | null]>([null, null])
   const [showFilters, setShowFilters] = useState(false)
@@ -155,17 +159,18 @@ export default function DataTable({
           flexDirection: { xs: 'column', sm: 'row' },
           justifyContent: 'space-between',
           alignItems: { xs: 'stretch', sm: 'center' },
-          gap: 2,
-          p: 3,
-          pb: showFilters ? 1 : 3,
+          gap: { xs: 1.5, md: 2 },
+          p: { xs: 2, md: 3 },
+          pb: showFilters ? { xs: 1, md: 1 } : { xs: 2, md: 3 },
         }}
       >
         <Typography
-          variant="h5"
+          variant={isMobile ? "h6" : "h5"}
           sx={{
             fontWeight: 700,
             color: theme.palette.mode === 'dark' ? '#fff' : '#1E1E28',
             fontFamily: 'Montserrat, Arial, sans-serif',
+            mb: { xs: 1, sm: 0 }
           }}
         >
           {title}
@@ -173,14 +178,15 @@ export default function DataTable({
         <Box
           sx={{
             display: 'flex',
-            gap: 2,
+            gap: { xs: 1, md: 2 },
             alignItems: 'center',
             flexWrap: 'wrap',
+            justifyContent: { xs: 'flex-start', sm: 'flex-end' }
           }}
         >
           <TextField
             placeholder="Buscar..."
-            size="small"
+            size={isMobile ? "small" : "small"}
             value={search}
             onChange={handleSearch}
             InputProps={{
@@ -195,9 +201,11 @@ export default function DataTable({
               ),
             }}
             sx={{
-              minWidth: 200,
+              minWidth: { xs: 150, md: 200 },
+              width: { xs: '100%', sm: 'auto' },
               '& .MuiOutlinedInput-root': {
                 borderRadius: 2,
+                fontSize: { xs: '0.875rem', md: '1rem' },
                 backgroundColor:
                   theme.palette.mode === 'dark'
                     ? 'rgba(139, 92, 246, 0.1)'
@@ -223,6 +231,7 @@ export default function DataTable({
           <Tooltip title="Filtros">
             <IconButton
               onClick={() => setShowFilters(!showFilters)}
+              size={isMobile ? "small" : "medium"}
               sx={{
                 backgroundColor:
                   theme.palette.mode === 'dark'
@@ -237,7 +246,10 @@ export default function DataTable({
               }}
             >
               <FilterListIcon
-                sx={{ color: '#8B5CF6' }}
+                sx={{ 
+                  color: '#8B5CF6',
+                  fontSize: { xs: '1.2rem', md: '1.5rem' }
+                }}
               />
             </IconButton>
           </Tooltip>
@@ -245,6 +257,7 @@ export default function DataTable({
             <Tooltip title="Limpiar filtros">
               <IconButton
                 onClick={handleClearFilters}
+                size={isMobile ? "small" : "medium"}
                 sx={{
                   backgroundColor:
                     theme.palette.mode === 'dark'
@@ -464,9 +477,9 @@ export default function DataTable({
         component={Paper}
         sx={{
           flex: 1,
-          mx: 3,
-          mb: 3,
-          borderRadius: 3,
+          mx: { xs: 1, md: 3 },
+          mb: { xs: 1, md: 3 },
+          borderRadius: { xs: 2, md: 3 },
           overflow: 'auto',
           backgroundColor:
             theme.palette.mode === 'dark' ? 'rgba(30, 30, 40, 0.95)' : 'rgba(255, 255, 255, 0.95)',
@@ -476,8 +489,8 @@ export default function DataTable({
               ? '0 4px 24px rgba(139, 92, 246, 0.1)'
               : '0 4px 24px rgba(139, 92, 246, 0.05)',
           '&::-webkit-scrollbar': {
-            width: '8px',
-            height: '8px',
+            width: { xs: '6px', md: '8px' },
+            height: { xs: '6px', md: '8px' },
           },
           '&::-webkit-scrollbar-track': {
             background: 'transparent',
@@ -513,9 +526,10 @@ export default function DataTable({
                     }`,
                     color: theme.palette.mode === 'dark' ? '#fff' : '#1E1E28',
                     fontWeight: 700,
-                    fontSize: '0.875rem',
-                    py: 2,
-                    whiteSpace: 'nowrap',
+                    fontSize: { xs: '0.75rem', md: '0.875rem' },
+                    py: { xs: 1.5, md: 2 },
+                    px: { xs: 1, md: 2 },
+                    whiteSpace: isMobile ? 'normal' : 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                   }}
@@ -575,8 +589,10 @@ export default function DataTable({
                           theme.palette.mode === 'dark'
                             ? 'rgba(255, 255, 255, 0.9)'
                             : 'rgba(30, 30, 40, 0.9)',
-                        fontSize: '0.875rem',
-                        whiteSpace: 'nowrap',
+                        fontSize: { xs: '0.75rem', md: '0.875rem' },
+                        py: { xs: 1, md: 1.5 },
+                        px: { xs: 1, md: 2 },
+                        whiteSpace: isMobile ? 'normal' : 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                       }}
