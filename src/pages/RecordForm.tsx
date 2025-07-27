@@ -16,6 +16,8 @@ import {
   CircularProgress,
   Alert,
   IconButton,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -32,6 +34,10 @@ import type { DynamicTable, TableField, CreateRecordRequest, UpdateRecordRequest
 import FileDropzone from '../components/FileDropzone';
 
 export default function RecordForm() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [table, setTable] = useState<DynamicTable | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
@@ -151,16 +157,24 @@ export default function RecordForm() {
   const renderField = (field: TableField) => {
     const value = formData[field.name] ?? '';
     const isMissing = missingFields.includes(field.name);
+    
     // Si el campo es 'asesor', renderiza un select con los asesores
     if (field.name === 'asesor') {
       return (
-        <FormControl fullWidth error={isMissing}>
-          <InputLabel>{field.label + (field.required ? ' *' : '')}</InputLabel>
+        <FormControl fullWidth error={isMissing} size={isMobile ? "small" : "medium"}>
+          <InputLabel sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
+            {field.label + (field.required ? ' *' : '')}
+          </InputLabel>
           <Select
             value={value}
             onChange={(e) => handleInputChange(field.name, e.target.value)}
             label={field.label + (field.required ? ' *' : '')}
             inputRef={el => fieldRefs.current[field.name] = el}
+            sx={{
+              '& .MuiSelect-select': {
+                fontSize: { xs: '0.875rem', md: '1rem' }
+              }
+            }}
           >
             {asesores.map((asesor) => (
               <MenuItem key={asesor._id || asesor.id || asesor.email} value={asesor._id || asesor.id || asesor.email}>
@@ -170,7 +184,13 @@ export default function RecordForm() {
             ))}
           </Select>
           {isMissing && (
-            <Typography variant="caption" color="error">Este campo es obligatorio</Typography>
+            <Typography 
+              variant="caption" 
+              color="error"
+              sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}
+            >
+              Este campo es obligatorio
+            </Typography>
           )}
         </FormControl>
       );
@@ -191,8 +211,21 @@ export default function RecordForm() {
             error={isMissing}
             helperText={isMissing ? 'Este campo es obligatorio' : ''}
             inputRef={el => fieldRefs.current[field.name] = el}
+            size={isMobile ? "small" : "medium"}
+            sx={{
+              '& .MuiInputBase-input': {
+                fontSize: { xs: '0.875rem', md: '1rem' }
+              },
+              '& .MuiInputLabel-root': {
+                fontSize: { xs: '0.875rem', md: '1rem' }
+              },
+              '& .MuiFormHelperText-root': {
+                fontSize: { xs: '0.7rem', md: '0.75rem' }
+              }
+            }}
           />
         );
+        
       case 'date': {
         const dateValue = value ? new Date(value) : null;
         return (
@@ -205,12 +238,25 @@ export default function RecordForm() {
               textField: {
                 error: isMissing,
                 helperText: isMissing ? 'Este campo es obligatorio' : '',
-                inputRef: (el: any) => fieldRefs.current[field.name] = el
+                inputRef: (el: any) => fieldRefs.current[field.name] = el,
+                size: isMobile ? "small" : "medium",
+                sx: {
+                  '& .MuiInputBase-input': {
+                    fontSize: { xs: '0.875rem', md: '1rem' }
+                  },
+                  '& .MuiInputLabel-root': {
+                    fontSize: { xs: '0.875rem', md: '1rem' }
+                  },
+                  '& .MuiFormHelperText-root': {
+                    fontSize: { xs: '0.7rem', md: '0.75rem' }
+                  }
+                }
               }
             }}
           />
         );
       }
+      
       case 'boolean':
         return (
           <Box>
@@ -220,24 +266,47 @@ export default function RecordForm() {
                   checked={!!value}
                   onChange={(e) => handleInputChange(field.name, e.target.checked)}
                   inputRef={el => fieldRefs.current[field.name] = el}
+                  size={isMobile ? "small" : "medium"}
                 />
               }
               label={field.label + (field.required ? ' *' : '')}
+              sx={{
+                '& .MuiFormControlLabel-label': {
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                }
+              }}
             />
             {isMissing && (
-              <Typography variant="caption" color="error">Este campo es obligatorio</Typography>
+              <Typography 
+                variant="caption" 
+                color="error"
+                sx={{ 
+                  display: 'block',
+                  fontSize: { xs: '0.7rem', md: '0.75rem' }
+                }}
+              >
+                Este campo es obligatorio
+              </Typography>
             )}
           </Box>
         );
+        
       case 'select':
         return (
-          <FormControl fullWidth error={isMissing}>
-            <InputLabel>{field.label + (field.required ? ' *' : '')}</InputLabel>
+          <FormControl fullWidth error={isMissing} size={isMobile ? "small" : "medium"}>
+            <InputLabel sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
+              {field.label + (field.required ? ' *' : '')}
+            </InputLabel>
             <Select
               value={value}
               onChange={(e) => handleInputChange(field.name, e.target.value)}
               label={field.label + (field.required ? ' *' : '')}
               inputRef={el => fieldRefs.current[field.name] = el}
+              sx={{
+                '& .MuiSelect-select': {
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                }
+              }}
             >
               {field.options?.map((option) => (
                 <MenuItem key={option} value={option}>
@@ -246,10 +315,17 @@ export default function RecordForm() {
               ))}
             </Select>
             {isMissing && (
-              <Typography variant="caption" color="error">Este campo es obligatorio</Typography>
+              <Typography 
+                variant="caption" 
+                color="error"
+                sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}
+              >
+                Este campo es obligatorio
+              </Typography>
             )}
           </FormControl>
         );
+        
       case 'file':
         return (
           <Box>
@@ -261,81 +337,158 @@ export default function RecordForm() {
               // acceptedFileTypes eliminado para aceptar cualquier archivo
             />
             {isMissing && (
-              <Typography variant="caption" color="error">Este campo es obligatorio</Typography>
+              <Typography 
+                variant="caption" 
+                color="error"
+                sx={{ 
+                  display: 'block',
+                  mt: 1,
+                  fontSize: { xs: '0.7rem', md: '0.75rem' }
+                }}
+              >
+                Este campo es obligatorio
+              </Typography>
             )}
           </Box>
         );
+        
       default:
         return null;
     }
   };
 
   if (loading) {
-    return <CircularProgress sx={{ display: 'block', margin: 'auto', mt: 4 }} />;
+    return (
+      <Box 
+        display="flex" 
+        justifyContent="center" 
+        alignItems="center" 
+        minHeight="400px"
+        sx={{ p: { xs: 2, md: 0 } }}
+      >
+        <CircularProgress size={isMobile ? 40 : 60} />
+      </Box>
+    );
   }
 
   // Solo ocultar el formulario si el error es de carga de datos
   if (error && (error.startsWith('Error al cargar') || error.startsWith('Error loading'))) {
-    return <Alert severity="error">{error}</Alert>;
+    return (
+      <Box sx={{ p: { xs: 2, md: 3 } }}>
+        <Alert 
+          severity="error"
+          sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+        >
+          {error}
+        </Alert>
+      </Box>
+    );
   }
 
   return (
-    <Box sx={{ p: 3, width: '100%' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-            <IconButton onClick={() => navigate(`/tablas/${tableSlug}`)} sx={{ mr: 2 }}>
-                <ArrowBackIcon />
-            </IconButton>
-            <Box>
-                <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
-                    {isEditMode ? 'Editar Registro' : 'Nuevo Registro'} en {table?.name}
-                </Typography>
-                <Typography variant="body1" color="text.secondary">
-                    Completa los campos para {isEditMode ? 'actualizar' : 'crear'} el registro.
-                </Typography>
-            </Box>
+    <Box sx={{ 
+      p: { xs: 2, md: 3 }, 
+      width: '100%',
+      minHeight: { xs: '100vh', md: '80vh' }
+    }}>
+      <Box sx={{ 
+        display: 'flex', 
+        alignItems: 'center', 
+        mb: 3 
+      }}>
+        <IconButton 
+          onClick={() => navigate(`/tablas/${tableSlug}`)} 
+          sx={{ mr: { xs: 1, md: 2 } }}
+          size={isMobile ? "small" : "medium"}
+        >
+          <ArrowBackIcon />
+        </IconButton>
+        <Box>
+          <Typography 
+            variant={isMobile ? "h5" : "h4"} 
+            gutterBottom 
+            sx={{ 
+              fontWeight: 700,
+              fontSize: { xs: '1.5rem', md: '2.125rem' }
+            }}
+          >
+            {isEditMode ? 'Editar Registro' : 'Nuevo Registro'} en {table?.name}
+          </Typography>
+          <Typography 
+            variant="body1" 
+            color="text.secondary"
+            sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+          >
+            Completa los campos para {isEditMode ? 'actualizar' : 'crear'} el registro.
+          </Typography>
         </Box>
+      </Box>
 
-        {/* Alert de error de validación */}
-        {missingFields.length > 0 && (
-          <Alert severity="error" sx={{ mb: 3 }}>
-            Faltan campos obligatorios: {missingFields.map(n => table?.fields.find(f => f.name === n)?.label || n).join(', ')}
-          </Alert>
-        )}
-        {/* Alert de error de guardado */}
-        {error && !(error.startsWith('Error al cargar') || error.startsWith('Error loading')) && (
-          <Alert severity="error" sx={{ mb: 3 }}>{error}</Alert>
-        )}
+      {/* Alert de error de validación */}
+      {missingFields.length > 0 && (
+        <Alert 
+          severity="error" 
+          sx={{ 
+            mb: 3,
+            fontSize: { xs: '0.875rem', md: '1rem' }
+          }}
+        >
+          Faltan campos obligatorios: {missingFields.map(n => table?.fields.find(f => f.name === n)?.label || n).join(', ')}
+        </Alert>
+      )}
+      
+      {/* Alert de error de guardado */}
+      {error && !(error.startsWith('Error al cargar') || error.startsWith('Error loading')) && (
+        <Alert 
+          severity="error" 
+          sx={{ 
+            mb: 3,
+            fontSize: { xs: '0.875rem', md: '1rem' }
+          }}
+        >
+          {error}
+        </Alert>
+      )}
 
-        <form onSubmit={handleSubmit} autoComplete="off">
-          <Card>
-              <CardContent>
-                  <Grid container spacing={3}>
-                      {table?.fields.map((field) => (
-                          <Grid item xs={12} sm={6} key={field.name}>
-                              {renderField(field)}
-                          </Grid>
-                      ))}
-                  </Grid>
-              </CardContent>
-          </Card>
+      <form onSubmit={handleSubmit} autoComplete="off">
+        <Card>
+          <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+            <Grid container spacing={{ xs: 2, md: 3 }}>
+              {table?.fields.map((field) => (
+                <Grid item xs={12} sm={6} md={6} key={field.name}>
+                  {renderField(field)}
+                </Grid>
+              ))}
+            </Grid>
+          </CardContent>
+        </Card>
 
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
-              <Button
-                  variant="contained"
-                  type="submit"
-                  disabled={saving}
-                  startIcon={<SaveIcon />}
-                  sx={{
-                      background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-                      '&:hover': {
-                        background: 'linear-gradient(135deg, #D04EFF 0%, #7A4CF6 100%)',
-                      }
-                  }}
-              >
-                  {saving ? 'Guardando...' : (isEditMode ? 'Guardar Cambios' : 'Crear Registro')}
-              </Button>
-          </Box>
-        </form>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: { xs: 'center', md: 'flex-end' }, 
+          mt: 3 
+        }}>
+          <Button
+            variant="contained"
+            type="submit"
+            disabled={saving}
+            startIcon={<SaveIcon />}
+            size={isMobile ? "medium" : "large"}
+            sx={{
+              background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+              fontSize: { xs: '0.875rem', md: '1rem' },
+              px: { xs: 3, md: 4 },
+              py: { xs: 1, md: 1.5 },
+              width: { xs: '100%', sm: 'auto' },
+              '&:hover': {
+                background: 'linear-gradient(135deg, #D04EFF 0%, #7A4CF6 100%)',
+              }
+            }}
+          >
+            {saving ? 'Guardando...' : (isEditMode ? 'Guardar Cambios' : 'Crear Registro')}
+          </Button>
+        </Box>
+      </form>
     </Box>
   );
 } 

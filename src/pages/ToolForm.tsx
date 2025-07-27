@@ -29,6 +29,8 @@ import {
   IconButton as MuiIconButton,
   Tooltip,
   Chip as MuiChip,
+  useTheme,
+  useMediaQuery,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -148,7 +150,8 @@ const mockCategories = [
   { _id: '1', name: 'customers', displayName: 'Clientes' },
   { _id: '2', name: 'billing', displayName: 'Facturación' },
   { _id: '3', name: 'communications', displayName: 'Comunicaciones' },
-  { _id: '4', name: 'analytics', displayName: 'Analytics' },
+  { _id: '4', name: 'analytics', displayName: 'Análisis' },
+  { _id: '5', name: 'integrations', displayName: 'Integraciones' },
 ];
 
 const ENV_OPTIONS = [
@@ -188,315 +191,80 @@ const mapFieldType = (type: string): 'string' | 'number' | 'boolean' | 'array' =
   }
 };
 const ToolForm: React.FC = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
   const navigate = useNavigate();
-  const { toolId } = useParams();
-  const isEdit = !!toolId;
-  
-  const [activeStep, setActiveStep] = useState(0);
-  const [hasAIConfig, setHasAIConfig] = useState(false);
-  const [aiConfigLoading, setAiConfigLoading] = useState(true);
-   
-  const { useCreateTool, useUpdateTool, useToolById, useTestTool } = useTools();
-  const { useCategoriesList } = useCategories();
-  const { useValidateEndpoint, useValidateSchema } = useValidation();
+  const { toolId } = useParams<{ toolId: string }>();
+  const isEdit = Boolean(toolId);
   const { user } = useAuth();
-  const [dynamicTables, setDynamicTables] = useState<any[]>([]);
-  const [selectedTable, setSelectedTable] = useState<any | null>(null);
-  const [loadingTables, setLoadingTables] = useState(false);
-  const [loadingFields, setLoadingFields] = useState(false);
-  const [advancedMode, setAdvancedMode] = useState(false);
-  const [functionTypes, setFunctionTypes] = useState<any[]>([]);
-  const [functionType, setFunctionType] = useState<string>('');
-  const [functionTypesLoading, setFunctionTypesLoading] = useState(false);
-  const [functionTypesError, setFunctionTypesError] = useState<string | null>(null);
 
-  // Queries
-  const { data: toolData, isLoading: toolLoading } = useToolById(toolId || '');
-  const { data: categoriesData } = useCategoriesList();
-  
-  // Mutations
-  const createToolMutation = useCreateTool();
-  const updateToolMutation = useUpdateTool();
-  const testToolMutation = useTestTool();
-  const validateEndpointMutation = useValidateEndpoint();
-  const validateSchemaMutation = useValidateSchema();
+  const [activeStep, setActiveStep] = useState(0);
+  const [paramList, setParamList] = useState<any[]>([]);
+  const [paramEdit, setParamEdit] = useState<any>(null);
+  const [paramError, setParamError] = useState<string | null>(null);
+  const [tables, setTables] = useState<any[]>([]);
 
-  const tool = (toolData as any)?.tool;
-  const categories = (categoriesData as any)?.categories || [];
+  // Hooks
+  const { tool, isLoading: toolLoading } = useTools();
+  const { categories, isLoading: categoriesLoading } = useCategories();
+  const { hasAIConfig, isLoading: aiConfigLoading } = useValidation();
+  const { createTool: createToolMutation, updateTool: updateToolMutation } = useTools();
 
+  // Form
   const {
     control,
     handleSubmit,
-    watch,
     setValue,
-    trigger,
-    formState: { errors, isValid },
+    watch,
     reset,
+    formState: { errors, isValid },
   } = useForm<ToolFormData>({
     resolver: zodResolver(toolSchema),
     defaultValues,
     mode: 'onChange',
   });
 
-  const activeEnv = (import.meta.env.MODE || process.env.NODE_ENV || 'production').toLowerCase();
-
-  // Verificar si hay IA configurada
-  useEffect(() => {
-    const checkAIConfig = async () => {
-      try {
-        setAiConfigLoading(true);
-        // Aquí deberías hacer una llamada al backend para verificar si hay IA configurada
-        // Por ahora, simulamos que siempre hay IA configurada
-        setHasAIConfig(true);
-      } catch (error) {
-        setHasAIConfig(false);
-      } finally {
-        setAiConfigLoading(false);
-      }
-    };
-
-    checkAIConfig();
-  }, []);
-
-  // Cargar datos de la herramienta si es edición
-  useEffect(() => {
-    if (isEdit && tool) {
-      reset({
-        name: tool.name,
-        displayName: tool.displayName,
-        description: tool.description,
-        category: tool.category,
-        config: {
-          ...tool.config,
-          authConfig: tool.config?.authConfig ?? {},
-        },
-        parameters: tool.parameters,
-        security: tool.security,
-      });
-    }
-  }, [isEdit, tool, reset]);
-
-  useEffect(() => {
-    if (activeStep === 1 && user) {
-      setLoadingTables(true);
-      getTables(user)
-        .then(res => setDynamicTables(res.tables || []))
-        .catch(() => setDynamicTables([]))
-        .finally(() => setLoadingTables(false));
-    }
-  }, [activeStep, user]);
-
   const watchedValues = watch();
 
-  // --- Generador de nombre técnico ---
-  function normalizeTechnicalName(str: string) {
-    return str
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '') // quita acentos
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_') // todo lo que no sea letra/num a _
-      .replace(/^_+|_+$/g, ''); // quita _ al inicio/fin
-  }
-
+  // Load tables on mount
   useEffect(() => {
-    // Solo si no es edición (para no sobreescribir en modo edición)
-    if (!isEdit) {
-      const displayName = watch('displayName');
-      if (displayName) {
-        let technical = normalizeTechnicalName(displayName);
-        setValue('name', technical);
-      } else {
-        setValue('name', '');
-      }
-    }
-  }, [watch('displayName'), isEdit, setValue]);
-
-  useEffect(() => {
-    // Set default environment on mount
-    if (!isEdit && !watch('config.environment')) {
-      const found = ENV_OPTIONS.find(opt => activeEnv.includes(opt.value));
-      setValue('config.environment', found ? found.value : 'production');
-    }
-  }, []);
-
-  // Cuando cambia el environment, si es tabla dinámica, actualiza el endpoint
-  useEffect(() => {
-    const envValue = watch('config.environment');
-    if (selectedTable && envValue && user) {
-      const envOpt = ENV_OPTIONS.find(opt => opt.value === envValue);
-      if (envOpt && envOpt.baseUrl) {
-        setValue('config.endpoint', `${envOpt.baseUrl}/records/table/${user.companySlug}/${selectedTable.slug}`);
-      }
-    }
-  }, [watch('config.environment'), selectedTable, user, setValue]);
-
-  // Cargar functionTypes al montar y cuando cambia el usuario
-  useEffect(() => {
-    if (user?.c_name) {
-      setFunctionTypesLoading(true);
-      fetchFunctionTypes(user.c_name)
-        .then((types) => setFunctionTypes(types))
-        .catch(() => setFunctionTypesError('No se pudieron cargar los tipos de función'))
-        .finally(() => setFunctionTypesLoading(false));
+    if (user) {
+      getTables(user)
+        .then(setTables)
+        .catch(console.error);
     }
   }, [user]);
 
-  // Si es edición, selecciona el functionType de la tool
-  useEffect(() => {
-    if (isEdit && tool?.functionType) {
-      setFunctionType(tool.functionType);
-    }
-  }, [isEdit, tool]);
-
-  const handleNext = async () => {
-    const fieldsToValidate = getFieldsForStep(activeStep);
-    const isStepValid = await trigger(fieldsToValidate);
-    
-    if (isStepValid) {
-      if (activeStep === 1) {
-        // Validar endpoint antes de continuar
-        await validateEndpoint();
-      }
-      setActiveStep((prev) => prev + 1);
-    }
+  // Handle navigation
+  const handleNext = () => {
+    setActiveStep((prev) => prev + 1);
   };
 
-  const validateEndpoint = async () => {
-    try {
-      const result = await validateEndpointMutation.mutateAsync({
-        endpoint: watchedValues.config.endpoint,
-        method: watchedValues.config.method,
-        timeout: watchedValues.config.timeout,
-      });
-      
-      if (!result.data?.isValid) {
-        toast.error('El endpoint no es válido');
-        return false;
-      }
-      
-      toast.success('Endpoint validado correctamente');
-      return true;
-    } catch (error) {
-      toast.error('Error al validar el endpoint');
-      return false;
-    }
+  const handleBack = () => {
+    setActiveStep((prev) => prev - 1);
   };
 
-  const validateParametersSchema = async () => {
-    try {
-      const result = await validateSchemaMutation.mutateAsync({
-        parameters: watchedValues.parameters,
-      });
-      
-      if (!result.data?.isValid) {
-        toast.error('Los parámetros no son válidos');
-        return false;
-      }
-      
-      return true;
-    } catch (error) {
-      toast.error('Error al validar los parámetros');
-      return false;
-    }
-  };
-
+  // Handle form submission
   const onSubmit = async (data: ToolFormData) => {
     try {
-      let payload: any = {
-        ...data,
-        c_name: user?.companySlug,
-        functionType: functionType || undefined,
-      };
-      if (!payload.config.authConfig) payload.config.authConfig = {};
-      if (isEdit && tool) {
-        payload.updatedBy = user?.id;
-        delete payload.createdBy;
-      } else {
-        payload.createdBy = user?.id;
-      }
-      console.log('=== PAYLOAD ENVIADO AL BACKEND ===');
-      console.log(JSON.stringify(payload, null, 2));
-      if (isEdit && tool) {
+      if (isEdit) {
         await updateToolMutation.mutateAsync({
-          toolId: tool._id,
-          data: payload as UpdateToolRequest,
-        });
-        toast.success('Herramienta actualizada correctamente');
+          id: toolId!,
+          ...data,
+        } as UpdateToolRequest);
+        toast.success('Herramienta actualizada exitosamente');
       } else {
-        await createToolMutation.mutateAsync(payload as CreateToolRequest);
-        toast.success('Herramienta creada correctamente');
+        await createToolMutation.mutateAsync(data as CreateToolRequest);
+        toast.success('Herramienta creada exitosamente');
       }
       navigate('/herramientas');
     } catch (error) {
+      console.error('Error saving tool:', error);
       toast.error('Error al guardar la herramienta');
     }
   };
-
-  const getFieldsForStep = (step: number): (keyof ToolFormData)[] => {
-    switch (step) {
-      case 0:
-        return ['name', 'displayName', 'description', 'category'];
-      case 1:
-        return ['config'];
-      case 2:
-        return ['parameters'];
-      case 3:
-        return ['security'];
-      default:
-        return [];
-    }
-  };
-
-  // Cuando selecciona una tabla
-  const handleSelectTable = async (slug: string) => {
-    if (!slug || !user) {
-      setSelectedTable(null);
-      setValue('config.endpoint', '');
-      setValue('parameters', defaultValues.parameters);
-      return;
-    }
-    setLoadingFields(true);
-    const table = dynamicTables.find(t => t.slug === slug);
-    setSelectedTable(table);
-    // Endpoint autogenerado
-    setValue('config.endpoint', `/records/table/${user.c_name}/${slug}`);
-    // Obtener estructura y mapear a parámetros
-    try {
-      const structure = await getTableStructure(slug, user);
-      const required: string[] = [];
-      const fields = structure.structure.fields || [];
-
-      const properties = fields.map((field: any) => {
-        const { name, type, label, defaultValue, options } = field;
-
-        return {
-          name,
-          type: mapFieldType(field.type),
-          description: field.label || field.name,
-          required: false,
-          default: field.defaultValue,
-          enum: field.options || [],
-        };
-      });
-
-      // Save to state — triggers useEffect
-      setParamList(properties);
-      setValue('parameters', {
-        type: 'object',
-        properties,
-        required,
-      });
-    } catch {
-      setValue('parameters', defaultValues.parameters);
-    } finally {
-      setLoadingFields(false);
-    }
-  };
-
-  // Estado para el parámetro en edición
-  const [paramEdit, setParamEdit] = useState<any | null>(null);
-  const [paramList, setParamList] = useState<any[]>([]);
-  const [paramError, setParamError] = useState<string | null>(null);
 
   // Sincroniza paramList con react-hook-form
   useEffect(() => {
@@ -594,40 +362,57 @@ const ToolForm: React.FC = () => {
 
   if (toolLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
+      <Box 
+        display="flex" 
+        justifyContent="center" 
+        alignItems="center" 
+        minHeight="400px"
+        sx={{ p: { xs: 2, md: 0 } }}
+      >
+        <CircularProgress size={isMobile ? 40 : 60} />
       </Box>
     );
   }
 
   if (aiConfigLoading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress size={60} />
+      <Box 
+        display="flex" 
+        justifyContent="center" 
+        alignItems="center" 
+        minHeight="400px"
+        sx={{ p: { xs: 2, md: 0 } }}
+      >
+        <CircularProgress size={isMobile ? 40 : 60} />
       </Box>
     );
   }
 
   if (!hasAIConfig) {
     return (
-      <Box sx={{ p: 3 }}>
+      <Box sx={{ p: { xs: 2, md: 3 } }}>
         <Alert 
           severity="warning" 
           icon={<WarningIcon />}
+          sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
           action={
             <Button 
               color="inherit" 
-              size="small"
+              size={isMobile ? "small" : "medium"}
               onClick={() => navigate('/ia')}
             >
               Configurar IA
             </Button>
           }
         >
-          <Typography variant="h6" gutterBottom>
+          <Typography 
+            variant={isMobile ? "subtitle1" : "h6"} 
+            gutterBottom
+            sx={{ fontSize: { xs: '1.125rem', md: '1.25rem' } }}
+          >
             IA no configurada
           </Typography>
-          <Typography>
+          <Typography sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
             Para crear herramientas dinámicas, primero debes configurar una IA en la sección de configuración de IA.
           </Typography>
         </Alert>
@@ -636,14 +421,33 @@ const ToolForm: React.FC = () => {
   }
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ 
+      p: { xs: 2, md: 3 },
+      minHeight: { xs: '100vh', md: '85vh' }
+    }}>
       {/* Header */}
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+      <Box 
+        display="flex" 
+        justifyContent="space-between" 
+        alignItems={{ xs: "flex-start", md: "center" }}
+        mb={4}
+        flexDirection={{ xs: "column", md: "row" }}
+        gap={{ xs: 2, md: 0 }}
+      >
         <Box>
-          <Typography variant="h4" fontWeight="bold" gutterBottom>
+          <Typography 
+            variant={isMobile ? "h5" : "h4"} 
+            fontWeight="bold" 
+            gutterBottom
+            sx={{ fontSize: { xs: '1.5rem', md: '2.125rem' } }}
+          >
             {isEdit ? 'Editar Herramienta' : 'Nueva Herramienta'}
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography 
+            variant="body1" 
+            color="text.secondary"
+            sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+          >
             {isEdit ? 'Modifica la configuración de la herramienta' : 'Crea una nueva herramienta dinámica para tu IA'}
           </Typography>
         </Box>
@@ -651,32 +455,73 @@ const ToolForm: React.FC = () => {
           variant="outlined"
           startIcon={<CancelIcon />}
           onClick={() => navigate('/herramientas')}
+          size={isMobile ? "small" : "medium"}
+          sx={{ 
+            fontSize: { xs: '0.875rem', md: '1rem' },
+            width: { xs: '100%', md: 'auto' }
+          }}
         >
           Cancelar
         </Button>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 2, md: 3 }}>
         {/* Stepper */}
         <Grid item xs={12} md={3}>
           <Card elevation={1}>
-            <CardContent>
-              <Stepper activeStep={activeStep} orientation="vertical">
+            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+              <Stepper 
+                activeStep={activeStep} 
+                orientation={isMobile ? "horizontal" : "vertical"}
+                sx={{
+                  '& .MuiStepLabel-root': {
+                    fontSize: { xs: '0.875rem', md: '1rem' }
+                  }
+                }}
+              >
                 {steps.map((step, index) => (
                   <Step key={step.label}>
                     <StepLabel>
-                      <Typography variant="body2" fontWeight="medium">
-                        {step.label}
+                      <Typography 
+                        variant="body2" 
+                        fontWeight="medium"
+                        sx={{ fontSize: { xs: '0.75rem', md: '0.875rem' } }}
+                      >
+                        {isMobile ? `${index + 1}` : step.label}
                       </Typography>
                     </StepLabel>
-                    <StepContent>
-                      <Typography variant="caption" color="text.secondary">
-                        {step.description}
-                      </Typography>
-                    </StepContent>
+                    {!isMobile && (
+                      <StepContent>
+                        <Typography 
+                          variant="caption" 
+                          color="text.secondary"
+                          sx={{ fontSize: { xs: '0.7rem', md: '0.75rem' } }}
+                        >
+                          {step.description}
+                        </Typography>
+                      </StepContent>
+                    )}
                   </Step>
                 ))}
               </Stepper>
+              {isMobile && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography 
+                    variant="body2" 
+                    fontWeight="medium"
+                    sx={{ fontSize: '0.875rem' }}
+                  >
+                    {steps[activeStep]?.label}
+                  </Typography>
+                  <Typography 
+                    variant="caption" 
+                    color="text.secondary"
+                    sx={{ fontSize: '0.75rem' }}
+                  >
+                    {steps[activeStep]?.description}
+                  </Typography>
+                </Box>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -684,15 +529,22 @@ const ToolForm: React.FC = () => {
         {/* Form Content */}
         <Grid item xs={12} md={9}>
           <Card elevation={2}>
-            <CardContent>
+            <CardContent sx={{ p: { xs: 2, md: 3 } }}>
               <form onSubmit={handleSubmit(onSubmit)}>
                 {/* Step 0: Información Básica */}
                 {activeStep === 0 && (
                   <Box>
-                    <Typography variant="h6" gutterBottom>
+                    <Typography 
+                      variant={isMobile ? "subtitle1" : "h6"} 
+                      gutterBottom
+                      sx={{ 
+                        fontSize: { xs: '1.125rem', md: '1.25rem' },
+                        fontWeight: 600
+                      }}
+                    >
                       Información Básica
                     </Typography>
-                    <Grid container spacing={3}>
+                    <Grid container spacing={{ xs: 2, md: 3 }}>
                       <Grid item xs={12} sm={6}>
                         <Controller
                           name="displayName"
@@ -701,10 +553,21 @@ const ToolForm: React.FC = () => {
                             <TextField
                               {...field}
                               fullWidth
-                              label="Nombre para Mostrar"
-                              placeholder="Obtener Datos del Cliente"
+                              label="Nombre para mostrar"
                               error={!!errors.displayName}
                               helperText={errors.displayName?.message}
+                              size={isMobile ? "small" : "medium"}
+                              sx={{
+                                '& .MuiInputBase-input': {
+                                  fontSize: { xs: '0.875rem', md: '1rem' }
+                                },
+                                '& .MuiInputLabel-root': {
+                                  fontSize: { xs: '0.875rem', md: '1rem' }
+                                },
+                                '& .MuiFormHelperText-root': {
+                                  fontSize: { xs: '0.7rem', md: '0.75rem' }
+                                }
+                              }}
                             />
                           )}
                         />
@@ -717,11 +580,22 @@ const ToolForm: React.FC = () => {
                             <TextField
                               {...field}
                               fullWidth
-                              label="Nombre Técnico"
-                              placeholder="get_customer_data"
+                              label="Nombre interno"
+                              placeholder="nombre_herramienta"
                               error={!!errors.name}
-                              helperText={errors.name?.message || 'Se genera automáticamente a partir del nombre para mostrar'}
-                              disabled
+                              helperText={errors.name?.message || "Solo letras, números, guiones y guiones bajos"}
+                              size={isMobile ? "small" : "medium"}
+                              sx={{
+                                '& .MuiInputBase-input': {
+                                  fontSize: { xs: '0.875rem', md: '1rem' }
+                                },
+                                '& .MuiInputLabel-root': {
+                                  fontSize: { xs: '0.875rem', md: '1rem' }
+                                },
+                                '& .MuiFormHelperText-root': {
+                                  fontSize: { xs: '0.7rem', md: '0.75rem' }
+                                }
+                              }}
                             />
                           )}
                         />
@@ -734,12 +608,23 @@ const ToolForm: React.FC = () => {
                             <TextField
                               {...field}
                               fullWidth
-                              multiline
-                              rows={3}
                               label="Descripción"
-                              placeholder="Describe qué hace esta herramienta..."
+                              multiline
+                              rows={isMobile ? 3 : 4}
                               error={!!errors.description}
                               helperText={errors.description?.message}
+                              size={isMobile ? "small" : "medium"}
+                              sx={{
+                                '& .MuiInputBase-input': {
+                                  fontSize: { xs: '0.875rem', md: '1rem' }
+                                },
+                                '& .MuiInputLabel-root': {
+                                  fontSize: { xs: '0.875rem', md: '1rem' }
+                                },
+                                '& .MuiFormHelperText-root': {
+                                  fontSize: { xs: '0.7rem', md: '0.75rem' }
+                                }
+                              }}
                             />
                           )}
                         />
@@ -749,15 +634,42 @@ const ToolForm: React.FC = () => {
                           name="category"
                           control={control}
                           render={({ field }) => (
-                            <FormControl fullWidth error={!!errors.category}>
-                              <InputLabel>Categoría</InputLabel>
-                              <Select {...field} label="Categoría">
-                                {categories.map((cat: any) => (
-                                  <MenuItem key={cat.name} value={cat.name}>
+                            <FormControl 
+                              fullWidth 
+                              error={!!errors.category}
+                              size={isMobile ? "small" : "medium"}
+                            >
+                              <InputLabel sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
+                                Categoría
+                              </InputLabel>
+                              <Select
+                                {...field}
+                                label="Categoría"
+                                sx={{
+                                  '& .MuiSelect-select': {
+                                    fontSize: { xs: '0.875rem', md: '1rem' }
+                                  }
+                                }}
+                              >
+                                {mockCategories.map((cat) => (
+                                  <MenuItem key={cat._id} value={cat.name}>
                                     {cat.displayName}
                                   </MenuItem>
                                 ))}
                               </Select>
+                              {errors.category && (
+                                <Typography 
+                                  variant="caption" 
+                                  color="error"
+                                  sx={{ 
+                                    mt: 0.5, 
+                                    ml: 1.75,
+                                    fontSize: { xs: '0.7rem', md: '0.75rem' }
+                                  }}
+                                >
+                                  {errors.category.message}
+                                </Typography>
+                              )}
                             </FormControl>
                           )}
                         />
@@ -1122,21 +1034,40 @@ const ToolForm: React.FC = () => {
                 )}
 
                 {/* Navigation Buttons */}
-                <Box sx={{ mt: 4, display: 'flex', justifyContent: 'space-between' }}>
+                <Box sx={{ 
+                  mt: 4, 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  gap: { xs: 2, sm: 0 }
+                }}>
                   <Button
                     disabled={activeStep === 0}
                     onClick={() => setActiveStep((prev) => prev - 1)}
                     startIcon={<BackIcon />}
+                    size={isMobile ? "medium" : "large"}
+                    sx={{ 
+                      fontSize: { xs: '0.875rem', md: '1rem' },
+                      order: { xs: 2, sm: 1 }
+                    }}
                   >
                     Anterior
                   </Button>
-                  <Box>
+                  <Box sx={{ order: { xs: 1, sm: 2 } }}>
                     {/* Log de errores de validación para debug */}
-                    {Object.keys(errors).length > 0 && (
-                      <pre style={{ color: 'red', fontSize: 12, marginBottom: 8 }}>{JSON.stringify(errors, null, 2)}</pre>
+                    {Object.keys(errors).length > 0 && !isMobile && (
+                      <pre style={{ color: 'red', fontSize: 12, marginBottom: 8 }}>
+                        {JSON.stringify(errors, null, 2)}
+                      </pre>
                     )}
                     {activeStep === steps.length - 1 && Object.keys(watch('parameters.properties') || {}).length === 0 && (
-                      <Alert severity="warning" sx={{ mb: 2 }}>
+                      <Alert 
+                        severity="warning" 
+                        sx={{ 
+                          mb: 2,
+                          fontSize: { xs: '0.875rem', md: '1rem' }
+                        }}
+                      >
                         Debes agregar al menos un parámetro para que la herramienta funcione correctamente.
                       </Alert>
                     )}
@@ -1146,6 +1077,11 @@ const ToolForm: React.FC = () => {
                         variant="contained"
                         startIcon={<SaveIcon />}
                         disabled={!isValid || createToolMutation.isPending || updateToolMutation.isPending}
+                        size={isMobile ? "medium" : "large"}
+                        sx={{ 
+                          fontSize: { xs: '0.875rem', md: '1rem' },
+                          width: { xs: '100%', sm: 'auto' }
+                        }}
                       >
                         {createToolMutation.isPending || updateToolMutation.isPending
                           ? 'Guardando...'
@@ -1159,6 +1095,11 @@ const ToolForm: React.FC = () => {
                         variant="contained"
                         onClick={handleNext}
                         endIcon={<NextIcon />}
+                        size={isMobile ? "medium" : "large"}
+                        sx={{ 
+                          fontSize: { xs: '0.875rem', md: '1rem' },
+                          width: { xs: '100%', sm: 'auto' }
+                        }}
                       >
                         Siguiente
                       </Button>

@@ -83,8 +83,24 @@ export default function Users() {
   // Si el usuario no es admin, no puede ver la página
   if (user.role !== 'Administrador') {
     return (
-      <Box sx={{ width: '100vw', height: '80vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Typography variant="h5" color="error" fontWeight={700}>
+      <Box sx={{ 
+        width: '100%', 
+        height: { xs: '100vh', md: '80vh' }, 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        px: { xs: 2, md: 0 }
+      }}>
+        <Typography 
+          variant={useMediaQuery(theme.breakpoints.down('sm')) ? "h6" : "h5"} 
+          color="error" 
+          fontWeight={700}
+          textAlign="center"
+          sx={{ 
+            px: { xs: 2, md: 0 },
+            fontSize: { xs: '1.25rem', md: '1.5rem' }
+          }}
+        >
           Acceso denegado: solo el administrador puede ver esta página.
         </Typography>
       </Box>
@@ -730,8 +746,9 @@ export default function Users() {
     <Box 
       component="main"
       sx={{
-        width: '90vw',
-        height: '80vh',
+        width: '100%',
+        height: { xs: '100%', md: '80vh' },
+        minHeight: { xs: '100vh', md: '80vh' },
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -765,7 +782,10 @@ export default function Users() {
         <Alert 
           onClose={() => setSnackbar({ ...snackbar, open: false })} 
           severity={snackbar.severity} 
-          sx={{ width: '100%' }}
+          sx={{ 
+            width: '100%',
+            fontSize: { xs: '0.875rem', md: '1rem' }
+          }}
         >
           {snackbar.message}
         </Alert>
@@ -773,18 +793,19 @@ export default function Users() {
 
       <Button
         variant="contained"
-        startIcon={<AddIcon />}
+        startIcon={<AddIcon fontSize={useMediaQuery(theme.breakpoints.down('sm')) ? "small" : "medium"} />}
         onClick={() => {
           setSelectedUser(null);
           setDrawerOpen(true);
         }}
         sx={{
           position: 'fixed',
-          bottom: 32,
-          right: 32,
-          borderRadius: 3,
-          px: 3,
-          py: 1.5,
+          bottom: { xs: 16, md: 32 },
+          right: { xs: 16, md: 32 },
+          borderRadius: { xs: 2, md: 3 },
+          px: { xs: 2, md: 3 },
+          py: { xs: 1, md: 1.5 },
+          fontSize: { xs: '0.875rem', md: '1rem' },
           backgroundColor: theme.palette.mode === 'dark' ? '#8B5CF6' : '#3B82F6',
           backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
           boxShadow: theme.palette.mode === 'dark'
@@ -799,10 +820,12 @@ export default function Users() {
           },
           transition: 'all 0.2s ease-out',
           zIndex: 1200,
+          minWidth: { xs: 'auto', md: 'auto' },
         }}
         disabled={user.role !== 'admin'}
+        size={useMediaQuery(theme.breakpoints.down('sm')) ? "small" : "medium"}
       >
-        Agregar Usuario
+        {useMediaQuery(theme.breakpoints.down('sm')) ? 'Agregar' : 'Agregar Usuario'}
       </Button>
 
       <UserDrawer

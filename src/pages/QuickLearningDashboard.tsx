@@ -14,6 +14,7 @@ import {
   Snackbar,
   Alert,
   useTheme,
+  useMediaQuery,
   Tooltip,
   Badge,
   Divider,
@@ -126,6 +127,10 @@ const QuickLearningDashboard: React.FC = () => {
   console.log('QuickLearningDashboard - Component rendering');
   
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('lg'));
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  
   const {
     isLoading,
     error,
@@ -207,6 +212,21 @@ const QuickLearningDashboard: React.FC = () => {
   // 1. Agrega estados para validación y referencias de campos
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const fieldRefs = useRef<Record<string, any>>({});
+
+  // Estado para panel móvil
+  const [showProspectsList, setShowProspectsList] = useState(!isMobile);
+
+  // Calcular dimensiones responsivas
+  const getProspectsListWidth = () => {
+    if (isSmallScreen) return '100%';
+    if (isTablet) return 300;
+    return 340;
+  };
+
+  const getListHeight = () => {
+    if (isSmallScreen) return window.innerHeight - 200;
+    return 520;
+  };
 
   // Función helper para formatear fechas
   const formatMessageDate = useCallback((dateString: string) => {
@@ -325,6 +345,11 @@ const QuickLearningDashboard: React.FC = () => {
   useEffect(() => {
     loadProspects();
   }, [loadProspects]);
+
+  // Efecto para manejar cambios de pantalla
+  useEffect(() => {
+    setShowProspectsList(!isMobile || !selectedProspect);
+  }, [isMobile, selectedProspect]);
 
   // Limpiar mensajes no leídos al desmontar el componente
   // ELIMINADO: Este useEffect estaba causando que se marcaran como leídos TODOS los números
@@ -546,8 +571,18 @@ const QuickLearningDashboard: React.FC = () => {
     }
   }, [sendMessage, messageForm]);
 
+  // Función para seleccionar prospecto (mobile)
+  const handleProspectSelect = (prospect: any) => {
+    selectProspect(prospect);
+    if (isMobile) {
+      setShowProspectsList(false);
+    }
+  };
 
-
+  // Función para volver a la lista en móvil
+  const handleBackToList = () => {
+    setShowProspectsList(true);
+  };
 
   // Cuando se abre la info del cliente, inicializa los datos editables
   const handleOpenClientInfo = async () => {
@@ -635,8 +670,6 @@ const QuickLearningDashboard: React.FC = () => {
       }
     }
   };
-
-
 
   // 3. Valida campos requeridos antes de guardar
   const handleSaveProspectValidated = async (formData?: any) => {
@@ -882,14 +915,13 @@ const QuickLearningDashboard: React.FC = () => {
 
   return (
     <Box sx={{ 
-      width: '90vw', 
-      height: '85vh', 
+      width: '100%',
+      height: '100%',
+      minHeight: isMobile ? '100vh' : 'calc(100vh - 120px)',
       overflow: 'hidden', 
       bgcolor: theme.palette.background.default, 
       display: 'flex', 
-      flexDirection: 'column', 
-      borderRadius: 2, 
-      boxShadow: 3,
+      flexDirection: 'column',
       '@keyframes pulse': {
         '0%': {
           opacity: 1,
@@ -949,21 +981,48 @@ const QuickLearningDashboard: React.FC = () => {
       {/* Header y stats */}
       <Box sx={{ flexShrink: 0 }}>
         {/* Header */}
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, pt: 3, px: 4 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          mb: { xs: 1, md: 2 }, 
+          pt: { xs: 1, md: 2 }, 
+          px: { xs: 1, md: 2 } 
+        }}>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
-            <Avatar sx={{ mr: 2, background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)', width: 56, height: 56 }}>
-              <WhatsAppIcon fontSize="large" />
+            {/* Botón de volver en móvil */}
+            {isMobile && selectedProspect && !showProspectsList && (
+              <IconButton 
+                onClick={handleBackToList}
+                sx={{ mr: 1 }}
+                aria-label="Volver a la lista"
+              >
+                <KeyboardArrowDownIcon sx={{ transform: 'rotate(90deg)' }} />
+              </IconButton>
+            )}
+            <Avatar sx={{ 
+              mr: { xs: 1, md: 2 }, 
+              background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)', 
+              width: { xs: 40, md: 56 }, 
+              height: { xs: 40, md: 56 } 
+            }}>
+              <WhatsAppIcon fontSize={isMobile ? "medium" : "large"} />
             </Avatar>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="h6" fontWeight={700} color="primary" sx={{ letterSpacing: 1 }}>
-                  Quick Learning WhatsApp
+                <Typography 
+                  variant={isMobile ? "subtitle1" : "h6"} 
+                  fontWeight={700} 
+                  color="primary" 
+                  sx={{ letterSpacing: 1 }}
+                >
+                  {isMobile ? "Quick Learning" : "Quick Learning WhatsApp"}
                 </Typography>
 
                 {/* Indicador de estado de conexión del socket */}
                 <Box
                   sx={{
-                    display: 'flex',
+                    display: { xs: 'none', sm: 'flex' },
                     alignItems: 'center',
                     gap: 0.5,
                     ml: 1,
@@ -989,24 +1048,65 @@ const QuickLearningDashboard: React.FC = () => {
                   {socketConnected ? 'Conectado' : 'Desconectado'}
                 </Box>
               </Box>
-              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 500 }}>
-                Dashboard de NatalIA - IA Conversacional
-              </Typography>
+              {!isMobile && (
+                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 500 }}>
+                  Dashboard de NatalIA - IA Conversacional
+                </Typography>
+              )}
             </Box>
           </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={() => loadProspects()} disabled={isLoadingProspects} sx={{ fontWeight: 700, fontSize: 16, px: 3, borderRadius: 3 }}>
-              ACTUALIZAR
+          <Box sx={{ display: 'flex', gap: { xs: 1, md: 2 } }}>
+            <Button 
+              variant="outlined" 
+              startIcon={<RefreshIcon />} 
+              onClick={() => loadProspects()} 
+              disabled={isLoadingProspects} 
+              sx={{ 
+                fontWeight: 700, 
+                fontSize: { xs: 14, md: 16 }, 
+                px: { xs: 2, md: 3 }, 
+                borderRadius: 3 
+              }}
+              size={isMobile ? "small" : "medium"}
+            >
+              {isMobile ? "ACTUALIZAR" : "ACTUALIZAR"}
             </Button> 
           </Box>
         </Box>
       </Box>
 
       {/* Main content: Lista de prospectos y chat */}
-      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', gap: 2, px: 1, pb: 1 }}>
+      <Box sx={{ 
+        flex: 1, 
+        minHeight: 0, 
+        display: 'flex', 
+        flexDirection: isMobile ? 'column' : 'row',
+        gap: { xs: 0, md: 2 }, 
+        px: { xs: 0, md: 1 }, 
+        pb: { xs: 0, md: 1 } 
+      }}>
         {/* Lista de prospectos */}
-        <Card sx={{ width: 340, minWidth: 340, maxWidth: 340, height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0, boxShadow: 2, borderRadius: 2, bgcolor: theme.palette.background.paper, ml: 0, mr: 0 }}>
-          <Box sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Card sx={{ 
+          width: isMobile ? '100%' : getProspectsListWidth(), 
+          minWidth: isMobile ? 'unset' : getProspectsListWidth(), 
+          maxWidth: isMobile ? 'unset' : getProspectsListWidth(),
+          height: isMobile ? (showProspectsList ? '100%' : 0) : '100%',
+          display: isMobile ? (showProspectsList ? 'flex' : 'none') : 'flex',
+          flexDirection: 'column', 
+          minHeight: 0, 
+          boxShadow: isMobile ? 0 : 2, 
+          borderRadius: isMobile ? 0 : 2, 
+          bgcolor: theme.palette.background.paper,
+          overflow: 'hidden'
+        }}>
+          <Box sx={{ 
+            p: { xs: 1, md: 1 }, 
+            borderBottom: '1px solid', 
+            borderColor: 'divider', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1 
+          }}>
             <TextField 
               size="small" 
               placeholder="Buscar prospecto..." 
@@ -1030,19 +1130,37 @@ const QuickLearningDashboard: React.FC = () => {
                   />
                 )
               }} 
-              sx={{ flex: 1, fontSize: 15, bgcolor: theme.palette.background.default, borderRadius: 2 }} 
+              sx={{ 
+                flex: 1, 
+                fontSize: 15, 
+                bgcolor: theme.palette.background.default, 
+                borderRadius: 2 
+              }} 
               inputProps={{ style: { color: theme.palette.text.primary } }} 
             />
-            <IconButton onClick={() => {
-              loadProspects();
-              setSearchTerm('');
-              setIsGlobalSearch(false);
-              setSearchResults([]);
-            }} disabled={isLoadingProspects}>
+            <IconButton 
+              onClick={() => {
+                loadProspects();
+                setSearchTerm('');
+                setIsGlobalSearch(false);
+                setSearchResults([]);
+              }} 
+              disabled={isLoadingProspects}
+              size={isMobile ? "small" : "medium"}
+            >
               <RefreshIcon fontSize="small" sx={{ color: theme.palette.text.secondary }} />
             </IconButton>
           </Box>
-          <Box data-prospects-container sx={{ flex: 1, overflowY: 'auto', minHeight: 0, p: 0.5, bgcolor: theme.palette.background.paper }}>
+          <Box 
+            data-prospects-container 
+            sx={{ 
+              flex: 1, 
+              overflowY: 'auto', 
+              minHeight: 0, 
+              p: { xs: 0.5, md: 0.5 }, 
+              bgcolor: theme.palette.background.paper 
+            }}
+          >
             {errorProspects && <Alert severity="error">{errorProspects}</Alert>}
             {!socketConnected && (
               <Alert severity="warning" sx={{ mb: 2 }}>
@@ -1050,7 +1168,9 @@ const QuickLearningDashboard: React.FC = () => {
               </Alert>
             )}
             {isLoadingProspects ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 120 }}><CircularProgress size={28} /></Box>
+              <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 120 }}>
+                <CircularProgress size={28} />
+              </Box>
             ) : isSearching ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 120 }}>
                 <CircularProgress size={28} />
@@ -1067,15 +1187,15 @@ const QuickLearningDashboard: React.FC = () => {
               </Box>
             ) : (
               <VirtualizedList
-                height={520}
+                height={getListHeight()}
                 itemCount={(isGlobalSearch ? searchResults : filteredProspects).length}
                 itemSize={76}
-                width={340}
+                width={isMobile ? '100%' : getProspectsListWidth()}
                 overscanCount={6}
                 itemData={{
                   items: isGlobalSearch ? searchResults : filteredProspects,
                   selectedProspect,
-                  selectProspect,
+                  selectProspect: handleProspectSelect,
                   unreadMessages,
                   formatPhoneNumber,
                   theme
@@ -1083,7 +1203,7 @@ const QuickLearningDashboard: React.FC = () => {
                 onScroll={(params: { scrollOffset: number; scrollDirection: 'forward' | 'backward' }) => {
                   const totalItems = (isGlobalSearch ? searchResults : filteredProspects).length;
                   if (!isGlobalSearch && hasMoreProspects && !isLoadingMoreProspects && params.scrollDirection === 'forward') {
-                    const visibleRows = Math.ceil(520 / 76);
+                    const visibleRows = Math.ceil(getListHeight() / 76);
                     if (params.scrollOffset / 76 + visibleRows >= totalItems - 2) {
                       loadMoreProspects();
                     }
@@ -1103,9 +1223,9 @@ const QuickLearningDashboard: React.FC = () => {
                         sx={{
                           borderRadius: 2,
                           mb: 0.5,
-                          px: 1,
-                          py: 1.5,
-                          minHeight: 56,
+                          px: { xs: 1, md: 1 },
+                          py: { xs: 1, md: 1.5 },
+                          minHeight: { xs: 64, md: 56 },
                           background: selectedProspect?._id === prospect._id ? (theme.palette.mode === 'dark' ? theme.palette.action.selected : theme.palette.action.selected) : 'transparent',
                           boxShadow: selectedProspect?._id === prospect._id ? 2 : 0,
                           transition: 'background 0.2s, box-shadow 0.2s',
@@ -1270,41 +1390,117 @@ const QuickLearningDashboard: React.FC = () => {
           </Box>
         </Card>
         {/* Panel de chat */}
-        <Card sx={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, boxShadow: 2, borderRadius: 2, bgcolor: theme.palette.background.paper, ml: 0, mr: 0 }}>
-          <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, p: 0 }}>
+        <Card sx={{ 
+          flex: 1, 
+          height: isMobile ? (showProspectsList ? 0 : '100%') : '100%',
+          display: isMobile ? (showProspectsList ? 'none' : 'flex') : 'flex',
+          flexDirection: 'column', 
+          minWidth: 0, 
+          minHeight: 0, 
+          boxShadow: isMobile ? 0 : 2, 
+          borderRadius: isMobile ? 0 : 2, 
+          bgcolor: theme.palette.background.paper,
+          overflow: 'hidden'
+        }}>
+          <Box sx={{ 
+            flex: 1, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            minHeight: 0, 
+            p: 0 
+          }}>
             {!selectedProspect ? (
-              <Box sx={{ textAlign: 'center', color: 'text.secondary', mt: 8 }}><WhatsAppIcon sx={{ fontSize: 64, mb: 2 }} /><Typography variant="h6">Selecciona un prospecto para ver la conversación</Typography></Box>
+              <Box sx={{ 
+                textAlign: 'center', 
+                color: 'text.secondary', 
+                mt: { xs: 4, md: 8 },
+                px: 2
+              }}>
+                <WhatsAppIcon sx={{ 
+                  fontSize: { xs: 48, md: 64 }, 
+                  mb: 2 
+                }} />
+                <Typography 
+                  variant={isMobile ? "body1" : "h6"}
+                  sx={{ px: 2 }}
+                >
+                  {isMobile ? "Selecciona un prospecto" : "Selecciona un prospecto para ver la conversación"}
+                </Typography>
+              </Box>
             ) : (
               <>
                 {selectedProspect && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, justifyContent: 'space-between' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', marginLeft: 2, marginTop: 1 }}
-                                      onClick={handleOpenClientInfo}
-                  
+                  <Box sx={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    mb: { xs: 1, md: 2 }, 
+                    justifyContent: 'space-between',
+                    px: { xs: 1, md: 2 },
+                    py: { xs: 1, md: 1 },
+                    borderBottom: { xs: '1px solid', md: 'none' },
+                    borderColor: 'divider'
+                  }}>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      flex: 1,
+                      minWidth: 0
+                    }}
+                    onClick={handleOpenClientInfo}
                     >
-                      <Avatar sx={{ width: 48, height: 48, bgcolor: theme.palette.success.main, color: theme.palette.getContrastText(theme.palette.success.main), fontWeight: 700 }}>
-                        <PersonIcon fontSize="large" />
+                      <Avatar sx={{ 
+                        width: { xs: 40, md: 48 }, 
+                        height: { xs: 40, md: 48 }, 
+                        bgcolor: theme.palette.success.main, 
+                        color: theme.palette.getContrastText(theme.palette.success.main), 
+                        fontWeight: 700 
+                      }}>
+                        <PersonIcon fontSize={isMobile ? "medium" : "large"} />
                       </Avatar>
-                      <Box sx={{ marginLeft: 1, }}>
-                        <Typography variant="h6" fontWeight={700}>{selectedProspect.data?.nombre ? selectedProspect.data.nombre.trim() : (selectedProspect.data?.telefono || '-')}</Typography>
-                        <Typography variant="body2" color="text.secondary">{selectedProspect.data?.telefono || '-'}</Typography>
+                      <Box sx={{ 
+                        marginLeft: { xs: 1, md: 1 },
+                        minWidth: 0,
+                        flex: 1
+                      }}>
+                        <Typography 
+                          variant={isMobile ? "subtitle1" : "h6"} 
+                          fontWeight={700}
+                          noWrap
+                          sx={{ 
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}
+                        >
+                          {selectedProspect.data?.nombre ? selectedProspect.data.nombre.trim() : (selectedProspect.data?.telefono || '-')}
+                        </Typography>
+                        <Typography 
+                          variant="body2" 
+                          color="text.secondary"
+                          noWrap
+                          sx={{ 
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}
+                        >
+                          {selectedProspect.data?.telefono || '-'}
+                        </Typography>
                       </Box>
                     </Box>
                     <Button
                       variant="contained"
-                      startIcon={<PaymentIcon sx={{ fontSize: 28 }} />}
+                      startIcon={<PaymentIcon sx={{ fontSize: { xs: 20, md: 28 } }} />}
                       onClick={() => setPaymentModalOpen(true)}
                       sx={{
                         background: 'linear-gradient(90deg, #7B61FF 60%, #A084FF 100%)',
                         color: '#fff',
                         textTransform: 'none',
                         fontWeight: 700,
-                        borderRadius: '18px',
-                        px: 2,
-                        py: .5,
-                        marginRight: 2,
+                        borderRadius: { xs: '12px', md: '18px' },
+                        px: { xs: 1.5, md: 2 },
+                        py: { xs: 0.5, md: 0.5 },
                         boxShadow: '0 4px 16px 0 rgba(123,97,255,0.10)',
-                        fontSize: 18,
+                        fontSize: { xs: 14, md: 18 },
                         letterSpacing: 0.5,
                         transition: 'all 0.18s cubic-bezier(.4,0,.2,1)',
                         '&:hover': {
@@ -1312,31 +1508,42 @@ const QuickLearningDashboard: React.FC = () => {
                           boxShadow: '0 6px 24px 0 rgba(123,97,255,0.18)',
                           transform: 'scale(1.04)'
                         },
-                        minWidth: 160,
+                        minWidth: { xs: 120, md: 160 },
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center'
+                        justifyContent: 'center',
+                        flexShrink: 0
                       }}
+                      size={isMobile ? "small" : "medium"}
                     >
-                      Enviar pago
+                      {isMobile ? "Pago" : "Enviar pago"}
                     </Button>
                   </Box>
                 )}
                 {isLoadingChatHistory ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 200 }}><CircularProgress /></Box>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    alignItems: 'center', 
+                    height: { xs: 120, md: 200 } 
+                  }}>
+                    <CircularProgress />
+                  </Box>
                 ) : errorChatHistory ? (
-                  <Alert severity="error">{errorChatHistory}</Alert>
+                  <Alert severity="error" sx={{ mx: { xs: 1, md: 2 } }}>
+                    {errorChatHistory}
+                  </Alert>
                 ) : (
                   <Box 
                     data-chat-container
                     sx={{ 
                       flex: 1, 
                       overflowY: 'auto', 
-                      px: 2, 
-                      py: 2, 
+                      px: { xs: 1, md: 2 }, 
+                      py: { xs: 1, md: 2 }, 
                       minHeight: 0, 
                       bgcolor: theme.palette.background.default, 
-                      borderRadius: 2,
+                      borderRadius: { xs: 0, md: 2 },
                       position: 'relative'
                     }}
                   >
@@ -1403,17 +1610,41 @@ const QuickLearningDashboard: React.FC = () => {
                         }
 
                         return (
-                          <Box key={msg._id || idx} sx={{ display: 'flex', flexDirection: msg.direction === 'inbound' ? 'row' : 'row-reverse', alignItems: 'flex-end', mb: 2 }}>
-                            <Avatar sx={{ bgcolor: msg.direction === 'inbound' ? (theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200]) : theme.palette.success.main, width: 44, height: 44, color: theme.palette.getContrastText(msg.direction === 'inbound' ? (theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200]) : theme.palette.success.main) }}>{msg.direction === 'inbound' ? <PersonIcon fontSize="large" /> : <AIIcon fontSize="large" />}</Avatar>
+                          <Box key={msg._id || idx} sx={{ 
+                            display: 'flex', 
+                            flexDirection: msg.direction === 'inbound' ? 'row' : 'row-reverse', 
+                            alignItems: 'flex-end', 
+                            mb: { xs: 1.5, md: 2 },
+                            px: { xs: 0, md: 0 }
+                          }}>
+                            <Avatar sx={{ 
+                              bgcolor: msg.direction === 'inbound' 
+                                ? (theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200]) 
+                                : theme.palette.success.main, 
+                              width: { xs: 36, md: 44 }, 
+                              height: { xs: 36, md: 44 }, 
+                              color: theme.palette.getContrastText(
+                                msg.direction === 'inbound' 
+                                  ? (theme.palette.mode === 'dark' ? theme.palette.grey[800] : theme.palette.grey[200]) 
+                                  : theme.palette.success.main
+                              )
+                            }}>
+                              {msg.direction === 'inbound' 
+                                ? <PersonIcon fontSize={isMobile ? "medium" : "large"} /> 
+                                : <AIIcon fontSize={isMobile ? "medium" : "large"} />
+                              }
+                            </Avatar>
                             <Box sx={{
-                              maxWidth: '70%',
+                              maxWidth: { xs: '80%', md: '70%' },
                               bgcolor: msg.direction === 'inbound'
                                 ? (theme.palette.mode === 'dark' ? theme.palette.background.paper : theme.palette.grey[100])
                                 : (theme.palette.mode === 'dark' ? theme.palette.success.dark : theme.palette.success.main),
                               color: theme.palette.text.primary,
-                              borderRadius: msg.direction === 'inbound' ? '18px 18px 18px 6px' : '18px 18px 6px 18px',
-                              p: 2,
-                              mx: 2,
+                              borderRadius: msg.direction === 'inbound' 
+                                ? { xs: '16px 16px 16px 4px', md: '18px 18px 18px 6px' }
+                                : { xs: '16px 16px 4px 16px', md: '18px 18px 6px 18px' },
+                              p: { xs: 1.5, md: 2 },
+                              mx: { xs: 1, md: 2 },
                               boxShadow: 2,
                               position: 'relative',
                               ...(msg.isNewMessage && {
@@ -1422,22 +1653,35 @@ const QuickLearningDashboard: React.FC = () => {
                               })
                             }}>
                               {content}
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, float: 'right' }}>
+                              <Box sx={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 0.5, 
+                                float: 'right',
+                                mt: 0.5
+                              }}>
                                 {msg.isNewMessage && (
                                   <Chip
                                     label="NUEVO"
                                     size="small"
                                     color="primary"
                                     sx={{
-                                      fontSize: '0.6rem',
-                                      height: 16,
+                                      fontSize: { xs: '0.5rem', md: '0.6rem' },
+                                      height: { xs: 14, md: 16 },
                                       mr: 0.5,
                                       animation: 'newMessagePulse 2s ease-in-out'
                                     }}
                                   />
                                 )}
-                                <AccessTimeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                                <Typography variant="caption" color="text.secondary" fontSize={14}>
+                                <AccessTimeIcon sx={{ 
+                                  fontSize: { xs: 12, md: 14 }, 
+                                  color: 'text.secondary' 
+                                }} />
+                                <Typography 
+                                  variant="caption" 
+                                  color="text.secondary" 
+                                  fontSize={{ xs: 12, md: 14 }}
+                                >
                                   {formatMessageDate(msg.dateCreated)}
                                 </Typography>
                               </Box>
@@ -1548,38 +1792,71 @@ const QuickLearningDashboard: React.FC = () => {
                 {/* Input de mensaje o botón plantilla según antigüedad del último mensaje */}
                 {selectedProspect && (
                   isLastMessageOlderThan24h ? (
-                    <Box sx={{ mt: 2 }}>
+                    <Box sx={{ 
+                      mt: { xs: 1, md: 2 },
+                      px: { xs: 1, md: 2 },
+                      pb: { xs: 1, md: 0 }
+                    }}>
                       <Button
                         variant="contained"
                         color="primary"
                         fullWidth
-                        sx={{ fontWeight: 700, fontSize: 18, borderRadius: 2, py: 1.5 }}
+                        sx={{ 
+                          fontWeight: 700, 
+                          fontSize: { xs: 16, md: 18 }, 
+                          borderRadius: 2, 
+                          py: { xs: 1.2, md: 1.5 }
+                        }}
                         onClick={() => setTemplateModalOpen(true)}
+                        size={isMobile ? "medium" : "large"}
                       >
                         Seleccionar plantilla
                       </Button>
                     </Box>
                   ) : (
-                    <Box sx={{ display: 'flex', alignItems: 'center', p: 1.5, borderTop: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', gap: 1 }}>
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      p: { xs: 1, md: 1.5 }, 
+                      borderTop: '1px solid', 
+                      borderColor: 'divider', 
+                      bgcolor: 'background.paper', 
+                      gap: { xs: 0.5, md: 1 }
+                    }}>
                       <TextField
                         fullWidth
-                        size="small"
+                        size={isMobile ? "small" : "small"}
                         placeholder="Escribe un mensaje..."
                         value={messageInputValue}
                         onChange={e => setMessageInputValue(e.target.value)}
                         onKeyDown={handleInputKeyDown}
                         disabled={isSendingMessage || isLoadingChatHistory}
-                        sx={{ borderRadius: 2, fontSize: 16, bgcolor: 'background.default' }}
-                        inputProps={{ maxLength: 1500, style: { fontSize: '16px' } }}
+                        sx={{ 
+                          borderRadius: 2, 
+                          fontSize: { xs: 14, md: 16 }, 
+                          bgcolor: 'background.default' 
+                        }}
+                        inputProps={{ 
+                          maxLength: 1500, 
+                          style: { fontSize: isMobile ? '14px' : '16px' } 
+                        }}
                       />
                       <Button
                         variant="contained"
                         color="success"
                         onClick={handleSendMessageInput}
                         disabled={isSendingMessage || isLoadingChatHistory || !messageInputValue.trim()}
-                        sx={{ minWidth: 48, minHeight: 48, borderRadius: 2, fontWeight: 700, fontSize: 18, boxShadow: 1 }}
+                        sx={{ 
+                          minWidth: { xs: 40, md: 48 }, 
+                          minHeight: { xs: 40, md: 48 }, 
+                          borderRadius: 2, 
+                          fontWeight: 700, 
+                          fontSize: { xs: 16, md: 18 }, 
+                          boxShadow: 1 
+                        }}
+                        size={isMobile ? "small" : "medium"}
                       >
-                        <SendIcon />
+                        <SendIcon fontSize={isMobile ? "small" : "medium"} />
                       </Button>
                     </Box>
                   )

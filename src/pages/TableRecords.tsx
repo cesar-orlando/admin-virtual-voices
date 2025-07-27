@@ -10,6 +10,7 @@ import {
   DialogActions,
   Button,
   useTheme,
+  useMediaQuery,
   Tooltip,
 } from '@mui/material'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -63,6 +64,10 @@ const initializeFieldMapping = (excelFields: string[], tableFields: any[], table
 };
 
 export default function TableRecords() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [table, setTable] = useState<DynamicTable | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -77,7 +82,6 @@ export default function TableRecords() {
   const { tableSlug } = useParams<{ tableSlug: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const theme = useTheme()
 
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const handleOpenImportDialog = () => setImportDialogOpen(true);
@@ -133,11 +137,6 @@ export default function TableRecords() {
     setRefreshTrigger(prev => prev + 1)
   }
 
-  // Validación para habilitar el botón Importar
-  // const mappedValues = Object.values(fieldMapping).filter(v => v);
-  // const hasDuplicates = new Set(mappedValues).size !== mappedValues.length;
-  // const canImport = importedRows.length > 0 && mappedValues.length > 0 && !hasDuplicates;
-
   // Para saber si un campo de la tabla es requerido
   const isFieldRequired = (f: any) => f.required;
   const requiredFields = table ? (table.fields as any[]).filter(isFieldRequired) : [];
@@ -149,8 +148,9 @@ export default function TableRecords() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 2, md: 3 },
           width: '100%',
+          minHeight: { xs: '100vh', md: '85vh' },
           display: 'flex',
           flexDirection: 'column',
           backgroundColor: theme.palette.mode === 'dark'
@@ -158,16 +158,30 @@ export default function TableRecords() {
             : 'rgba(255,255,255,0.96)',
         }}
       >
-        <Skeleton variant="text" width="40%" height={48} sx={{ mb: 2 }} />
-        <Skeleton variant="rectangular" height={'calc(80vh - 100px)'} />
+        <Skeleton 
+          variant="text" 
+          width={isMobile ? "80%" : "40%"} 
+          height={isMobile ? 36 : 48} 
+          sx={{ mb: 2 }} 
+        />
+        <Skeleton 
+          variant="rectangular" 
+          height={isMobile ? 'calc(100vh - 200px)' : 'calc(80vh - 100px)'} 
+          sx={{ borderRadius: { xs: 2, md: 1 } }}
+        />
       </Box>
     )
   }
 
   if (error || !table) {
     return (
-      <Box sx={{ p: 3 }}>
-        <Alert severity="error">{error || 'No se pudo cargar la tabla'}</Alert>
+      <Box sx={{ p: { xs: 2, md: 3 } }}>
+        <Alert 
+          severity="error"
+          sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+        >
+          {error || 'No se pudo cargar la tabla'}
+        </Alert>
       </Box>
     )
   }
@@ -176,9 +190,9 @@ export default function TableRecords() {
     <Box
       component="main"
       sx={{
-        p: 3,
-        width: '92vw',
-        height: '85vh',
+        p: { xs: 2, md: 3 },
+        width: '100%',
+        minHeight: { xs: '100vh', md: '85vh' },
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -210,20 +224,26 @@ export default function TableRecords() {
         onRecordView={handleRecordView}
         refreshTrigger={refreshTrigger}
         visibleFields={table.slug === 'asesor' ? ['nombre', 'apellido'] : undefined}
+        isMobile={isMobile}
+        isTablet={isTablet}
       />
 
-      {/* Botón de nuevo registro (igual que antes) */}
+      {/* Botón de nuevo registro */}
       <Button
         variant="contained"
-        startIcon={<AddIcon />}
+        startIcon={<AddIcon fontSize={isMobile ? "small" : "medium"} />}
         onClick={handleRecordCreate}
         sx={{
           position: 'fixed',
-          bottom: 32,
-          right: 32,
-          borderRadius: 3,
-          px: 3,
-          py: 1.5,
+          bottom: { xs: 20, md: 32 },
+          right: { xs: 20, md: 32 },
+          borderRadius: { xs: 28, md: 3 },
+          px: { xs: 2, md: 3 },
+          py: { xs: 1, md: 1.5 },
+          minWidth: { xs: 56, md: 'auto' },
+          width: { xs: 56, md: 'auto' },
+          height: { xs: 56, md: 'auto' },
+          fontSize: { xs: '0.875rem', md: '1rem' },
           background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
           boxShadow: theme.shadows[6],
           '&:hover': {
@@ -232,9 +252,13 @@ export default function TableRecords() {
           },
           transition: 'all 0.2s ease-out',
           zIndex: 1200,
+          '& .MuiButton-startIcon': {
+            marginRight: { xs: 0, md: 1 },
+            marginLeft: 0
+          }
         }}
       >
-        Nuevo Registro
+        {!isMobile && 'Nuevo Registro'}
       </Button>
     </Box>
   )

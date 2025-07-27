@@ -15,6 +15,7 @@ import {
   InputAdornment,
   IconButton,
   useTheme,
+  useMediaQuery,
   Button,
   Dialog,
   DialogTitle,
@@ -31,6 +32,7 @@ import SendIcon from '@mui/icons-material/Send'
 import SearchIcon from '@mui/icons-material/Search'
 import ForumIcon from '@mui/icons-material/Forum'
 import AddIcon from '@mui/icons-material/Add'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 
 import { fetchWhatsAppUsers, fetchUserMessages, sendMessages, fetchSessions } from '../api/servicios'
 import type { UserProfile, WhatsAppSession, WhatsAppUser, WhatsAppMessage } from '../types'
@@ -47,6 +49,9 @@ type Message = {
 export function ChatsTab() {
   const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
   const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'))
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'))
+  
   const [conversations, setConversations] = useState<WhatsAppUser[]>([])
   const [filteredConversations, setFilteredConversations] = useState<WhatsAppUser[]>([])
   const [activeConversation, setActiveConversation] = useState<WhatsAppUser | null>(null)
@@ -54,6 +59,7 @@ export function ChatsTab() {
   const [isLoading, setIsLoading] = useState(true)
   const [chatInput, setChatInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [showConversationsList, setShowConversationsList] = useState(true)
   const chatEndRef = useRef<HTMLDivElement | null>(null)
 
   // State for the new message modal
@@ -64,6 +70,22 @@ export function ChatsTab() {
   const [sendLoading, setSendLoading] = useState(false)
   const [selectedSessionId, setSelectedSessionId] = useState<string>('')
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' })
+
+  // Handle conversation selection for mobile
+  const handleConversationSelect = (convo: WhatsAppUser) => {
+    setActiveConversation(convo)
+    if (isMobile) {
+      setShowConversationsList(false)
+    }
+  }
+
+  // Handle back to conversations list on mobile
+  const handleBackToConversations = () => {
+    if (isMobile) {
+      setShowConversationsList(true)
+      setActiveConversation(null)
+    }
+  }
 
   useEffect(() => {
     const socket = io(import.meta.env.VITE_SOCKET_URL) // Use environment variable
@@ -256,8 +278,17 @@ export function ChatsTab() {
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-        <CircularProgress sx={{ color: '#8B5CF6' }} />
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        p: { xs: 2, md: 0 }
+      }}>
+        <CircularProgress 
+          sx={{ color: '#8B5CF6' }} 
+          size={isMobile ? 40 : 60}
+        />
       </Box>
     )
   }
@@ -266,8 +297,8 @@ export function ChatsTab() {
     <Box 
       component="main"
       sx={{
-        width: '90vw',
-        height: '80vh',
+        width: '100%',
+        height: { xs: '100vh', md: '85vh' },
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -276,14 +307,25 @@ export function ChatsTab() {
           : 'rgba(255,255,255,0.96)',
       }}
     >
-       <Box sx={{ p: 3, flexShrink: 0, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Header */}
+      <Box sx={{ 
+        p: { xs: 2, md: 3 }, 
+        flexShrink: 0, 
+        borderBottom: `1px solid ${theme.palette.divider}`, 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: { xs: 'flex-start', md: 'center' },
+        flexDirection: { xs: 'column', md: 'row' },
+        gap: { xs: 2, md: 0 }
+      }}>
         <div>
           <Typography 
-            variant="h4" 
+            variant={isMobile ? "h5" : "h4"} 
             sx={{ 
               fontWeight: 700,
               color: theme.palette.mode === 'dark' ? '#fff' : '#1E1E28',
               fontFamily: 'Montserrat, Arial, sans-serif',
+              fontSize: { xs: '1.5rem', md: '2.125rem' }
             }}
           >
             Bandeja de Entrada
@@ -291,6 +333,7 @@ export function ChatsTab() {
           <Typography 
             variant="body1" 
             color="text.secondary"
+            sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
           >
             Gestiona todas tus conversaciones de WhatsApp en un solo lugar.
           </Typography>
@@ -299,99 +342,196 @@ export function ChatsTab() {
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setOpenSendModal(true)}
+          size={isMobile ? "small" : "medium"}
           sx={{
-            borderRadius: 2,
-            px: 3,
-            py: 1,
-            fontWeight: 600,
             backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
             boxShadow: '0 4px 24px rgba(139, 92, 246, 0.3)',
+            fontSize: { xs: '0.875rem', md: '1rem' },
+            width: { xs: '100%', md: 'auto' }
           }}
         >
-          Nuevo Mensaje
+          {isMobile ? 'Nuevo' : 'Nuevo Mensaje'}
         </Button>
       </Box>
-      <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        {/* Conversation List */}
+
+      {/* Main Chat Layout */}
+      <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Conversations Sidebar */}
         <Paper 
-          elevation={0}
+          elevation={2} 
           sx={{ 
-            width: { xs: '100%', md: 360 },
-            borderRight: `1px solid ${theme.palette.divider}`,
-            display: 'flex',
-            flexDirection: 'column',
-            backgroundColor: 'transparent',
+            width: isMobile ? '100%' : { xs: '100%', md: '350px' },
+            display: isMobile ? (showConversationsList ? 'flex' : 'none') : 'flex',
+            flexDirection: 'column', 
+            borderRadius: 0,
+            position: 'relative'
           }}
         >
-          <Box sx={{ p: 2 }}>
+          <Box sx={{ p: { xs: 2, md: 3 }, pb: 0 }}>
             <TextField
               fullWidth
-              placeholder="Buscar conversación..."
+              placeholder="Buscar conversaciones..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              size={isMobile ? "small" : "medium"}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <SearchIcon color="action" />
+                    <SearchIcon />
                   </InputAdornment>
                 ),
               }}
+              sx={{
+                '& .MuiInputBase-input': {
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                }
+              }}
             />
           </Box>
-          <Divider />
-          <List sx={{ flex: 1, overflowY: 'auto', p: 1 }}>
-            {filteredConversations.length > 0 ? filteredConversations.map(convo => (
-              <ListItem 
-                key={convo._id}
+          <List sx={{ flex: 1, overflow: 'auto', p: 0 }}>
+            {filteredConversations.length > 0 ? filteredConversations.map((convo, index) => (
+              <ListItem
+                key={convo.phone}
                 button
-                selected={activeConversation?._id === convo._id}
-                onClick={() => setActiveConversation(convo)}
-                sx={{ borderRadius: 2, mb: 0.5 }}
+                onClick={() => handleConversationSelect(convo)}
+                selected={activeConversation?.phone === convo.phone}
+                sx={{
+                  borderBottom: index < filteredConversations.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                  py: { xs: 1.5, md: 2 },
+                  px: { xs: 2, md: 3 },
+                  '&:hover': {
+                    backgroundColor: theme.palette.action.hover
+                  },
+                  '&.Mui-selected': {
+                    backgroundColor: theme.palette.primary.main + '20',
+                    borderRight: `4px solid ${theme.palette.primary.main}`
+                  }
+                }}
               >
                 <ListItemAvatar>
-                  <Avatar sx={{ backgroundColor: '#8B5CF6' }}>
+                  <Avatar 
+                    sx={{ 
+                      backgroundColor: '#8B5CF6',
+                      width: { xs: 40, md: 48 },
+                      height: { xs: 40, md: 48 },
+                      fontSize: { xs: '0.875rem', md: '1rem' }
+                    }}
+                  >
                     {convo.name.substring(0, 2).toUpperCase()}
                   </Avatar>
                 </ListItemAvatar>
                 <ListItemText
                   primary={convo.name}
                   secondary={convo.lastMessage?.body || 'Sin mensajes'}
-                  primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
-                  secondaryTypographyProps={{ noWrap: true, fontStyle: 'italic' }}
+                  primaryTypographyProps={{ 
+                    fontWeight: 600, 
+                    noWrap: true,
+                    fontSize: { xs: '0.875rem', md: '1rem' }
+                  }}
+                  secondaryTypographyProps={{ 
+                    noWrap: true, 
+                    fontStyle: 'italic',
+                    fontSize: { xs: '0.75rem', md: '0.875rem' }
+                  }}
                 />
               </ListItem>
             )) : (
               <Box sx={{ textAlign: 'center', p: 4 }}>
-                <Typography color="text.secondary">No hay conversaciones</Typography>
+                <Typography 
+                  color="text.secondary"
+                  sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+                >
+                  No hay conversaciones
+                </Typography>
               </Box>
             )}
           </List>
         </Paper>
 
         {/* Chat View */}
-        <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Box sx={{ 
+          flex: 1, 
+          display: isMobile ? (showConversationsList ? 'none' : 'flex') : 'flex',
+          flexDirection: 'column', 
+          overflow: 'hidden' 
+        }}>
           {activeConversation ? (
             <>
-              <Box sx={{ p: 2, display: 'flex', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}` }}>
-                <Avatar sx={{ backgroundColor: '#8B5CF6', mr: 2 }}>{activeConversation.name.substring(0, 2).toUpperCase()}</Avatar>
-                <Typography variant="h6" fontWeight={600}>{activeConversation.name}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-                  {activeConversation.phone}
-                </Typography>
+              {/* Chat Header */}
+              <Box sx={{ 
+                p: { xs: 2, md: 3 }, 
+                display: 'flex', 
+                alignItems: 'center', 
+                borderBottom: `1px solid ${theme.palette.divider}`,
+                gap: 2
+              }}>
+                {isMobile && (
+                  <IconButton 
+                    onClick={handleBackToConversations}
+                    size="small"
+                  >
+                    <ArrowBackIcon />
+                  </IconButton>
+                )}
+                <Avatar 
+                  sx={{ 
+                    backgroundColor: '#8B5CF6',
+                    width: { xs: 32, md: 40 },
+                    height: { xs: 32, md: 40 },
+                    fontSize: { xs: '0.75rem', md: '1rem' }
+                  }}
+                >
+                  {activeConversation.name.substring(0, 2).toUpperCase()}
+                </Avatar>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography 
+                    variant={isMobile ? "subtitle1" : "h6"} 
+                    fontWeight={600}
+                    sx={{ 
+                      fontSize: { xs: '1rem', md: '1.25rem' },
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {activeConversation.name}
+                  </Typography>
+                  <Typography 
+                    variant="body2" 
+                    color="text.secondary"
+                    sx={{ 
+                      fontSize: { xs: '0.75rem', md: '0.875rem' },
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {activeConversation.phone}
+                  </Typography>
+                </Box>
               </Box>
-              <Box sx={{ flex: 1, p: 3, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+
+              {/* Messages */}
+              <Box sx={{ 
+                flex: 1, 
+                p: { xs: 2, md: 3 }, 
+                overflowY: 'auto', 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: { xs: 1.5, md: 2 }
+              }}>
                 {activeMessages.map((msg, idx) => (
                   <Box
                     key={msg._id || idx}
                     sx={{
                       alignSelf: msg.direction === 'inbound' ? 'flex-start' : 'flex-end',
-                      maxWidth: '70%',
+                      maxWidth: { xs: '85%', md: '70%' },
                     }}
                   >
                     <Paper 
                       elevation={1}
                       sx={{
-                        p: '10px 14px',
+                        p: { xs: '8px 12px', md: '10px 14px' },
                         borderRadius: msg.direction === 'inbound' ? '20px 20px 20px 5px' : '20px 20px 5px 20px',
                         backgroundColor: msg.direction === 'inbound'
                           ? (theme.palette.mode === 'dark' ? 'grey.800' : 'grey.200')
@@ -399,18 +539,33 @@ export function ChatsTab() {
                         color: msg.direction === 'inbound' ? 'text.primary' : 'primary.contrastText',
                       }}
                     >
-                      <Typography variant="body1">{msg.body}</Typography>
+                      <Typography 
+                        variant="body1"
+                        sx={{ 
+                          fontSize: { xs: '0.875rem', md: '1rem' },
+                          lineHeight: 1.4,
+                          wordBreak: 'break-word'
+                        }}
+                      >
+                        {msg.body}
+                      </Typography>
                     </Paper>
                   </Box>
                 ))}
                 <div ref={chatEndRef} />
               </Box>
-              <Box sx={{ p: 2, borderTop: `1px solid ${theme.palette.divider}`, backgroundColor: 'background.default' }}>
-                <Stack direction="row" spacing={2}>
+
+              {/* Message Input */}
+              <Box sx={{ 
+                p: { xs: 2, md: 3 }, 
+                borderTop: `1px solid ${theme.palette.divider}`, 
+                backgroundColor: 'background.default' 
+              }}>
+                <Stack direction="row" spacing={{ xs: 1, md: 2 }}>
                   <TextField
                     fullWidth
                     multiline
-                    maxRows={3}
+                    maxRows={isMobile ? 2 : 3}
                     placeholder="Escribe un mensaje..."
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
@@ -420,35 +575,98 @@ export function ChatsTab() {
                         handleSendMessage()
                       }
                     }}
+                    size={isMobile ? "small" : "medium"}
+                    sx={{
+                      '& .MuiInputBase-input': {
+                        fontSize: { xs: '0.875rem', md: '1rem' }
+                      }
+                    }}
                   />
-                  <IconButton color="primary" onClick={handleSendMessage} disabled={!chatInput.trim()}>
-                    <SendIcon />
+                  <IconButton 
+                    color="primary" 
+                    onClick={handleSendMessage} 
+                    disabled={!chatInput.trim()}
+                    size={isMobile ? "small" : "medium"}
+                  >
+                    <SendIcon fontSize={isMobile ? "small" : "medium"} />
                   </IconButton>
                 </Stack>
               </Box>
             </>
           ) : (
-            <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', flexDirection: 'column', color: 'text.secondary' }}>
-              <ForumIcon sx={{ fontSize: 80, mb: 2, opacity: 0.3 }}/>
-              <Typography variant="h5">Selecciona una conversación</Typography>
-              <Typography>Elige un chat de la lista para ver los mensajes.</Typography>
+            <Box sx={{ 
+              flex: 1, 
+              display: 'flex', 
+              justifyContent: 'center', 
+              alignItems: 'center', 
+              flexDirection: 'column', 
+              color: 'text.secondary',
+              p: { xs: 3, md: 4 }
+            }}>
+              <ForumIcon sx={{ 
+                fontSize: { xs: 60, md: 80 }, 
+                mb: { xs: 1.5, md: 2 }, 
+                opacity: 0.3 
+              }}/>
+              <Typography 
+                variant={isMobile ? "h6" : "h5"}
+                sx={{ 
+                  fontSize: { xs: '1.25rem', md: '1.5rem' },
+                  textAlign: 'center',
+                  mb: 1
+                }}
+              >
+                Selecciona una conversación
+              </Typography>
+              <Typography 
+                sx={{ 
+                  fontSize: { xs: '0.875rem', md: '1rem' },
+                  textAlign: 'center'
+                }}
+              >
+                {isMobile ? 'Elige un chat para ver los mensajes.' : 'Elige un chat de la lista para ver los mensajes.'}
+              </Typography>
             </Box>
           )}
         </Box>
       </Box>
 
       {/* Modal para enviar mensaje manual */}
-      <Dialog open={openSendModal} onClose={() => setOpenSendModal(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ fontWeight: 700 }}>Enviar Nuevo Mensaje</DialogTitle>
-        <DialogContent dividers>
+      <Dialog 
+        open={openSendModal} 
+        onClose={() => setOpenSendModal(false)} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={isMobile}
+      >
+        <DialogTitle sx={{ 
+          fontWeight: 700,
+          fontSize: { xs: '1.25rem', md: '1.5rem' }
+        }}>
+          Enviar Nuevo Mensaje
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: { xs: 2, md: 3 } }}>
           <Stack spacing={3} sx={{ pt: 1 }}>
-            <FormControl fullWidth>
-              <InputLabel id="session-select-label">Sesión de Envío</InputLabel>
+            <FormControl 
+              fullWidth
+              size={isMobile ? "small" : "medium"}
+            >
+              <InputLabel 
+                id="session-select-label"
+                sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+              >
+                Sesión de Envío
+              </InputLabel>
               <Select
                 labelId="session-select-label"
                 value={selectedSessionId}
                 label="Sesión de Envío"
                 onChange={e => setSelectedSessionId(e.target.value)}
+                sx={{
+                  '& .MuiSelect-select': {
+                    fontSize: { xs: '0.875rem', md: '1rem' }
+                  }
+                }}
               >
                 {sessions.map(session => (
                   <MenuItem key={session._id || session.id} value={session._id || session.id}>
@@ -463,6 +681,15 @@ export function ChatsTab() {
               onChange={e => setSendPhone(e.target.value)}
               fullWidth
               placeholder="Ej: 5512345678"
+              size={isMobile ? "small" : "medium"}
+              sx={{
+                '& .MuiInputBase-input': {
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                },
+                '& .MuiInputLabel-root': {
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                }
+              }}
             />
             <TextField
               label="Mensaje"
@@ -470,19 +697,32 @@ export function ChatsTab() {
               onChange={e => setSendMessage(e.target.value)}
               fullWidth
               multiline
-              rows={4}
+              rows={isMobile ? 3 : 4}
               placeholder="Escribe el mensaje..."
+              size={isMobile ? "small" : "medium"}
+              sx={{
+                '& .MuiInputBase-input': {
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                },
+                '& .MuiInputLabel-root': {
+                  fontSize: { xs: '0.875rem', md: '1rem' }
+                }
+              }}
             />
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ p: '16px 24px' }}>
-          <Button onClick={() => setOpenSendModal(false)}>
+        <DialogActions sx={{ p: { xs: 2, md: 3 } }}>
+          <Button 
+            onClick={() => setOpenSendModal(false)}
+            size={isMobile ? "medium" : "large"}
+          >
             Cancelar
           </Button>
           <Button
             variant="contained"
             onClick={handleSendFromModal}
             disabled={!sendPhone.trim() || !sendMessage.trim() || !selectedSessionId || sendLoading}
+            size={isMobile ? "medium" : "large"}
             sx={{
               backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
               boxShadow: '0 4px 24px rgba(139, 92, 246, 0.3)',
@@ -493,8 +733,26 @@ export function ChatsTab() {
         </DialogActions>
       </Dialog>
       
-      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
-        <Alert elevation={6} variant="filled" onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={4000} 
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: isMobile ? 'center' : 'left',
+        }}
+      >
+        <Alert 
+          elevation={6} 
+          variant="filled" 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity} 
+          sx={{ 
+            width: '100%',
+            fontSize: { xs: '0.875rem', md: '1rem' },
+            minWidth: { xs: 'auto', md: '300px' }
+          }}
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>

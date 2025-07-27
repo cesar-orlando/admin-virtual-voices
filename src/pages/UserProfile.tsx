@@ -13,6 +13,7 @@ import {
   Snackbar,
   InputAdornment,
   useTheme,
+  useMediaQuery,
   Fade,
   FormControl,
   InputLabel,
@@ -32,6 +33,8 @@ import { useCompanyStatuses } from "../hooks/useCompanyStatuses";
 
 export default function UserProfile() {
   const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.down('md'));
   const userFromStorage = JSON.parse(localStorage.getItem("user") || "{}") as UserProfile;
   const { statuses } = useCompanyStatuses();
   
@@ -97,15 +100,12 @@ export default function UserProfile() {
     }
   };
 
-  // Tamaño del avatar
-  const AVATAR_SIZE = 140;
-  const HEADER_HEIGHT = 180;
-
   return (
     <Box
       sx={{
-        height: '80vh',
-        width: '90vw',
+        width: '100%',
+        minHeight: { xs: '100vh', md: '80vh' },
+        height: { xs: '100%', md: '80vh' },
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -115,24 +115,25 @@ export default function UserProfile() {
           : 'linear-gradient(135deg, #E05EFF11 0%, #8B5CF611 100%)',
         overflow: 'hidden',
         position: 'relative',
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
+        borderBottomLeftRadius: { xs: 0, md: 20 },
+        borderBottomRightRadius: { xs: 0, md: 20 },
+        p: { xs: 1, md: 0 },
       }}
     >
       {/* Header visual */}
       <Box
         sx={{
           width: '100%',
-          height: 100,
-          minHeight: 80,
+          height: { xs: 80, md: 100 },
+          minHeight: { xs: 80, md: 80 },
           background: 'linear-gradient(90deg, #E05EFF 0%, #8B5CF6 100%)',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           position: 'relative',
-          borderTopLeftRadius: 20,
-          borderTopRightRadius: 20,
+          borderTopLeftRadius: { xs: 0, md: 20 },
+          borderTopRightRadius: { xs: 0, md: 20 },
         }}
       >
         <Box
@@ -141,7 +142,7 @@ export default function UserProfile() {
           sx={{
             position: 'absolute',
             left: '50%',
-            bottom: -48,
+            bottom: { xs: -32, md: -48 },
             transform: 'translateX(-50%)',
             zIndex: 10,
             cursor: edit ? 'pointer' : 'default',
@@ -153,9 +154,9 @@ export default function UserProfile() {
             src={profilePic}
             alt={user.company}
             sx={{
-              width: 96,
-              height: 96,
-              border: '4px solid #fff',
+              width: { xs: 64, sm: 80, md: 96 },
+              height: { xs: 64, sm: 80, md: 96 },
+              border: { xs: '3px solid #fff', md: '4px solid #fff' },
               background: '#fff',
               transition: 'box-shadow 0.3s',
               boxShadow: avatarHover && edit ? '0 0 0 4px #E05EFF33' : '0 2px 8px #E05EFF22',
@@ -176,11 +177,13 @@ export default function UserProfile() {
                   boxShadow: '0 2px 8px #E05EFF22',
                   '&:hover': { background: '#E05EFF', color: '#fff' },
                   zIndex: 20,
-                  p: 1,
+                  p: { xs: 0.5, md: 1 },
                   opacity: 0.95,
+                  width: { xs: 28, md: 40 },
+                  height: { xs: 28, md: 40 },
                 }}
               >
-                <CameraAltIcon fontSize="medium" />
+                <CameraAltIcon fontSize={isMobile ? "small" : "medium"} />
                 <input
                   type="file"
                   accept="image/*"
@@ -200,22 +203,23 @@ export default function UserProfile() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          p: { xs: 1, md: 0 },
         }}
       >
         <Paper
           elevation={1}
           sx={{
-            borderRadius: 2,
-            maxWidth: 400,
+            borderRadius: { xs: 8, sm: 12, md: 16 },
+            maxWidth: { xs: '100%', sm: 380, md: 400 },
             width: '100%',
-            height: 'auto',
+            minHeight: 'auto',
             background: theme.palette.mode === 'dark'
               ? 'rgba(30,30,40,0.92)'
               : 'rgba(255,255,255,0.85)',
             color: theme.palette.mode === 'dark' ? '#fff' : '#23243a',
             fontFamily: 'Montserrat, Arial, sans-serif',
             boxShadow: '0 4px 24px 0 rgba(139,92,246,0.08)',
-            p: { xs: 3, sm: 5 },
+            p: { xs: 2, sm: 3, md: 4 },
             position: 'relative',
             zIndex: 2,
             display: 'flex',
@@ -223,35 +227,41 @@ export default function UserProfile() {
             alignItems: 'center',
             backdropFilter: 'blur(10px)',
             border: 'none',
-            pt: '56px', // padding top para el avatar flotante
-            m: 2,
-            '@media (max-width: 900px)': {
-              maxWidth: 340,
-              p: 2,
-              borderRadius: 14,
-              pt: '48px',
-            },
-            '@media (max-width: 600px)': {
-              maxWidth: '98vw',
-              p: 1,
-              borderRadius: 8,
-              pt: '36px',
-            },
+            pt: { xs: '40px', sm: '48px', md: '56px' }, // padding top para el avatar flotante
+            m: { xs: 1, md: 2 },
           }}
         >
-          <Typography variant="h5" sx={{ fontWeight: 700, letterSpacing: 1, color: '#8B5CF6', mb: 0.5, textAlign: 'center', fontFamily: 'Montserrat, Arial, sans-serif' }}>
+          <Typography 
+            variant={isMobile ? "h6" : "h5"} 
+            sx={{ 
+              fontWeight: 700, 
+              letterSpacing: 1, 
+              color: '#8B5CF6', 
+              mb: 0.5, 
+              textAlign: 'center', 
+              fontFamily: 'Montserrat, Arial, sans-serif',
+              fontSize: { xs: '1.25rem', md: '1.5rem' }
+            }}
+          >
             {user.company}
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: 1, 
+            mb: 2,
+            flexWrap: 'wrap',
+            justifyContent: 'center'
+          }}>
             <Box
               sx={{
-                px: 2,
+                px: { xs: 1.5, md: 2 },
                 py: 0.5,
                 borderRadius: 99,
                 background: 'linear-gradient(90deg, #E05EFF11 0%, #8B5CF611 100%)',
                 color: '#8B5CF6',
                 fontWeight: 600,
-                fontSize: '0.95rem',
+                fontSize: { xs: '0.8rem', md: '0.95rem' },
                 letterSpacing: 1,
                 textTransform: 'uppercase',
                 fontFamily: 'Montserrat, Arial, sans-serif',
@@ -261,7 +271,7 @@ export default function UserProfile() {
             </Box>
             <Box
               sx={{
-                px: 2,
+                px: { xs: 1.5, md: 2 },
                 py: 0.5,
                 borderRadius: 99,
                 background: user.status === 'Activo' 
@@ -269,7 +279,7 @@ export default function UserProfile() {
                   : 'linear-gradient(90deg, #EF444411 0%, #DC262611 100%)',
                 color: user.status === 'Activo' ? '#10B981' : '#EF4444',
                 fontWeight: 600,
-                fontSize: '0.95rem',
+                fontSize: { xs: '0.8rem', md: '0.95rem' },
                 letterSpacing: 1,
                 textTransform: 'uppercase',
                 fontFamily: 'Montserrat, Arial, sans-serif',
@@ -286,22 +296,34 @@ export default function UserProfile() {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              size={isMobile ? "small" : "medium"}
               disabled={!edit}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <PersonIcon sx={{ color: '#8B5CF6' }} />
+                    <PersonIcon sx={{ 
+                      color: '#8B5CF6',
+                      fontSize: { xs: '1.2rem', md: '1.5rem' }
+                    }} />
                   </InputAdornment>
                 ),
-                style: { color: theme.palette.mode === 'dark' ? '#fff' : '#23243a', fontWeight: 600 }
+                style: { 
+                  color: theme.palette.mode === 'dark' ? '#fff' : '#23243a', 
+                  fontWeight: 600,
+                  fontSize: isMobile ? '0.875rem' : '1rem'
+                }
               }}
               InputLabelProps={{
-                style: { color: '#8B5CF6', fontWeight: 600 }
+                style: { 
+                  color: '#8B5CF6', 
+                  fontWeight: 600,
+                  fontSize: isMobile ? '0.875rem' : '1rem'
+                }
               }}
               sx={{
-                mb: 2,
+                mb: { xs: 1.5, md: 2 },
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 12,
+                  borderRadius: { xs: 8, md: 12 },
                   background: 'rgba(255,255,255,0.7)',
                   '& fieldset': { borderColor: '#E05EFF11' },
                   '&:hover fieldset': { borderColor: '#8B5CF6' },
@@ -317,22 +339,34 @@ export default function UserProfile() {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              size={isMobile ? "small" : "medium"}
               disabled={!edit}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <EmailIcon sx={{ color: '#8B5CF6' }} />
+                    <EmailIcon sx={{ 
+                      color: '#8B5CF6',
+                      fontSize: { xs: '1.2rem', md: '1.5rem' }
+                    }} />
                   </InputAdornment>
                 ),
-                style: { color: theme.palette.mode === 'dark' ? '#fff' : '#23243a', fontWeight: 600 }
+                style: { 
+                  color: theme.palette.mode === 'dark' ? '#fff' : '#23243a', 
+                  fontWeight: 600,
+                  fontSize: isMobile ? '0.875rem' : '1rem'
+                }
               }}
               InputLabelProps={{
-                style: { color: '#8B5CF6', fontWeight: 600 }
+                style: { 
+                  color: '#8B5CF6', 
+                  fontWeight: 600,
+                  fontSize: isMobile ? '0.875rem' : '1rem'
+                }
               }}
               sx={{
-                mb: 2,
+                mb: { xs: 1.5, md: 2 },
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 12,
+                  borderRadius: { xs: 8, md: 12 },
                   background: 'rgba(255,255,255,0.7)',
                   '& fieldset': { borderColor: '#E05EFF11' },
                   '&:hover fieldset': { borderColor: '#8B5CF6' },
@@ -340,21 +374,34 @@ export default function UserProfile() {
                 }
               }}
             />
-            <FormControl fullWidth margin="normal" disabled={!edit}>
-              <InputLabel sx={{ color: '#8B5CF6', fontWeight: 600 }}>Estado</InputLabel>
+            <FormControl 
+              fullWidth 
+              margin="normal" 
+              disabled={!edit}
+              size={isMobile ? "small" : "medium"}
+              sx={{ mb: { xs: 1.5, md: 2 } }}
+            >
+              <InputLabel sx={{ 
+                color: '#8B5CF6', 
+                fontWeight: 600,
+                fontSize: isMobile ? '0.875rem' : '1rem'
+              }}>
+                Estado
+              </InputLabel>
               <Select
                 name="status"
                 value={user.status}
                 onChange={handleChange}
                 sx={{
-                  borderRadius: 12,
+                  borderRadius: { xs: 8, md: 12 },
                   background: 'rgba(255,255,255,0.7)',
                   '& .MuiOutlinedInput-notchedOutline': { borderColor: '#E05EFF11' },
                   '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#8B5CF6' },
                   '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#E05EFF' },
                   '& .MuiSelect-select': { 
                     color: theme.palette.mode === 'dark' ? '#fff' : '#23243a', 
-                    fontWeight: 600 
+                    fontWeight: 600,
+                    fontSize: isMobile ? '0.875rem' : '1rem'
                   }
                 }}
               >
@@ -373,23 +420,35 @@ export default function UserProfile() {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              size={isMobile ? "small" : "medium"}
               disabled={!edit}
               required={edit}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <LockIcon sx={{ color: '#8B5CF6' }} />
+                    <LockIcon sx={{ 
+                      color: '#8B5CF6',
+                      fontSize: { xs: '1.2rem', md: '1.5rem' }
+                    }} />
                   </InputAdornment>
                 ),
-                style: { color: theme.palette.mode === 'dark' ? '#fff' : '#23243a', fontWeight: 600 }
+                style: { 
+                  color: theme.palette.mode === 'dark' ? '#fff' : '#23243a', 
+                  fontWeight: 600,
+                  fontSize: isMobile ? '0.875rem' : '1rem'
+                }
               }}
               InputLabelProps={{
-                style: { color: '#8B5CF6', fontWeight: 600 }
+                style: { 
+                  color: '#8B5CF6', 
+                  fontWeight: 600,
+                  fontSize: isMobile ? '0.875rem' : '1rem'
+                }
               }}
               sx={{
-                mb: 2,
+                mb: { xs: 1.5, md: 2 },
                 '& .MuiOutlinedInput-root': {
-                  borderRadius: 12,
+                  borderRadius: { xs: 8, md: 12 },
                   background: 'rgba(255,255,255,0.7)',
                   '& fieldset': { borderColor: '#E05EFF11' },
                   '&:hover fieldset': { borderColor: '#8B5CF6' },
@@ -397,19 +456,24 @@ export default function UserProfile() {
                 }
               }}
             />
-            <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
+            <Box sx={{ 
+              display: "flex", 
+              justifyContent: "center", 
+              mt: { xs: 2, md: 3 } 
+            }}>
               {edit ? (
                 <Button
                   variant="contained"
                   color="primary"
-                  startIcon={<SaveIcon />}
+                  startIcon={<SaveIcon fontSize={isMobile ? "small" : "medium"} />}
+                  size={isMobile ? "medium" : "large"}
                   sx={{
                     background: "linear-gradient(90deg, #E05EFF 0%, #8B5CF6 50%, #3B82F6 100%)",
                     color: "#fff",
                     fontWeight: 700,
-                    fontSize: '1.05rem',
-                    px: 4,
-                    py: 1.2,
+                    fontSize: { xs: '0.9rem', md: '1.05rem' },
+                    px: { xs: 3, md: 4 },
+                    py: { xs: 1, md: 1.2 },
                     borderRadius: 99,
                     boxShadow: '0 2px 8px #E05EFF22',
                     letterSpacing: 1,
@@ -417,7 +481,7 @@ export default function UserProfile() {
                     transition: 'all 0.2s',
                     '&:hover': {
                       background: "linear-gradient(90deg, #3B82F6 0%, #8B5CF6 50%, #E05EFF 100%)",
-                      transform: 'translateY(-2px) scale(1.03)',
+                      transform: { xs: 'scale(1.02)', md: 'translateY(-2px) scale(1.03)' },
                       boxShadow: '0 6px 16px #E05EFF22',
                     }
                   }}
@@ -429,14 +493,15 @@ export default function UserProfile() {
                 <Button
                   variant="outlined"
                   color="secondary"
-                  startIcon={<EditIcon />}
+                  startIcon={<EditIcon fontSize={isMobile ? "small" : "medium"} />}
+                  size={isMobile ? "medium" : "large"}
                   sx={{
                     color: "#8B5CF6",
                     borderColor: "#8B5CF6",
                     fontWeight: 700,
-                    fontSize: '1.05rem',
-                    px: 4,
-                    py: 1.2,
+                    fontSize: { xs: '0.9rem', md: '1.05rem' },
+                    px: { xs: 3, md: 4 },
+                    py: { xs: 1, md: 1.2 },
                     borderRadius: 99,
                     letterSpacing: 1,
                     textTransform: 'uppercase',
@@ -444,12 +509,12 @@ export default function UserProfile() {
                     '&:hover': {
                       background: "#E05EFF11",
                       borderColor: "#E05EFF",
-                      transform: 'translateY(-2px) scale(1.03)',
+                      transform: { xs: 'scale(1.02)', md: 'translateY(-2px) scale(1.03)' },
                     }
                   }}
                   onClick={() => setEdit(true)}
                 >
-                  Editar perfil
+                  {isMobile ? 'Editar' : 'Editar perfil'}
                 </Button>
               )}
             </Box>
@@ -460,6 +525,10 @@ export default function UserProfile() {
         open={snackbar.open}
         autoHideDuration={4000}
         onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ 
+          vertical: 'top', 
+          horizontal: 'center' 
+        }}
       >
         <MuiAlert
           elevation={6}
@@ -468,6 +537,8 @@ export default function UserProfile() {
           severity={snackbar.severity}
           sx={{
             backgroundColor: snackbar.severity === 'success' ? '#8B5CF6' : undefined,
+            fontSize: { xs: '0.875rem', md: '1rem' },
+            minWidth: { xs: 280, md: 320 },
           }}
         >
           {snackbar.message}
