@@ -135,6 +135,16 @@ export interface WhatsAppUser extends BaseEntity {
   tableSlug: string
   botActive: boolean
   totalMessages: number
+  session: {
+    id: string
+    name: string
+  }
+  unreadMessages: number;
+}
+
+// Nueva interfaz para los agrupados por número
+export interface GroupedWhatsAppUser extends WhatsAppUser {
+  sessions: string[]; // IDs de sesiones donde aparece este número
 }
 
 export interface WhatsAppMessage extends BaseEntity {
