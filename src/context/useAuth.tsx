@@ -108,7 +108,7 @@ export const UserProvider = ({ children }: Props) => {
         response = await quickLearningRegisterAPI({
           ...registerData,
           companySlug: "quicklearning",
-          role: (registerData.role === "Administrador" || registerData.role === "Usuario") ? registerData.role : "Usuario"
+          role: registerData.role
         });
         
         // Set company context for Quick Learning

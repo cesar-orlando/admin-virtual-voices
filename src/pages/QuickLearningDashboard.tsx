@@ -624,7 +624,7 @@ const QuickLearningDashboard: React.FC = () => {
         // Agregar campos adicionales que no están en la estructura de la tabla
         // pero que necesitamos mostrar en el modal
         initialData.tableSlug = updatedProspect.tableSlug || ''
-        initialData.aiEnabled = updatedProspect.aiEnabled || false
+        initialData.aiEnabled = updatedProspect.data.aiEnabled || false
         initialData.lastMessageDate = updatedProspect.lastMessageDate || ''
 
         // Asegurar que los campos especiales tengan valores por defecto
@@ -655,7 +655,7 @@ const QuickLearningDashboard: React.FC = () => {
         const fallbackData = {
           ...updatedProspect.data,
           tableSlug: updatedProspect.tableSlug || '',
-          aiEnabled: updatedProspect.aiEnabled || false,
+          aiEnabled: updatedProspect.data.aiEnabled || false,
           campana: updatedProspect.data.campana || '',
           medio: updatedProspect.data.medio || '',
           comentario: updatedProspect.data.comentario || '',
@@ -888,7 +888,7 @@ const QuickLearningDashboard: React.FC = () => {
 
       // Mantener campos especiales que no están en la estructura de tabla
       newData.tableSlug = newTableSlug
-      newData.aiEnabled = editProspectData?.aiEnabled || false
+      newData.aiEnabled = editProspectData?.data?.aiEnabled || false
       newData.lastMessageDate = editProspectData?.lastMessageDate || ''
 
       // Asegurar que los campos especiales tengan valores por defecto

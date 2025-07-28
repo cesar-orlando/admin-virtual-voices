@@ -21,9 +21,11 @@ export interface UserProfileToken extends UserProfile {
 }
 
 export const UserRole = {
-  ADMIN: 'Admin',
-  USER: 'Usuario',
-  MODERATOR: 'moderator'
+  ADMINISTRADOR: 'Administrador',
+  GERENTE: 'Gerente',
+  MARKETING: 'Marketing',
+  ASESOR: 'Asesor',
+  ASISTENTE: 'Asistente'
 } as const;
 
 export type UserRole = typeof UserRole[keyof typeof UserRole];
@@ -39,7 +41,7 @@ export interface RegisterRequest {
   name: string
   email: string
   password: string
-  role: string
+  role: UserRole
   companySlug: string
 }
 
@@ -75,7 +77,7 @@ export interface CompanyConfig {
 // Quick Learning Enterprise specific types
 export interface QuickLearningUser extends UserProfile {
   companySlug: 'quicklearning'
-  role: 'Admin' | 'Usuario'
+  role: UserRole
   enterpriseFeatures?: {
     advancedAnalytics: boolean
     customWorkflows: boolean
@@ -89,7 +91,7 @@ export interface QuickLearningLoginRequest extends LoginRequest {
 
 export interface QuickLearningRegisterRequest extends RegisterRequest {
   companySlug: 'quicklearning'
-  role: 'Administrador' | 'Usuario'
+  role: UserRole
 }
 
 // Company detection types

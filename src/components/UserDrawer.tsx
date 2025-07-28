@@ -25,8 +25,9 @@ interface UserDrawerProps {
 const ROLES = [
   { value: 'Administrador', label: 'Administrador' },
   { value: 'Gerente', label: 'Gerente' },
-  { value: 'Asesor', label: 'Asesor' },
   { value: 'Marketing', label: 'Marketing' },
+  { value: 'Asesor', label: 'Asesor' },
+  { value: 'Asistente', label: 'Asistente' },
 ];
 
 const STATUS_OPTIONS = [
@@ -50,7 +51,7 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
     name: initialData?.name || '',
     email: initialData?.email || '',
     password: '',
-    role: initialData?.role || '',
+    role: initialData?.role || ROLES[0].value,
     status: mapStatusToValue(initialData?.status || STATUS_OPTIONS[0].value)
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -62,7 +63,7 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
         name: initialData.name || '',
         email: initialData.email || '',
         password: '',
-        role: initialData.role || '',
+        role: initialData.role || ROLES[0].value,
         status: mapStatusToValue(initialData.status || STATUS_OPTIONS[0].value)
       });
     } else {
@@ -70,7 +71,7 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
         name: '',
         email: '',
         password: '',
-        role: '',
+        role: ROLES[0].value,
         status: STATUS_OPTIONS[0].value
       });
     }
@@ -160,7 +161,7 @@ export default function UserDrawer({ open, onClose, onSubmit, initialData, mode 
             error={!!errors.email}
             helperText={errors.email}
           />
-          <FormControl fullWidth margin="normal" disabled={!(currentUserRole === 'admin' || currentUserRole === 'gerente')}>
+          <FormControl fullWidth margin="normal" disabled={!(currentUserRole === 'Administrador' || currentUserRole === 'Gerente')}>
             <InputLabel>Rol</InputLabel>
             <Select
               value={formData.role}

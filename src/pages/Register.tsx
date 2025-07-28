@@ -99,7 +99,10 @@ const Register = () => {
         companySlug: form.companySlug
       };
       console.log("registerData", registerData);
-      await registerUser(registerData);
+      await registerUser({
+        ...registerData,
+        role: form.role as UserRole
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Error al registrar usuario.";
       setServerError(errorMessage);
@@ -286,7 +289,10 @@ const Register = () => {
                 }}
               >
                 <MenuItem value="Administrador">Administrador</MenuItem>
-                <MenuItem value="">Usuario</MenuItem>
+                <MenuItem value="Gerente">Gerente</MenuItem>
+                <MenuItem value="Marketing">Marketing</MenuItem>
+                <MenuItem value="Asesor">Asesor</MenuItem>
+                <MenuItem value="Asistente">Asistente</MenuItem>
               </Select>
               {errors.role && (
                 <Typography variant="caption" sx={{ color: '#f44336', mt: 0.5, px: 1 }}>
