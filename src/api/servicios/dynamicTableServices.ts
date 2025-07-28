@@ -22,12 +22,39 @@ export const createTable = async (tableData: CreateTableRequest, user: UserProfi
       c_name: user.companySlug,
       createdBy: user.id
     };
+    
+    // Enhanced logging for debugging
+    console.log('🚀 Creating table with payload:', JSON.stringify(payload, null, 2));
+    console.log('📋 Fields in payload:', payload.fields);
+    
     const response = await api.post(`/tables/`, payload);
     return response.data;
   } catch (error: any) {
-    const backendMessage = error.response?.data?.message || 'No se pudo crear la tabla. Revisa los datos enviados.';
+    // Enhanced error logging
+    console.error('❌ Table creation error:', error);
+    console.error('📋 Error response:', error.response?.data);
+    console.error('📊 Status code:', error.response?.status);
+    console.error('📝 Status text:', error.response?.statusText);
+    
+    const backendMessage = error.response?.data?.message || error.response?.data?.error || 'No se pudo crear la tabla. Revisa los datos enviados.';
+    const validationErrors = error.response?.data?.errors || error.response?.data?.validation || [];
+    
+    // Log validation errors if they exist
+    if (validationErrors.length > 0) {
+      console.error('🚫 Validation errors:', validationErrors);
+    }
+    
     handleError(error);
-    throw new Error(backendMessage);
+    
+    // Create a more informative error message
+    let fullErrorMessage = backendMessage;
+    if (validationErrors.length > 0) {
+      fullErrorMessage += '\nValidation errors: ' + validationErrors.map((err: any) => 
+        typeof err === 'string' ? err : `${err.field || err.property || 'field'}: ${err.message || err.constraint || err}`
+      ).join(', ');
+    }
+    
+    throw new Error(fullErrorMessage);
   }
 };
 

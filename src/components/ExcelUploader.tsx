@@ -96,11 +96,11 @@ export function ExcelUploader() {
   return (
     <Box sx={{ p: 2 }}>
       <Box sx={{ mb: 2 }}>
-        <Input
+        <input
           type="file"
           accept=".xlsx,.xls,.csv"
           onChange={handleFileUpload}
-          sx={{ display: 'none' }}
+          style={{ display: 'none' }}
           id="excel-upload"
         />
         <label htmlFor="excel-upload">

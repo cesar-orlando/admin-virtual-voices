@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { UserProvider } from './context/useAuth'
 import { useAuth } from './hooks/useAuth'
 import Login from './pages/Login'
@@ -18,6 +18,7 @@ import UserProfile from './pages/UserProfile'
 import Metrics from './pages/Metrics'
 import QuickLearningDashboard from './pages/QuickLearningDashboard'
 import { DynamicDashboard } from './components/DynamicDashboard';
+import DateFieldDebugger from './components/DateFieldDebugger';
 
 // Tools System imports
 import ToolsDashboard from './pages/ToolsDashboard'
@@ -102,6 +103,7 @@ export default function App() {
             <Route path="tablas/:tableSlug/editar" element={<EditTable />} />
             <Route path="tablas/:tableSlug/nuevo" element={<RecordForm />} />
             <Route path="tablas/:tableSlug/editar/:recordId" element={<RecordForm />} />
+            <Route path="debug/date-field" element={<DateFieldDebugger />} />
 
             {/* Tools System Routes */}
             <Route path="herramientas-dashboard" element={<ToolsDashboard />} />

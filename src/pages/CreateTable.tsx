@@ -349,6 +349,17 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
         isActive: true,
       };
 
+      // Enhanced debugging for table creation
+      console.log('🔍 CreateTable: About to create table with data:', tableData);
+      console.log('📋 CreateTable: Fields being sent:', tableData.fields);
+      console.log('👤 CreateTable: User info:', { id: user.id, companySlug: user.companySlug });
+      
+      // Check for date fields specifically
+      const dateFields = tableData.fields.filter(f => f.type === 'date');
+      if (dateFields.length > 0) {
+        console.log('📅 CreateTable: Date fields detected:', dateFields);
+      }
+
       const newTableResponse = await createTable(tableData, user);
 
       if (importedRecords.length > 0 && newTableResponse?.table?.slug) {

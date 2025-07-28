@@ -490,7 +490,8 @@ export default function DynamicDataTable({
         return { content: formattedCurrency };
       }
       case 'number': {
-        const formattedNumber = new Intl.NumberFormat('es-MX').format(value);
+        const numericValue = typeof value === 'number' ? value : Number(value);
+        const formattedNumber = new Intl.NumberFormat('es-MX').format(isNaN(numericValue) ? 0 : numericValue);
         return { content: formattedNumber };
       }
       case 'file': {

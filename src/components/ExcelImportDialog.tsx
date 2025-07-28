@@ -30,6 +30,72 @@ import {
 import { Upload as UploadIcon, CheckCircle as CheckIcon, Warning as WarningIcon } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
 
+// Date formatting utility function
+const formatDateField = (value: any, fieldType?: string): any => {
+  if (fieldType === 'date' && value) {
+    // Handle Excel serial date numbers
+    if (typeof value === 'number' && value > 25000 && value < 100000) {
+      try {
+        // Excel stores dates as serial numbers (days since 1900-01-01)
+        const excelDate = XLSX.SSF.format('yyyy-mm-dd', value);
+        return excelDate;
+      } catch (e) {
+        console.warn('Error formatting Excel date number:', value, e);
+      }
+    }
+    
+    // Handle string dates
+    if (typeof value === 'string' && value.trim()) {
+      try {
+        const parsedDate = new Date(value);
+        if (!isNaN(parsedDate.getTime())) {
+          // Return in ISO format (YYYY-MM-DD)
+          return parsedDate.toISOString().split('T')[0];
+        }
+      } catch (e) {
+        console.warn('Error parsing date string:', value, e);
+      }
+    }
+    
+    // Handle Date objects
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      return value.toISOString().split('T')[0];
+    }
+  }
+  
+  return value;
+};
+
+// Enhanced field validation
+const validateFieldValue = (value: any, field: TableField): { valid: boolean; message?: string } => {
+  if (field.required && (!value || value.toString().trim() === '')) {
+    return { valid: false, message: `${field.label} es requerido` };
+  }
+  
+  if (field.type === 'date' && value && value.toString().trim()) {
+    const formattedDate = formatDateField(value, 'date');
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(formattedDate)) {
+      return { valid: false, message: `${field.label} debe tener formato de fecha válido (YYYY-MM-DD)` };
+    }
+  }
+  
+  if (field.type === 'email' && value && value.toString().trim()) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value.toString())) {
+      return { valid: false, message: `${field.label} debe tener formato de email válido` };
+    }
+  }
+  
+  if (field.type === 'number' && value && value.toString().trim()) {
+    if (isNaN(Number(value))) {
+      return { valid: false, message: `${field.label} debe ser un número válido` };
+    }
+  }
+  
+  return { valid: true };
+};
+
 interface ExcelData {
   [key: string]: unknown;
 }
@@ -145,7 +211,18 @@ export function ExcelImportDialog({ open, onClose, tableFields, onImport }: Exce
           .map((row) => {
             const obj: ExcelData = {};
             headers.forEach((header, index) => {
-              obj[header] = row[index] || '';
+              const rawValue = row[index] || '';
+              
+              // Find the table field that maps to this header
+              const mappedFieldKey = Object.keys(fieldMapping).find(key => fieldMapping[key] === header);
+              const tableField = tableFields.find(f => f.key === mappedFieldKey);
+              
+              // Format the value based on field type
+              if (tableField?.type === 'date') {
+                obj[header] = formatDateField(rawValue, 'date');
+              } else {
+                obj[header] = rawValue;
+              }
             });
             return obj;
           });
@@ -225,12 +302,26 @@ export function ExcelImportDialog({ open, onClose, tableFields, onImport }: Exce
     setError('');
     
     try {
-      // Transform data according to field mapping
+      // Transform data according to field mapping with proper type formatting
       const transformedData = excelData.map(row => {
         const newRow: ExcelData = {};
         Object.entries(fieldMapping).forEach(([tableField, excelHeader]) => {
           if (excelHeader && row[excelHeader] !== undefined) {
-            newRow[tableField] = row[excelHeader];
+            const tableFieldDef = tableFields.find(f => f.key === tableField);
+            const rawValue = row[excelHeader];
+            
+            // Format value according to field type
+            if (tableFieldDef?.type === 'date') {
+              newRow[tableField] = formatDateField(rawValue, 'date');
+            } else if (tableFieldDef?.type === 'number' && rawValue) {
+              const numValue = Number(rawValue);
+              newRow[tableField] = isNaN(numValue) ? rawValue : numValue;
+            } else if (tableFieldDef?.type === 'boolean' && rawValue) {
+              const strValue = rawValue.toString().toLowerCase();
+              newRow[tableField] = strValue === 'true' || strValue === '1' || strValue === 'sí' || strValue === 'si';
+            } else {
+              newRow[tableField] = rawValue;
+            }
           }
         });
         return newRow;
@@ -303,6 +394,22 @@ export function ExcelImportDialog({ open, onClose, tableFields, onImport }: Exce
               style={{ display: 'none' }}
               accept=".xlsx,.xls,.csv"
             />
+            
+            {/* Date Format Information */}
+            <Alert severity="info" sx={{ mt: 2 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                📅 Formatos de fecha soportados:
+              </Typography>
+              <Typography variant="body2" component="div">
+                • <strong>Excel nativo:</strong> Celdas formateadas como fecha en Excel<br/>
+                • <strong>Formato ISO:</strong> YYYY-MM-DD (ej: 2025-01-28)<br/>
+                • <strong>Formatos comunes:</strong> DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY<br/>
+                • <strong>Texto legible:</strong> "January 28, 2025", "28 enero 2025"
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                💡 Para mejores resultados, usa celdas de fecha nativa de Excel o formato ISO (YYYY-MM-DD)
+              </Typography>
+            </Alert>
           </Box>
         );
 
@@ -358,11 +465,45 @@ export function ExcelImportDialog({ open, onClose, tableFields, onImport }: Exce
                     <TableBody>
                       {excelData.slice(0, 3).map((row, idx) => (
                         <TableRow key={idx}>
-                          {Object.entries(fieldMapping).filter(([key, header]) => header).map(([key, header]) => (
-                            <TableCell key={key}>
-                              {String(row[header] || '').slice(0, 50)}
-                            </TableCell>
-                          ))}
+                          {Object.entries(fieldMapping).filter(([, header]) => header).map(([fieldKey, header]) => {
+                            const tableField = tableFields.find(f => f.key === fieldKey);
+                            const rawValue = row[header];
+                            let displayValue = String(rawValue || '').slice(0, 50);
+                            let hasError = false;
+                            
+                            // Format and validate the display value
+                            if (tableField?.type === 'date' && rawValue) {
+                              const formattedDate = formatDateField(rawValue, 'date');
+                              displayValue = String(formattedDate);
+                              hasError = !/^\d{4}-\d{2}-\d{2}$/.test(String(formattedDate));
+                            }
+                            
+                            if (tableField?.required && (!rawValue || String(rawValue).trim() === '')) {
+                              hasError = true;
+                            }
+                            
+                            return (
+                              <TableCell key={fieldKey} sx={{ 
+                                color: hasError ? 'error.main' : 'inherit',
+                                bgcolor: hasError ? 'error.light' : 'inherit',
+                                fontWeight: hasError ? 'bold' : 'normal'
+                              }}>
+                                {displayValue}
+                                {tableField?.type === 'date' && rawValue ? (
+                                  <Chip
+                                    label="DATE"
+                                    size="small"
+                                    color={hasError ? 'error' : 'success'}
+                                    variant="outlined"
+                                    sx={{ ml: 1, fontSize: '0.6rem', height: 16 }}
+                                  />
+                                ) : null}
+                                {hasError && (
+                                  <WarningIcon sx={{ fontSize: 16, ml: 0.5, color: 'error.main' }} />
+                                )}
+                              </TableCell>
+                            );
+                          })}
                         </TableRow>
                       ))}
                     </TableBody>
