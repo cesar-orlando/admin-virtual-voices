@@ -341,15 +341,25 @@ export const bulkDeleteRecords = async (
 export const importRecords = async (
   tableSlug: string, 
   records: Array<{ data: Record<string, any> }>, 
-  user: UserProfile
+  user: UserProfile,
+  options?: {
+    duplicateStrategy: 'skip' | 'update' | 'create';
+    identifierField: string;
+    updateExistingFields: boolean;
+  }
 ) => {
   try {
+    console.log("Importing records:", records, "with options:", options, "user:", user);
+    
     const response = await api.post(`/records/${user.companySlug}/${tableSlug}/import`, {
       records,
-      createdBy: user.id
+      createdBy: user.id, // Add this line
+      options
     });
+    
     return response.data;
   } catch (error) {
+    console.error('API Import error:', error);
     handleError(error as any);
     throw new Error('No se pudieron importar los registros');
   }

@@ -48,6 +48,7 @@ import { useAuth } from '../hooks/useAuth';
 import { createTable, importRecords } from '../api/servicios';
 import type { TableField, FieldType } from '../types';
 import * as XLSX from 'xlsx';
+import { ExcelUploader } from '../components/ExcelUploader';
 
 const FIELD_TYPES: { value: FieldType; label: string; icon: string }[] = [
   { value: 'text', label: 'Texto', icon: '📝' },
@@ -740,19 +741,47 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
   return (
     <Box sx={{ p: 3, width: '90vw', height: '80vh' }}>
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-        <IconButton onClick={() => navigate('/tablas')} sx={{ mr: 2 }}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Box>
-          <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
-            Crear Nueva Tabla
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            Define la estructura de tu tabla personalizada
-          </Typography>
-        </Box>
-      </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+    <IconButton onClick={() => navigate('/tablas')} sx={{ mr: 2 }}>
+      <ArrowBackIcon />
+    </IconButton>
+    <Box>
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700 }}>
+        Crear Nueva Tabla
+      </Typography>
+      <Typography variant="body1" color="text.secondary">
+        Define la estructura de tu tabla personalizada
+      </Typography>
+    </Box>
+  </Box>
+  
+  {/* Excel upload button on the right */}
+  <Box>
+    <Button
+      variant="outlined"
+      startIcon={<UploadFileIcon />}
+      onClick={() => fileInputRef.current?.click()}
+      sx={{
+        borderColor: '#8B5CF6',
+        color: '#8B5CF6',
+        '&:hover': {
+          borderColor: '#7A4CF6',
+          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+        }
+      }}
+    >
+      Subir archivo Excel
+    </Button>
+    <input
+      type="file"
+      ref={fileInputRef}
+      onChange={handleFileImport}
+      style={{ display: 'none' }}
+      accept=".xlsx, .xls, .csv"
+    />
+  </Box>
+</Box>
 
       {/* Stepper */}
       <Stepper activeStep={activeStep} sx={{ mb: 4 }}>

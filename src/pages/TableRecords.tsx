@@ -22,7 +22,7 @@ import * as XLSX from 'xlsx';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import ExcelImportDialog from '../components/ExcelImportDialog';
+import { ExcelImportDialog } from '../components/ExcelImportDialog';
 import { importRecords } from '../api/servicios/dynamicTableServices';
 
 // Fuzzy match helper

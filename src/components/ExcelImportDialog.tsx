@@ -1,275 +1,572 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
-  Dialog, DialogTitle, DialogContent, DialogActions,
-  Button, Box, Typography, Alert, FormControl, InputLabel, Select, MenuItem, Tooltip
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Box,
+  Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Chip,
+  Alert,
+  CircularProgress,
+  FormControlLabel,
+  Checkbox,
+  Stepper,
+  Step,
+  StepLabel,
 } from '@mui/material';
+import { Upload as UploadIcon, CheckCircle as CheckIcon, Warning as WarningIcon } from '@mui/icons-material';
 import * as XLSX from 'xlsx';
-import { remove as removeDiacritics } from 'diacritics';
+
+interface ExcelData {
+  [key: string]: unknown;
+}
 
 interface TableField {
   key: string;
   label: string;
   required: boolean;
+  type?: string;
+}
+
+interface ImportResult {
+  newRecords: number;
+  updatedRecords: number;
+  duplicatesSkipped: number;
+  errors: string[];
 }
 
 interface ExcelImportDialogProps {
   open: boolean;
   onClose: () => void;
   tableFields: TableField[];
-  onImport: (mappedRows: any[]) => void;
+  onImport: (data: ExcelData[], options: ImportOptions) => Promise<ImportResult>;
 }
 
-const ExcelImportDialog: React.FC<ExcelImportDialogProps> = ({ open, onClose, tableFields, onImport }) => {
-  const [excelFileName, setExcelFileName] = useState('');
-  const [importedFields, setImportedFields] = useState<string[]>([]);
-  const [importedRows, setImportedRows] = useState<any[]>([]);
-  const [fieldMapping, setFieldMapping] = useState<{ [excelField: string]: string | undefined }>({});
-  const [error, setError] = useState('');
+interface ImportOptions {
+  duplicateStrategy: 'skip' | 'update' | 'create';
+  identifierField: string;
+  updateExistingFields: boolean;
+}
 
-  const handleExcelFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+const steps = ['Subir archivo', 'Mapear columnas', 'Configurar importación'];
+
+export function ExcelImportDialog({ open, onClose, tableFields, onImport }: ExcelImportDialogProps) {
+  const [activeStep, setActiveStep] = useState(0);
+  const [excelData, setExcelData] = useState<ExcelData[]>([]);
+  const [excelHeaders, setExcelHeaders] = useState<string[]>([]);
+  const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
+  const [fileName, setFileName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [error, setError] = useState<string>('');
+  
+  // Import options
+  const [duplicateStrategy, setDuplicateStrategy] = useState<'skip' | 'update' | 'create'>('skip');
+  const [identifierField, setIdentifierField] = useState<string>('');
+  const [updateExistingFields, setUpdateExistingFields] = useState(true);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Add this function to automatically map fields when headers match
+  const autoMapFields = (excelHeaders: string[], tableFields: TableField[]) => {
+    const mapping: Record<string, string> = {};
+    
+    tableFields.forEach(field => {
+      // Try exact match first
+      const exactMatch = excelHeaders.find(header => 
+        header.toLowerCase() === field.label.toLowerCase() ||
+        header.toLowerCase() === field.key.toLowerCase()
+      );
+      
+      if (exactMatch) {
+        mapping[field.key] = exactMatch;
+        return;
+      }
+      
+      // Try partial match (contains)
+      const partialMatch = excelHeaders.find(header => 
+        header.toLowerCase().includes(field.label.toLowerCase()) ||
+        field.label.toLowerCase().includes(header.toLowerCase())
+      );
+      
+      if (partialMatch) {
+        mapping[field.key] = partialMatch;
+      }
+    });
+    
+    return mapping;
+  };
+
+  // Update the handleFileUpload function
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
     if (!file) return;
-    setExcelFileName(file.name);
+
+    setLoading(true);
+    setFileName(file.name);
+    setError('');
+
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      const bstr = evt.target?.result;
-      if (!bstr) return;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
-      const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
-      if (Array.isArray(data) && data.length > 0) {
-        const excelFields = Object.keys(data[0] as object);
-        setImportedRows(data);
-        setImportedFields(excelFields);
-        // Mapeo automático: si el nombre de la columna de Excel coincide con el label o key de un campo de la tabla, se asigna automáticamente
-        const normalize = (str: string | undefined) => {
-          if (!str) return '';
-          return removeDiacritics(String(str))
-            .toLowerCase()
-            .replace(/[^a-z0-9]/gi, '');
-        };
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
         
-        const mapping: { [excelField: string]: string | undefined } = {};
-        const alreadyMapped = new Set<string>();
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
         
-        excelFields.forEach(excelField => {
-          const excelNorm = normalize(excelField);
-          let match: TableField | undefined;
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
         
-          for (const f of tableFields) {
-            const fieldNorm = normalize(f.label) || normalize(f.key);
+        if (jsonData.length < 2) {
+          setError('El archivo debe tener al menos 2 filas (encabezados + datos)');
+          setLoading(false);
+          return;
+        }
+
+        const headers = jsonData[0] as string[];
+        const rows = jsonData.slice(1) as any[][];
         
-            if (
-              (excelNorm === fieldNorm || fieldNorm.includes(excelNorm) || excelNorm.includes(fieldNorm)) &&
-              !alreadyMapped.has(f.key)
-            ) {
-              match = f;
-              alreadyMapped.add(f.key);
-              break;
-            }
-          }
+        const formattedData = rows
+          .filter(row => row.some(cell => cell !== undefined && cell !== null && cell !== ''))
+          .map((row) => {
+            const obj: ExcelData = {};
+            headers.forEach((header, index) => {
+              obj[header] = row[index] || '';
+            });
+            return obj;
+          });
         
-          mapping[excelField] = match ? match.key : undefined;
+        setExcelHeaders(headers);
+        setExcelData(formattedData);
+        
+        // Auto-map fields when possible
+        const autoMapping = autoMapFields(headers, tableFields);
+        setFieldMapping(autoMapping);
+        
+        // Auto-set identifier field if there's a clear match
+        const possibleIdentifiers = Object.keys(autoMapping).filter(key => {
+          const field = tableFields.find(f => f.key === key);
+          return field && (
+            field.key.toLowerCase().includes('id') ||
+            field.key.toLowerCase().includes('numero') ||
+            field.label.toLowerCase().includes('número') ||
+            field.label.toLowerCase().includes('telefono') ||
+            field.label.toLowerCase().includes('email')
+          );
         });
         
-        console.table(mapping); // <-- Colócalo aquí, después de llenar el objeto
-        setFieldMapping(mapping);
+        if (possibleIdentifiers.length > 0) {
+          setIdentifierField(possibleIdentifiers[0]);
+        }
+        
+        setActiveStep(1);
+      } catch (error) {
+        console.error('Error reading Excel file:', error);
+        setError('Error al leer el archivo Excel. Verifica que sea un archivo válido.');
+      } finally {
+        setLoading(false);
       }
     };
-    reader.readAsBinaryString(file);
+
+    reader.readAsArrayBuffer(file);
   };
 
-  const handleFieldMappingChange = (excelField: string, value: string) => {
-    setFieldMapping(prev => {
-      // Si selecciona 'Ignorar', deselecciona el campo para esa columna
-      if (!value) {
-        return { ...prev, [excelField]: undefined };
+  const handleFieldMappingChange = (tableField: string, excelHeader: string) => {
+    setFieldMapping(prev => ({
+      ...prev,
+      [tableField]: excelHeader
+    }));
+  };
+
+  const handleNext = () => {
+    if (activeStep === 1) {
+      // Check if we have any mappings at all
+      const hasMappings = Object.keys(fieldMapping).some(key => fieldMapping[key]);
+      
+      if (!hasMappings) {
+        setError('Debes mapear al menos un campo para continuar');
+        return;
       }
-      // No permitir mapear un campo ya seleccionado en otra columna
-      if (value && Object.entries(prev).some(([key, v]) => v === value && key !== excelField)) {
-        return prev;
+      
+      // Validate required field mappings
+      const requiredFields = tableFields.filter(f => f.required);
+      const missingFields = requiredFields.filter(f => !fieldMapping[f.key]);
+      
+      if (missingFields.length > 0) {
+        setError(`Los siguientes campos obligatorios no han sido mapeados: ${missingFields.map(f => f.label).join(', ')}`);
+        return;
       }
-      const newMapping = { ...prev };
-      Object.keys(newMapping).forEach(key => {
-        if (key !== excelField && newMapping[key] === value) {
-          newMapping[key] = undefined;
-        }
+      setError('');
+    }
+    setActiveStep(prev => prev + 1);
+  };
+
+  const handleBack = () => {
+    setActiveStep(prev => prev - 1);
+    setError('');
+  };
+
+  const handleImport = async () => {
+    setImporting(true);
+    setError('');
+    
+    try {
+      // Transform data according to field mapping
+      const transformedData = excelData.map(row => {
+        const newRow: ExcelData = {};
+        Object.entries(fieldMapping).forEach(([tableField, excelHeader]) => {
+          if (excelHeader && row[excelHeader] !== undefined) {
+            newRow[tableField] = row[excelHeader];
+          }
+        });
+        return newRow;
       });
-      newMapping[excelField] = value;
-      return newMapping;
-    });
-  };
 
-  // Validación de campos requeridos
-  const requiredFieldKeys = tableFields.filter(f => f.required).map(f => f.key);
-  const mappedFieldKeys = Object.values(fieldMapping);
-  const missingRequired = requiredFieldKeys.filter(key => !mappedFieldKeys.includes(key));
-  const canImport = importedRows.length > 0 && missingRequired.length === 0;
+      const options: ImportOptions = {
+        duplicateStrategy,
+        identifierField,
+        updateExistingFields
+      };
 
-  // Previsualización: solo muestra columnas mapeadas
-  const previewFields = tableFields.filter(f => mappedFieldKeys.includes(f.key));
-
-  const handleImport = () => {
-    if (!canImport) return;
-    // Construye los registros mapeados
-    const mappedRows = importedRows.map(row => {
-      const mapped: any = {};
-      for (const field of tableFields) {
-        const excelCol = Object.keys(fieldMapping).find(k => fieldMapping[k] === field.key);
-        mapped[field.key] = excelCol ? row[excelCol] : '';
+      const result = await onImport(transformedData, options);
+      setImportResult(result);
+      
+      if (result.errors.length === 0) {
+        setTimeout(() => {
+          handleClose();
+        }, 3000);
       }
-      return mapped;
-    });
-    onImport(mappedRows);
-    handleClose();
+    } catch (err: any) {
+      setError(err.message || 'Error durante la importación');
+    } finally {
+      setImporting(false);
+    }
   };
 
   const handleClose = () => {
-    setExcelFileName('');
-    setImportedFields([]);
-    setImportedRows([]);
+    setActiveStep(0);
+    setExcelData([]);
+    setExcelHeaders([]);
     setFieldMapping({});
+    setFileName('');
     setError('');
+    setImportResult(null);
+    setDuplicateStrategy('skip');
+    setIdentifierField('');
+    setUpdateExistingFields(true);
     onClose();
   };
 
-  
-
-  return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>Importar Registros desde Excel</DialogTitle>
-      <DialogContent>
-        <Box sx={{ my: 2 }}>
-          <Button
-            variant="outlined"
-            component="label"
-            sx={{ mb: 2 }}
-          >
-            Seleccionar archivo Excel
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              hidden
-              onChange={handleExcelFile}
-            />
-          </Button>
-          {excelFileName && (
-            <Typography variant="body2" sx={{ mb: 2 }}>
-              Archivo seleccionado: <b>{excelFileName}</b>
+  const renderStepContent = () => {
+    switch (activeStep) {
+      case 0:
+        return (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <UploadIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
+            <Typography variant="h6" gutterBottom>
+              Selecciona un archivo Excel
             </Typography>
-          )}
-          {importedFields.length > 0 && (
-            <>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                Asigna cada columna de tu archivo Excel al campo correspondiente de la tabla. Los campos requeridos están marcados en <b style={{color:'#d32f2f'}}>rojo</b>. Solo puedes asignar un campo por columna.
-              </Alert>
-              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Mapea las columnas del Excel a los campos de la tabla:</Typography>
-              <Box sx={{ mb: 2 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                  <thead>
-                    <tr>
-                      <th style={{ background: '#f5f5f5', padding: 6, border: '1px solid #ddd', fontWeight: 700 }}>Columna Excel</th>
-                      <th style={{ background: '#f5f5f5', padding: 6, border: '1px solid #ddd', fontWeight: 700 }}>Importar como</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {importedFields.map((excelField, index) => (
-                      <tr key={`row-${index}`}>
-                        <td style={{ padding: 6, border: '1px solid #eee', fontWeight: 600 }}>{excelField}</td>
-                        <td style={{ padding: 6, border: '1px solid #eee' }}>
-                          <FormControl size="small" fullWidth>
-                            <InputLabel>Campo</InputLabel>
-                            <Select
-                              value={fieldMapping[excelField] ?? ''}
-                              label="Campo"
-                              onChange={e => handleFieldMappingChange(excelField, e.target.value)}
-                              renderValue={selected => {
-                                if (!selected) return 'Ignorar';
-                                const campo = tableFields.find(f => f.key === selected);
-                                return campo ? campo.label : 'Ignorar';
-                              }}
-                            >
-                              <MenuItem value="">Ignorar</MenuItem>
-                              {tableFields.map(f => {
-                                const isSelected = fieldMapping[excelField] === f.key;
-                                // Solo deshabilitar si el campo está mapeado en otra columna (y no en esta)
-                                const isMappedElsewhere = Object.entries(fieldMapping).some(([key, v]) => v === f.key && key !== excelField);
-                                return (
-                                  <MenuItem key={f.key} value={f.key} disabled={isMappedElsewhere}>
-                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                      {isSelected && <span style={{color:'#8B5CF6',fontWeight:700}}>&#10003;</span>}
-                                      <span style={{color: f.required ? '#d32f2f' : undefined, fontWeight: f.required ? 700 : undefined}}>{f.label}{f.required ? ' *' : ''}</span>
-                                    </Box>
-                                  </MenuItem>
-                                );
-                              })}
-                            </Select>
-                          </FormControl>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Box>
-              {missingRequired.length > 0 && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  Los siguientes campos requeridos no están mapeados: <b>{[...new Set(missingRequired.map(k => tableFields.find(f => f.key === k)?.label))].join(', ')}</b>
-                </Alert>
-              )}
-              <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>Previsualización de todos los registros (con mapeo):</Typography>
-              <Box sx={{ maxHeight: 400, overflow: 'auto', border: '1px solid #eee', borderRadius: 2, mb: 2 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-                  <thead>
-                    <tr>
-                      {previewFields.map(f => (
-                        <th key={f.key} style={{ background: f.required ? '#ffebee' : '#f5f5f5', color: f.required ? '#d32f2f' : undefined, padding: 6, border: '1px solid #ddd', fontWeight: 700 }}>{f.label}{f.required ? ' *' : ''}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {importedRows.map((row, idx) => (
-                      <tr key={idx}>
-                        {previewFields.map(f => {
-                          const excelCol = Object.keys(fieldMapping).find(k => fieldMapping[k] === f.key);
-                          let cellValue = '-';
-                          if (excelCol) {
-                            cellValue = row[excelCol] !== undefined && row[excelCol] !== '' ? row[excelCol] : '-';
-                          }
-                          const isEmpty = cellValue === '-';
-                          return (
-                            <Tooltip  key={`cell-${idx}-${f.key}`} title={f.required && isEmpty ? 'Este campo es requerido y está vacío en esta fila.' : ''} arrow>
-                              <td style={{ padding: 6, border: '1px solid #eee', color: f.required && isEmpty ? '#d32f2f' : undefined, background: f.required && isEmpty ? '#ffebee' : undefined, fontWeight: f.required && isEmpty ? 700 : undefined }}>{cellValue}</td>
-                            </Tooltip>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Box>
-            </>
-          )}
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose}>Cancelar</Button>
-        <Tooltip title={importedRows.length === 0 ? 'Debes seleccionar un archivo Excel' : missingRequired.length > 0 ? 'Debes mapear todos los campos requeridos' : ''} arrow>
-          <span>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Formatos soportados: .xlsx, .xls, .csv
+            </Typography>
             <Button
               variant="contained"
-              color="primary"
-              disabled={!canImport}
-              onClick={handleImport}
-              sx={{ fontWeight: 700, px: 4 }}
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading}
+              sx={{ mb: 2 }}
             >
-              Importar
+              {loading ? <CircularProgress size={20} color="inherit" /> : 'Subir archivo'}
             </Button>
-          </span>
-        </Tooltip>
+            {fileName && (
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Archivo: {fileName}
+              </Typography>
+            )}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              style={{ display: 'none' }}
+              accept=".xlsx,.xls,.csv"
+            />
+          </Box>
+        );
+
+      case 1:
+        return (
+          <Box>
+            <Typography variant="h6" gutterBottom>
+              Mapear columnas del Excel con campos de la tabla
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+              Encontrados {excelData.length} registros. Mapea las columnas del Excel con los campos de tu tabla.
+            </Typography>
+            
+            {tableFields.map((field) => (
+              <Box key={field.key} sx={{ mb: 2 }}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>
+                    {field.label} {field.required && <span style={{ color: 'red' }}>*</span>}
+                  </InputLabel>
+                  <Select
+                    value={fieldMapping[field.key] || ''}
+                    label={field.label}
+                    onChange={(e) => handleFieldMappingChange(field.key, e.target.value)}
+                  >
+                    <MenuItem value="">-- Sin mapear --</MenuItem>
+                    {excelHeaders.map((header) => (
+                      <MenuItem key={header} value={header}>
+                        {header}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Box>
+            ))}
+
+            {/* Preview */}
+            {excelData.length > 0 && (
+              <Box sx={{ mt: 3 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Vista previa (primeros 3 registros):
+                </Typography>
+                <TableContainer component={Paper} sx={{ maxHeight: 200 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        {Object.keys(fieldMapping).filter(key => fieldMapping[key]).map(key => (
+                          <TableCell key={key}>
+                            {tableFields.find(f => f.key === key)?.label}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {excelData.slice(0, 3).map((row, idx) => (
+                        <TableRow key={idx}>
+                          {Object.entries(fieldMapping).filter(([key, header]) => header).map(([key, header]) => (
+                            <TableCell key={key}>
+                              {String(row[header] || '').slice(0, 50)}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Box>
+            )}
+
+            <Box sx={{ mb: 2, display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => {
+                  const autoMapping = autoMapFields(excelHeaders, tableFields);
+                  setFieldMapping(autoMapping);
+                  
+                  // Auto-set identifier if possible
+                  const possibleIdentifiers = Object.keys(autoMapping).filter(key => {
+                    const field = tableFields.find(f => f.key === key);
+                    return field && (
+                      field.key.toLowerCase().includes('id') ||
+                      field.key.toLowerCase().includes('numero') ||
+                      field.label.toLowerCase().includes('número') ||
+                      field.label.toLowerCase().includes('telefono') ||
+                      field.label.toLowerCase().includes('email')
+                    );
+                  });
+                  
+                  if (possibleIdentifiers.length > 0) {
+                    setIdentifierField(possibleIdentifiers[0]);
+                  }
+                }}
+              >
+                Auto-mapear campos
+              </Button>
+              
+              <Button
+                variant="outlined"
+                size="small"
+                color="secondary"
+                onClick={() => {
+                  setFieldMapping({});
+                  setIdentifierField('');
+                }}
+              >
+                Limpiar mapeo
+              </Button>
+            </Box>
+          </Box>
+        );
+
+      case 2:
+        return (
+          <Box>
+            <Typography variant="h6" gutterBottom>
+              Configurar importación
+            </Typography>
+            
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <InputLabel>Campo identificador para duplicados</InputLabel>
+              <Select
+                value={identifierField}
+                label="Campo identificador para duplicados"
+                onChange={(e) => setIdentifierField(e.target.value)}
+              >
+                <MenuItem value="">-- Seleccionar campo --</MenuItem>
+                {/* Show all table fields that have mappings OR all table fields if no mappings */}
+                {(Object.keys(fieldMapping).length > 0 
+                  ? Object.keys(fieldMapping).filter(key => fieldMapping[key])
+                  : tableFields.map(f => f.key)
+                ).map(key => (
+                  <MenuItem key={key} value={key}>
+                    {tableFields.find(f => f.key === key)?.label}
+                    {fieldMapping[key] && ` (${fieldMapping[key]})`}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth sx={{ mb: 3 }}>
+              <InputLabel>Estrategia para duplicados</InputLabel>
+              <Select
+                value={duplicateStrategy}
+                label="Estrategia para duplicados"
+                onChange={(e) => setDuplicateStrategy(e.target.value as any)}
+              >
+                <MenuItem value="skip">Omitir duplicados</MenuItem>
+                <MenuItem value="update">Actualizar existentes</MenuItem>
+                <MenuItem value="create">Crear como nuevos</MenuItem>
+              </Select>
+            </FormControl>
+
+            {duplicateStrategy === 'update' && (
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={updateExistingFields}
+                    onChange={(e) => setUpdateExistingFields(e.target.checked)}
+                  />
+                }
+                label="Actualizar solo campos no vacíos"
+                sx={{ mb: 2 }}
+              />
+            )}
+
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography variant="body2">
+                Se van a procesar <strong>{excelData.length}</strong> registros.
+                {identifierField && (
+                  <> Los duplicados se identificarán por el campo <strong>{tableFields.find(f => f.key === identifierField)?.label}</strong>.</>
+                )}
+              </Typography>
+            </Alert>
+
+            {importResult && (
+              <Alert severity={importResult.errors.length > 0 ? "warning" : "success"} sx={{ mt: 2 }}>
+                <Typography variant="body2">
+                  <strong>Resultado de la importación:</strong><br />
+                  • {importResult.newRecords} registros nuevos creados<br />
+                  • {importResult.updatedRecords} registros actualizados<br />
+                  • {importResult.duplicatesSkipped} duplicados omitidos<br />
+                  {importResult.errors.length > 0 && (
+                    <>• {importResult.errors.length} errores encontrados</>
+                  )}
+                </Typography>
+                {importResult.errors.length > 0 && (
+                  <Box sx={{ mt: 1 }}>
+                    {importResult.errors.slice(0, 5).map((error, idx) => (
+                      <Typography key={idx} variant="caption" display="block">
+                        {error}
+                      </Typography>
+                    ))}
+                  </Box>
+                )}
+              </Alert>
+            )}
+          </Box>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{ sx: { minHeight: 500 } }}
+    >
+      <DialogTitle>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <UploadIcon />
+          Importar datos desde Excel
+        </Box>
+        <Stepper activeStep={activeStep} sx={{ mt: 2 }}>
+          {steps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      </DialogTitle>
+      
+      <DialogContent>
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+        
+        {renderStepContent()}
+      </DialogContent>
+      
+      <DialogActions>
+        <Button onClick={handleClose}>
+          Cancelar
+        </Button>
+        {activeStep > 0 && (
+          <Button onClick={handleBack}>
+            Atrás
+          </Button>
+        )}
+        {activeStep < steps.length - 1 ? (
+          <Button 
+            onClick={handleNext}
+            variant="contained"
+            disabled={activeStep === 0 && excelData.length === 0}
+          >
+            Siguiente
+          </Button>
+        ) : (
+          <Button
+            onClick={handleImport}
+            variant="contained"
+            disabled={importing || !identifierField}
+            startIcon={importing ? <CircularProgress size={20} /> : undefined}
+          >
+            {importing ? 'Importando...' : 'Importar datos'}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );
-};
-
-export default ExcelImportDialog; 
+}
