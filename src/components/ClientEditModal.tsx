@@ -331,33 +331,45 @@ export default function ClientEditModal({
 
     // Campo especial: Asesor
     if (field.name === 'asesor') {
-      // Parsear el valor del asesor si es JSON string
+      // Manejar diferentes formatos del asesor
       let asesorData: any = null;
       let asesorValue = '';
       
       try {
-        if (value && typeof value === 'string' && value.startsWith('{')) {
-          // Es un JSON string, parsearlo
-          asesorData = JSON.parse(value);
-          // Buscar el asesor en la lista por email o nombre
-          const foundAsesor = asesores.find((a: any) => 
-            (a.email && asesorData?.email && a.email === asesorData.email) ||
-            (a.name && asesorData?.name && a.name === asesorData.name) ||
-            (a.nombre && asesorData?.name && a.nombre === asesorData.name)
-          );
-          if (foundAsesor) {
-            asesorValue = String(foundAsesor._id || foundAsesor.id || foundAsesor.value || '');
+        if (value && typeof value === 'string') {
+          if (value.startsWith('{')) {
+            // Formato JSON: {"name":"Oscar Daniel López Rosagel","_id":"686eaa8ecb5c849172b31e6b","email":"olopez@quicklearning.com"}
+            asesorData = JSON.parse(value);
+            const foundAsesor = asesores.find((a: any) => 
+              (asesorData?._id && (a._id === asesorData._id || a.id === asesorData._id)) ||
+              (a.email && asesorData?.email && a.email === asesorData.email) ||
+              (a.name && asesorData?.name && a.name === asesorData.name) ||
+              (a.nombre && asesorData?.name && a.nombre === asesorData.name)
+            );
+            if (foundAsesor) {
+              asesorValue = String(foundAsesor._id || foundAsesor.id || foundAsesor.value || '');
+            }
+          } else {
+            // Formato string simple: "Verónica Guadalupe Molina Alvarado"
+            const foundAsesor = asesores.find((a: any) => {
+              const asesorName = a.nombre || a.name || a.label || '';
+              const fullName = asesorName + (a.apellido ? ` ${a.apellido}` : '');
+              return fullName === value || asesorName === value;
+            });
+            if (foundAsesor) {
+              asesorValue = String(foundAsesor._id || foundAsesor.id || foundAsesor.value || '');
+            }
           }
         } else if (value) {
           // Es un ID directo
           asesorValue = String(value);
         }
       } catch (e) {
-        console.warn('Error parsing asesor JSON:', e);
+        console.warn('Error parsing asesor:', e);
         asesorValue = value ? String(value) : '';
       }
       
-      console.log('Asesor field - original value:', value, 'parsed data:', asesorData, 'final value:', asesorValue);
+      console.log('Asesor field - original value:', value, 'final value:', asesorValue);
       
       return (
         <Box key={field.name} sx={{ mb: 3, position: 'relative' }}>
@@ -374,14 +386,15 @@ export default function ClientEditModal({
                   // Sin asesor
                   handleFieldChange(field.name, '');
                 } else {
-                  // Encontrar el asesor completo para crear el JSON
+                  // Encontrar el asesor completo
                   const selectedAsesor = asesores.find((a: any) => 
                     String(a._id || a.id || a.value || '') === selectedId
                   );
                   if (selectedAsesor) {
-                    // Crear objeto JSON consistente
+                    // SIEMPRE guardar en formato JSON completo
                     const asesorJson = JSON.stringify({
                       name: selectedAsesor.nombre || selectedAsesor.name || selectedAsesor.label,
+                      _id: selectedAsesor._id || selectedAsesor.id,
                       email: selectedAsesor.email
                     });
                     console.log('Saving asesor as JSON:', asesorJson);

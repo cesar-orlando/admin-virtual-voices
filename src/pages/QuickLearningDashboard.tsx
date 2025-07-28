@@ -736,16 +736,24 @@ const QuickLearningDashboard: React.FC = () => {
         }
         dataToSave.curso = mapCurso[dataToSave.curso as string] || dataToSave.curso
       }
-      // 2. Asesor: string (nombre o email)
-      if (dataToSave.asesor && typeof dataToSave.asesor === 'object') {
-        dataToSave.asesor =
-          dataToSave.asesor.nombre || dataToSave.asesor.name || dataToSave.asesor.email || ''
-      } else if (typeof dataToSave.asesor === 'string' && dataToSave.asesor.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(dataToSave.asesor)
-          dataToSave.asesor = parsed.nombre || parsed.name || parsed.email || ''
-        } catch {}
+      // 2. Asesor: mantener formato JSON completo
+      if (dataToSave.asesor && typeof dataToSave.asesor === 'string' && !dataToSave.asesor.startsWith('{')) {
+        // Si es un string simple, convertir a JSON (casos legacy)
+        const foundAsesor = asesores.find((a: any) => {
+          const asesorName = a.nombre || a.name || a.label || '';
+          const fullName = asesorName + (a.apellido ? ` ${a.apellido}` : '');
+          return fullName === dataToSave.asesor || asesorName === dataToSave.asesor;
+        });
+        if (foundAsesor) {
+          dataToSave.asesor = JSON.stringify({
+            name: foundAsesor.nombre || foundAsesor.name || foundAsesor.label,
+            _id: foundAsesor._id || foundAsesor.id,
+            email: foundAsesor.email
+          });
+        }
       }
+      // Si ya es JSON, mantenerlo tal como está
+      console.log('Final asesor data being saved:', dataToSave.asesor);
       // 3. Email: si está vacío, NO lo mandes
       if (!dataToSave.email) {
         delete dataToSave.email
