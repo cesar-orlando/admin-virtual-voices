@@ -111,7 +111,7 @@ describe('Multi-Company Authentication System', () => {
         name: 'New Quick Learning User',
         email: 'newuser@quicklearning.com',
         password: 'NewPassword123!',
-        role: 'Usuario' as const,
+        role: 'Asesor' as const,
         companySlug: 'quicklearning' as const,
       };
 
@@ -121,7 +121,7 @@ describe('Multi-Company Authentication System', () => {
         name: 'New Quick Learning User',
         email: 'newuser@quicklearning.com',
         password: 'NewPassword123!',
-        role: 'Usuario',
+        role: 'Asesor',
         companySlug: 'quicklearning',
       });
 
@@ -183,7 +183,7 @@ describe('Multi-Company Authentication System', () => {
         name: 'Test User',
         email: 'test@example.com',
         password: 'password123456',
-        role: 'Usuario',
+        role: 'Asesor',
         companySlug: 'test'
       };
 
@@ -193,7 +193,7 @@ describe('Multi-Company Authentication System', () => {
         name: 'Test User',
         email: 'test@example.com',
         password: 'password123456',
-        role: 'Usuario',
+        role: 'Asesor',
         companySlug: 'test'
       });
 

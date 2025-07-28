@@ -31,9 +31,10 @@ import SendIcon from '@mui/icons-material/Send'
 import SearchIcon from '@mui/icons-material/Search'
 import ForumIcon from '@mui/icons-material/Forum'
 import AddIcon from '@mui/icons-material/Add'
+import Badge from '@mui/material/Badge'
 
 import { fetchWhatsAppUsers, fetchUserMessages, sendMessages, fetchSessions } from '../api/servicios'
-import type { UserProfile, WhatsAppSession, WhatsAppUser, WhatsAppMessage } from '../types'
+import type { UserProfile, WhatsAppSession, WhatsAppUser, WhatsAppMessage, GroupedWhatsAppUser } from '../types'
 import io from 'socket.io-client'
 
 type Message = {
@@ -47,9 +48,9 @@ type Message = {
 export function ChatsTab() {
   const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
   const theme = useTheme()
-  const [conversations, setConversations] = useState<WhatsAppUser[]>([])
-  const [filteredConversations, setFilteredConversations] = useState<WhatsAppUser[]>([])
-  const [activeConversation, setActiveConversation] = useState<WhatsAppUser | null>(null)
+  const [conversations, setConversations] = useState<GroupedWhatsAppUser[]>([])
+  const [filteredConversations, setFilteredConversations] = useState<GroupedWhatsAppUser[]>([])
+  const [activeConversation, setActiveConversation] = useState<GroupedWhatsAppUser | null>(null)
   const [activeMessages, setActiveMessages] = useState<WhatsAppMessage[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [chatInput, setChatInput] = useState('')
@@ -63,7 +64,32 @@ export function ChatsTab() {
   const [sessions, setSessions] = useState<WhatsAppSession[]>([])
   const [sendLoading, setSendLoading] = useState(false)
   const [selectedSessionId, setSelectedSessionId] = useState<string>('')
-  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' })
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'info' })
+  const [selectedSessionViewId, setSelectedSessionViewId] = useState<string>(''); // <-- NUEVO
+
+  // Agrupa conversaciones por número de teléfono
+  function groupConversationsByPhone(users: WhatsAppUser[]): GroupedWhatsAppUser[] {
+    const map = new Map<string, GroupedWhatsAppUser>();
+    users.forEach(u => {
+      if (!map.has(u.phone)) {
+        map.set(u.phone, { ...u, sessions: [u.session.id], unreadMessages: u.unreadMessages || 0 });
+      } else {
+        const existing = map.get(u.phone)!;
+        existing.sessions.push(u.session.id);
+        // Suma los mensajes no leídos de todas las sesiones
+        existing.unreadMessages = (existing.unreadMessages || 0) + (u.unreadMessages || 0);
+        // Actualiza el último mensaje si es más reciente
+        if (
+          u.lastMessage &&
+          (!existing.lastMessage ||
+            new Date(u.lastMessage.date).getTime() > new Date(existing.lastMessage.date).getTime())
+        ) {
+          existing.lastMessage = u.lastMessage;
+        }
+      }
+    });
+    return Array.from(map.values());
+  }
 
   useEffect(() => {
     const socket = io(import.meta.env.VITE_SOCKET_URL) // Use environment variable
@@ -79,14 +105,26 @@ export function ChatsTab() {
             ...updatedConversations[existingConvoIndex],
             lastMessage: newMessageData.messages[newMessageData.messages.length - 1],
             totalMessages: updatedConversations[existingConvoIndex].totalMessages + 1,
-            updatedAt: newMessageData.messages[newMessageData.messages.length - 1].createdAt
+            updatedAt: newMessageData.messages[newMessageData.messages.length - 1].createdAt,
+            unreadMessages: newMessageData.messages[newMessageData.messages.length - 1].direction === 'inbound'
+              ? (updatedConversations[existingConvoIndex].unreadMessages || 0) + 1
+              : 0
           };
+          // Notificación tipo snackbar solo para mensajes entrantes
+          const lastMsg = newMessageData.messages[newMessageData.messages.length - 1];
+          if (lastMsg.direction === 'inbound') {
+            setSnackbar({
+              open: true,
+              message: `Nuevo mensaje de ${newMessageData.name || newMessageData.phone.replace('@c.us', '')}: ${lastMsg.body?.slice(0, 60)}`,
+              severity: 'info'
+            });
+          }
           return updatedConversations;
         }
         return prev;
       });
-      
-      if(activeConversation && activeConversation.phone === newMessageData.phone) {
+
+      if (activeConversation && activeConversation.phone === newMessageData.phone) {
         setActiveMessages(prev => [...prev, newMessageData.lastMessage])
       }
     })
@@ -94,19 +132,26 @@ export function ChatsTab() {
     // Fetch initial data
     const loadData = async () => {
       try {
-        const [usersData, sessionsData] = await Promise.all([
-          fetchWhatsAppUsers(user, ['prospectos', 'clientes', 'nuevo_ingreso']),
-          fetchSessions(user),
-        ]) as [WhatsAppUser[], WhatsAppSession[]]
-        
-        // Sort conversations after initial fetch
-        const sortedConversations = usersData.sort((a, b) => {
-          const lastMessageDateA = a.lastMessage ? new Date(a.lastMessage.date).getTime() : 0;
-          const lastMessageDateB = b.lastMessage ? new Date(b.lastMessage.date).getTime() : 0;
-          return lastMessageDateB - lastMessageDateA; // Sort descending by latest message
-        });
-        setConversations(sortedConversations)
-        setSessions(sessionsData)
+        const sessionsData = await fetchSessions(user) as WhatsAppSession[];
+        setSessions(sessionsData);
+        // Selecciona la primera sesión por defecto si no hay una seleccionada
+        if (!selectedSessionViewId && sessionsData.length > 0) {
+          setSelectedSessionViewId(sessionsData[0]._id || sessionsData[0].id);
+        }
+        // Solo carga usuarios si hay una sesión seleccionada
+        if ((selectedSessionViewId || sessionsData[0]?._id || sessionsData[0]?.id)) {
+          const usersData = await fetchWhatsAppUsers(user, ['prospectos', 'clientes', 'nuevo_ingreso']) as WhatsAppUser[];
+          console.log("Fetched users:", usersData);
+          // Agrupa por número
+          const grouped = groupConversationsByPhone(usersData);
+          // Ordena por fecha de último mensaje
+          const sortedConversations = grouped.sort((a, b) => {
+            const lastMessageDateA = a.lastMessage ? new Date(a.lastMessage.date).getTime() : 0;
+            const lastMessageDateB = b.lastMessage ? new Date(b.lastMessage.date).getTime() : 0;
+            return lastMessageDateB - lastMessageDateA;
+          }) as GroupedWhatsAppUser[];
+          setConversations(sortedConversations)
+        }
       } catch (error) {
         console.error("Error loading conversations:", error)
         setSnackbar({ open: true, message: 'Error al cargar datos iniciales', severity: 'error' })
@@ -121,7 +166,7 @@ export function ChatsTab() {
     return () => {
       socket.disconnect()
     }
-  }, [user.companySlug, user.id])
+  }, [user.companySlug, user.id]) // No agregues selectedSessionViewId aquí
 
   useEffect(() => {
 
@@ -142,11 +187,34 @@ export function ChatsTab() {
 
   // Load messages when active conversation changes
   useEffect(() => {
-    if (activeConversation?.phone) {
+    if (
+      activeConversation?.phone &&
+      activeConversation.sessions?.includes(selectedSessionViewId)
+    ) {
       const loadMessages = async () => {
         try {
-          const messagesData = await fetchUserMessages(user, activeConversation.phone)
+          const messagesData = await fetchUserMessages(user, selectedSessionViewId, activeConversation.phone)
           setActiveMessages(messagesData.chat?.messages || [])
+          console.log(messagesData);
+          // Cambia el nombre del chat si el nombre de la sesión es diferente
+          if (
+            messagesData.chat?.name &&
+            messagesData.chat.name !== activeConversation.name
+          ) {
+            setConversations(prev =>
+              prev.map(convo =>
+                convo.phone === activeConversation.phone
+                  ? { ...convo, name: messagesData.chat.name, lastMessage: messagesData.chat.messages[messagesData.chat.messages.length - 1] }
+                  : convo
+              )
+            )
+            // Si el chat activo es el mismo, actualiza también el activeConversation
+            setActiveConversation(prev =>
+              prev && prev.phone === activeConversation.phone
+                ? { ...prev, name: messagesData.chat.name, lastMessage: messagesData.chat.messages[messagesData.chat.messages.length - 1] }
+                : prev
+            )
+          }
         } catch (error) {
           console.error("Failed to load messages", error)
           setSnackbar({ open: true, message: 'Error al cargar mensajes', severity: 'error' })
@@ -156,7 +224,7 @@ export function ChatsTab() {
     } else {
       setActiveMessages([])
     }
-  }, [activeConversation?.phone, conversations])
+  }, [activeConversation?.phone, conversations, selectedSessionViewId])
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -189,22 +257,25 @@ export function ChatsTab() {
     // Optimistically update the UI
     setActiveMessages(prev => [...prev, newMessage])
 
-    // Usa la primera sesión disponible
-    const sessionId = sessions[0]._id || sessions[0].id
     try {
-      await sendMessages(sessionId, user, phone, userMessage);
-      // Update conversations if message sent successfully
-      setConversations((prevConvos) =>
-        prevConvos.map((convo) =>
-          convo.phone === activeConversation.phone
-            ? {
-                ...convo,
-                lastMessage: newMessage,
-                updatedAt: new Date().toISOString(),
-              }
-            : convo
-        )
-      );
+      if (
+        activeConversation?.phone &&
+        activeConversation.sessions?.includes(selectedSessionViewId)
+      ) {
+        await sendMessages(selectedSessionViewId, user, phone, userMessage);
+        // Update conversations if message sent successfully
+        setConversations((prevConvos) =>
+          prevConvos.map((convo) =>
+            convo.phone === activeConversation.phone
+              ? {
+                  ...convo,
+                  lastMessage: newMessage,
+                  updatedAt: new Date().toISOString(),
+                }
+              : convo
+          )
+        );
+      }
     } catch (error) {
       // If the message fails, show error
       setSnackbar({ open: true, message: 'Error al enviar mensaje', severity: 'error' });
@@ -254,6 +325,26 @@ export function ChatsTab() {
     }
   }
 
+  useEffect(() => {
+    if (!activeConversation) return;
+    // Si el selectedSessionViewId no es válido para este número, selecciona la primera sesión disponible
+    if (
+      !activeConversation.sessions?.includes(selectedSessionViewId) &&
+      activeConversation.sessions &&
+      activeConversation.sessions.length > 0
+    ) {
+      setSelectedSessionViewId(activeConversation.sessions[0]);
+    }
+    // Si solo hay una sesión, asegúrate de que esté seleccionada
+    if (
+      activeConversation.sessions &&
+      activeConversation.sessions.length === 1 &&
+      selectedSessionViewId !== activeConversation.sessions[0]
+    ) {
+      setSelectedSessionViewId(activeConversation.sessions[0]);
+    }
+  }, [activeConversation]);
+
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -276,7 +367,8 @@ export function ChatsTab() {
           : 'rgba(255,255,255,0.96)',
       }}
     >
-       <Box sx={{ p: 3, flexShrink: 0, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Header */}
+      <Box sx={{ p: 3, flexShrink: 0, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <Typography 
             variant="h4" 
@@ -349,9 +441,17 @@ export function ChatsTab() {
                 sx={{ borderRadius: 2, mb: 0.5 }}
               >
                 <ListItemAvatar>
-                  <Avatar sx={{ backgroundColor: '#8B5CF6' }}>
-                    {convo.name.substring(0, 2).toUpperCase()}
-                  </Avatar>
+                  <Badge
+                    color="secondary"
+                    badgeContent={convo.unreadMessages > 0 ? convo.unreadMessages : 0}
+                    invisible={!convo.unreadMessages || convo.unreadMessages <= 0}
+                    overlap="circular"
+                    anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
+                  >
+                    <Avatar sx={{ backgroundColor: '#8B5CF6' }}>
+                      {convo.name.substring(0, 2).toUpperCase()}
+                    </Avatar>
+                  </Badge>
                 </ListItemAvatar>
                 <ListItemText
                   primary={convo.name}
@@ -378,6 +478,26 @@ export function ChatsTab() {
                 <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
                   {activeConversation.phone}
                 </Typography>
+                {/* Selector de sesión si hay más de una sesión para este número */}
+                {activeConversation.sessions && activeConversation.sessions.length > 1 && (
+                  <FormControl size="small" sx={{ minWidth: 180, ml: 3 }}>
+                    <InputLabel id="session-view-chat-label">Sesión</InputLabel>
+                    <Select
+                      labelId="session-view-chat-label"
+                      value={selectedSessionViewId}
+                      label="Sesión"
+                      onChange={e => setSelectedSessionViewId(e.target.value)}
+                    >
+                      {sessions
+                        .filter(s => activeConversation.sessions.includes(s._id || s.id))
+                        .map(session => (
+                          <MenuItem key={session._id || session.id} value={session._id || session.id}>
+                            {session.name || session._id || session.id}
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                )}
               </Box>
               <Box sx={{ flex: 1, p: 3, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {activeMessages.map((msg, idx) => (

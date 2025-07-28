@@ -132,6 +132,7 @@ export default function ClientEditModal({
   // Inicializar datos del formulario
   useEffect(() => {
     if (initialData) {
+      console.log('ClientEditModal - initialData:', initialData);
       setFormData(initialData);
       setHasUnsavedChanges(false);
     }
@@ -330,6 +331,46 @@ export default function ClientEditModal({
 
     // Campo especial: Asesor
     if (field.name === 'asesor') {
+      // Manejar diferentes formatos del asesor
+      let asesorData: any = null;
+      let asesorValue = '';
+      
+      try {
+        if (value && typeof value === 'string') {
+          if (value.startsWith('{')) {
+            // Formato JSON: {"name":"Oscar Daniel López Rosagel","_id":"686eaa8ecb5c849172b31e6b","email":"olopez@quicklearning.com"}
+            asesorData = JSON.parse(value);
+            const foundAsesor = asesores.find((a: any) => 
+              (asesorData?._id && (a._id === asesorData._id || a.id === asesorData._id)) ||
+              (a.email && asesorData?.email && a.email === asesorData.email) ||
+              (a.name && asesorData?.name && a.name === asesorData.name) ||
+              (a.nombre && asesorData?.name && a.nombre === asesorData.name)
+            );
+            if (foundAsesor) {
+              asesorValue = String(foundAsesor._id || foundAsesor.id || foundAsesor.value || '');
+            }
+          } else {
+            // Formato string simple: "Verónica Guadalupe Molina Alvarado"
+            const foundAsesor = asesores.find((a: any) => {
+              const asesorName = a.nombre || a.name || a.label || '';
+              const fullName = asesorName + (a.apellido ? ` ${a.apellido}` : '');
+              return fullName === value || asesorName === value;
+            });
+            if (foundAsesor) {
+              asesorValue = String(foundAsesor._id || foundAsesor.id || foundAsesor.value || '');
+            }
+          }
+        } else if (value) {
+          // Es un ID directo
+          asesorValue = String(value);
+        }
+      } catch (e) {
+        console.warn('Error parsing asesor:', e);
+        asesorValue = value ? String(value) : '';
+      }
+      
+      console.log('Asesor field - original value:', value, 'final value:', asesorValue);
+      
       return (
         <Box key={field.name} sx={{ mb: 3, position: 'relative' }}>
           <FormControl fullWidth error={isMissing} sx={missingFieldStyle}>
@@ -337,9 +378,33 @@ export default function ClientEditModal({
               Asesor {isRequired && '*'}
             </InputLabel>
             <Select
-              value={value || ''}
+              value={asesorValue}
               label="Asesor"
-              onChange={(e) => handleFieldChange(field.name, e.target.value)}
+              onChange={(e) => {
+                const selectedId = e.target.value;
+                if (selectedId === '') {
+                  // Sin asesor
+                  handleFieldChange(field.name, '');
+                } else {
+                  // Encontrar el asesor completo
+                  const selectedAsesor = asesores.find((a: any) => 
+                    String(a._id || a.id || a.value || '') === selectedId
+                  );
+                  if (selectedAsesor) {
+                    // SIEMPRE guardar en formato JSON completo
+                    const asesorJson = JSON.stringify({
+                      name: selectedAsesor.nombre || selectedAsesor.name || selectedAsesor.label,
+                      _id: selectedAsesor._id || selectedAsesor.id,
+                      email: selectedAsesor.email
+                    });
+                    console.log('Saving asesor as JSON:', asesorJson);
+                    handleFieldChange(field.name, asesorJson);
+                  } else {
+                    // Fallback: guardar solo el ID
+                    handleFieldChange(field.name, selectedId);
+                  }
+                }
+              }}
               startAdornment={
                 <InputAdornment position="start">
                   <GroupIcon color="action" />
@@ -349,12 +414,15 @@ export default function ClientEditModal({
               <MenuItem value="">
                 <em>Sin asesor asignado</em>
               </MenuItem>
-              {asesores.map((asesor: any) => (
-                <MenuItem key={asesor._id || asesor.id} value={asesor._id || asesor.id}>
-                  {asesor.nombre || asesor.name || asesor.email}
-                  {asesor.apellido ? ` ${asesor.apellido}` : ''}
-                </MenuItem>
-              ))}
+              {asesores.map((asesor: any) => {
+                const asesorId = String(asesor._id || asesor.id || asesor.value || '');
+                return (
+                  <MenuItem key={asesorId} value={asesorId}>
+                    {asesor.nombre || asesor.name || asesor.label || asesor.email}
+                    {asesor.apellido ? ` ${asesor.apellido}` : ''}
+                  </MenuItem>
+                );
+              })}
             </Select>
           </FormControl>
           {isMissing && (
@@ -534,11 +602,15 @@ export default function ClientEditModal({
 
     // Campo especial: Boolean (AI Enabled)
     if (field.name === 'aiEnabled') {
+      // Normalizar el valor boolean a string
+      const aiValue = value === true || value === 'true' ? 'true' : 'false';
+      console.log('aiEnabled field - original value:', value, 'normalized:', aiValue);
+      
       return (
         <FormControl fullWidth key={field.name} error={isMissing}>
           <InputLabel>IA Habilitada</InputLabel>
           <Select
-            value={value || 'false'}
+            value={aiValue}
             label="IA Habilitada"
             onChange={(e) => handleFieldChange(field.name, e.target.value)}
             startAdornment={

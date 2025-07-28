@@ -7,7 +7,8 @@ import type {
   QuickLearningLoginRequest,
   QuickLearningRegisterRequest,
   CompanyDetectionResponse,
-  CompanyConfig
+  CompanyConfig,
+  UserRole
 } from "../../types";
 
 // Enhanced login API for multi-company support
@@ -247,5 +248,5 @@ export const loginAPI_Legacy = async (email: string, password: string) => {
 };
 
 export const registerAPI_Legacy = async (name: string, email: string, password: string, role: string, companySlug: string) => {
-  return registerAPI({ name, email, password, role, companySlug });
+  return registerAPI({ name, email, password, role: role as UserRole, companySlug });
 };

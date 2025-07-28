@@ -38,7 +38,8 @@ import SpeedIcon from '@mui/icons-material/Speed';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import DataTable from '../components/DataTable';
 import UserDrawer from '../components/UserDrawer';
-import { fetchCompanyUsers, createUser, deleteUser, updateUser } from '../api/servicios';
+import { fetchCompanyUsers, deleteUser, updateUser } from '../api/servicios';
+import { registerAPI } from '../api/servicios/authServices';
 import Loading from '../components/Loading';
 import { useCompanyStatuses } from '../hooks/useCompanyStatuses';
 import { getCompanyConfig } from '../api/servicios/aiConfigServices';
@@ -79,6 +80,8 @@ export default function Users() {
   const [companyStatuses, setCompanyStatuses] = useState<string[]>(["active", "inactive"]);
   const [metricsModalOpen, setMetricsModalOpen] = useState(false);
   const [selectedUserForMetrics, setSelectedUserForMetrics] = useState<User | null>(null);
+
+
 
   // Si el usuario no es admin, no puede ver la página
   if (user.role !== 'Administrador') {
@@ -145,23 +148,23 @@ export default function Users() {
         setSelectedUser(null);
       } else {
         console.log('Creating new user');
-        // Crear nuevo usuario en el backend
-        const newUser = await createUser({
+        // Crear nuevo usuario en el backend usando registerAPI
+        const response = await registerAPI({
           name: userData.name,
           email: userData.email,
           password: userData.password,
-          role: userData.role || 'user',
-          c_name: user.c_name,
+          role: userData.role || 'Asesor',
+          companySlug: user.companySlug || user.c_name,
         });
         
-        console.log('Create result:', newUser);
+        console.log('Create result:', response);
         
         // Agregar el nuevo usuario a la lista local
         setUsers([...users, {
-          id: newUser.id,
-          name: newUser.name,
-          email: newUser.email,
-          role: newUser.role,
+          id: response.data.id,
+          name: response.data.name,
+          email: response.data.email,
+          role: response.data.role,
           status: userData.status || statuses[0] || 'active',
           lastLogin: '-',
         }]);
@@ -798,9 +801,12 @@ export default function Users() {
               : '0 4px 32px rgba(59, 130, 246, 0.4)',
           },
           transition: 'all 0.2s ease-out',
-          zIndex: 1200,
+          zIndex: '9999 !important',
+          pointerEvents: 'auto !important',
+          cursor: 'pointer !important',
+          isolation: 'isolate',
         }}
-        disabled={user.role !== 'admin'}
+        disabled={user.role !== 'Administrador'}
       >
         Agregar Usuario
       </Button>

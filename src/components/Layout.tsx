@@ -223,7 +223,7 @@ export default function Layout() {
                 <DarkModeIcon sx={{ color: mode === 'dark' ? '#8B5CF6' : '#BDBDBD', fontSize: 20 }} />
               </Box>
               {/* Configuración de empresa solo para admin */}
-              {user.role === 'admin' && (
+              {user.role === 'Administrador' && (
                 <Tooltip title="Configuración de empresa">
                   <IconButton
                     color="inherit"
@@ -293,7 +293,8 @@ export default function Layout() {
               py: 2,
               mt: 'auto',
               background: 'transparent',
-              position: 'relative',
+              pointerEvents: 'none',
+              zIndex: 1,
             }}
           >
             © {new Date().getFullYear()} Virtual Voices. Todos los derechos reservados.
