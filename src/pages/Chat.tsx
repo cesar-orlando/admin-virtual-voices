@@ -31,19 +31,14 @@ import SendIcon from '@mui/icons-material/Send'
 import SearchIcon from '@mui/icons-material/Search'
 import ForumIcon from '@mui/icons-material/Forum'
 import AddIcon from '@mui/icons-material/Add'
+import AnalyticsIcon from '@mui/icons-material/Analytics'
+import CloseIcon from '@mui/icons-material/Close'
 import Badge from '@mui/material/Badge'
 
 import { fetchWhatsAppUsers, fetchUserMessages, sendMessages, fetchSessions } from '../api/servicios'
 import type { UserProfile, WhatsAppSession, WhatsAppUser, WhatsAppMessage, GroupedWhatsAppUser } from '../types'
+import { MetricsDashboard } from '../components/MetricsDashboard'
 import io from 'socket.io-client'
-
-type Message = {
-  id: string
-  phone: string
-  messages: WhatsAppMessage[]
-  session: { id: string }
-  // add other properties if needed
-}
 
 export function ChatsTab() {
   const user = JSON.parse(localStorage.getItem('user') || '{}') as UserProfile
@@ -66,6 +61,7 @@ export function ChatsTab() {
   const [selectedSessionId, setSelectedSessionId] = useState<string>('')
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'info' })
   const [selectedSessionViewId, setSelectedSessionViewId] = useState<string>(''); // <-- NUEVO
+  const [openMetricsModal, setOpenMetricsModal] = useState(false) // <-- NUEVO ESTADO PARA MODAL DE MÉTRICAS
 
   // Agrupa conversaciones por número de teléfono
   function groupConversationsByPhone(users: WhatsAppUser[]): GroupedWhatsAppUser[] {
@@ -387,21 +383,42 @@ export function ChatsTab() {
             Gestiona todas tus conversaciones de WhatsApp en un solo lugar.
           </Typography>
         </div>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setOpenSendModal(true)}
-          sx={{
-            borderRadius: 2,
-            px: 3,
-            py: 1,
-            fontWeight: 600,
-            backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
-            boxShadow: '0 4px 24px rgba(139, 92, 246, 0.3)',
-          }}
-        >
-          Nuevo Mensaje
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<AnalyticsIcon />}
+            onClick={() => setOpenMetricsModal(true)}
+            sx={{
+              borderRadius: 2,
+              px: 3,
+              py: 1,
+              fontWeight: 600,
+              borderColor: '#8B5CF6',
+              color: '#8B5CF6',
+              '&:hover': {
+                borderColor: '#8B5CF6',
+                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+              }
+            }}
+          >
+            Métricas de Chat
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setOpenSendModal(true)}
+            sx={{
+              borderRadius: 2,
+              px: 3,
+              py: 1,
+              fontWeight: 600,
+              backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+              boxShadow: '0 4px 24px rgba(139, 92, 246, 0.3)',
+            }}
+          >
+            Nuevo Mensaje
+          </Button>
+        </Box>
       </Box>
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Conversation List */}
@@ -556,6 +573,50 @@ export function ChatsTab() {
           )}
         </Box>
       </Box>
+
+      {/* Modal para Métricas de Chat */}
+      <Dialog 
+        open={openMetricsModal} 
+        onClose={() => setOpenMetricsModal(false)} 
+        maxWidth="lg" 
+        fullWidth
+        PaperProps={{
+          sx: {
+            minHeight: '80vh',
+            borderRadius: 3,
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          fontWeight: 700, 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          pb: 2
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <AnalyticsIcon sx={{ color: '#8B5CF6' }} />
+            <Typography variant="h5" component="span" sx={{ fontWeight: 700 }}>
+              Métricas de Chat
+            </Typography>
+          </Box>
+          <IconButton 
+            onClick={() => setOpenMetricsModal(false)}
+            sx={{ 
+              color: 'text.secondary',
+              '&:hover': { backgroundColor: 'rgba(0,0,0,0.04)' }
+            }}
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, overflow: 'hidden' }}>
+          <Box sx={{ p: 3, height: '70vh', overflow: 'auto' }}>
+            <MetricsDashboard companySlug={user?.companySlug || ''} />
+          </Box>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal para enviar mensaje manual */}
       <Dialog open={openSendModal} onClose={() => setOpenSendModal(false)} maxWidth="sm" fullWidth>

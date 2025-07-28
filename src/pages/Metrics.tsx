@@ -45,6 +45,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 import { useAuth } from '../hooks/useAuth';
 import { getTableStats } from '../api/servicios/dynamicTableServices';
 import { keyframes } from '@mui/system';
+import DynamicDashboard from '../components/DynamicDashboard';
+import { useNavigate } from 'react-router-dom';
 
 // Mock data para las métricas - COMENTADO PARA USAR DATOS REALES
 /*
@@ -565,6 +567,8 @@ const Metrics = () => {
   // Elimina cualquier declaración previa de isAdmin y deja solo esta:
   const isAdmin = user?.role === 'Administrador' as any;
 
+  const navigate = useNavigate();
+
   // Estado para el ciclo seleccionado
   const [selectedCycle, setSelectedCycle] = useState(getCurrentCycle());
 
@@ -577,6 +581,9 @@ const Metrics = () => {
   const [campanaStats, setCampanaStats] = useState<any[]>([]);
   const [medioStats, setMedioStats] = useState<any[]>([]);
   const [ciudadStats, setCiudadStats] = useState<any[]>([]);
+  const handleTableClick = (tableSlug: string) => {
+    navigate(`/tablas/${tableSlug}`);
+  };
 
   // Cargar datos reales al montar y cuando cambie el ciclo
   useEffect(() => {
@@ -775,13 +782,8 @@ const Metrics = () => {
 
   // Para otras empresas o si no es admin, dejar mensaje de "Próximamente"
   return (
+    console.log(user?.companySlug, 'is not QuickLearning'),
     <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
-      <Typography variant="h3" sx={{ fontWeight: 800, color: '#222', mb: 1 }}>
-        Dashboard de Métricas
-      </Typography>
-      <Typography variant="subtitle1" sx={{ color: '#6C63FF', mb: 4 }}>
-        Análisis completo del rendimiento de tu negocio
-      </Typography>
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
         <Paper elevation={0} sx={{
           p: { xs: 3, md: 6 },
@@ -789,7 +791,7 @@ const Metrics = () => {
           background: 'linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%)',
           border: '1.5px solid #d1d5db',
           width: '100%',
-          maxWidth: 700,
+          maxWidth: '100%',
           textAlign: 'center',
           boxShadow: '0 4px 32px #6C63FF10',
         }}>
@@ -809,16 +811,13 @@ const Metrics = () => {
             }}>
               <span role="img" aria-label="metrics">📊</span>
             </Box>
-            <Typography variant="h5" sx={{ fontWeight: 800, color: '#6C63FF', mb: 1 }}>
-              Dashboard de Métricas
-            </Typography>
+            
+            {/* Tables Dashboard */}
+            <DynamicDashboard 
+              companySlug={user?.companySlug ?? ''}
+              onTableClick={handleTableClick}
+            />
           </Box>
-          <Typography variant="body1" sx={{ color: '#6C63FF', fontWeight: 600, mb: 1 }}>
-            Próximamente: Centro de análisis y seguimiento de tu negocio
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#6C63FF', opacity: 0.8 }}>
-            Estamos trabajando para traerte métricas detalladas y análisis avanzados
-          </Typography>
         </Paper>
       </Box>
     </Box>

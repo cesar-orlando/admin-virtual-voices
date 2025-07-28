@@ -17,6 +17,7 @@ import EditTable from './pages/EditTable'
 import UserProfile from './pages/UserProfile'
 import Metrics from './pages/Metrics'
 import QuickLearningDashboard from './pages/QuickLearningDashboard'
+import { DynamicDashboard } from './components/DynamicDashboard';
 
 // Tools System imports
 import ToolsDashboard from './pages/ToolsDashboard'
@@ -43,13 +44,24 @@ function QuickLearningProtectedRoute({ children }: React.PropsWithChildren) {
   return <>{children}</>
 }
 
-function DashboardPage() {
+function Dashboard() {
+  const navigate = useNavigate();
+
+  const handleTableClick = (tableSlug: string) => {
+    navigate(`/tablas/${tableSlug}`);
+  };
+
+  const handleCreateTable = () => {
+    navigate('/crear-tabla');
+  };
+
   return (
-    <div>
-      <h1>Dashboard</h1>
-      <p>Bienvenido al dashboard de Virtual Voices</p>
-    </div>
-  )
+    <DynamicDashboard 
+      companySlug={localStorage.getItem('companySlug')!}
+      onTableClick={handleTableClick}
+      onCreateTable={handleCreateTable}
+    />
+  );
 }
 
 function EquiposPage() {
