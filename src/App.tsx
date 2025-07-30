@@ -26,6 +26,7 @@ import ToolsList from './pages/ToolsList'
 import ToolForm from './pages/ToolForm'
 import ToolTester from './pages/ToolTester'
 import ToolsTest from './pages/ToolsTest'
+import Messenger from './pages/Messenger'
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth()
@@ -115,6 +116,7 @@ export default function App() {
             <Route path="herramientas-test" element={<ToolsTest />} />
 
             <Route path="chats" element={<ChatsTab />} />
+            <Route path="messenger" element={<Messenger />} />
             <Route path="quicklearning/whatsapp" element={
               <QuickLearningProtectedRoute>
                 <QuickLearningDashboard />

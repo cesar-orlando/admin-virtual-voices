@@ -227,6 +227,11 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
             icon: <ChatIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
             path: '/chats',
           },
+          {
+            label: 'Messenger',
+            icon: <ChatIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
+            path: '/messenger',
+          },
         ]),
   ]
 
