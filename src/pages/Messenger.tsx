@@ -160,7 +160,7 @@ export default function Messenger() {
     if (!chatInput.trim() || !activeConversation) return;
     try {
       setChatInput('');
-      await sendMessage(user, activeConversation.userId, chatInput);
+      await sendMessage(user, activeConversation.userId, chatInput, activeConversation.session.id);
       setActiveMessages(prev => [
         ...prev,
         {
@@ -170,6 +170,24 @@ export default function Messenger() {
           direction: 'outbound',
         }
       ]);
+      setConversations(prev => {
+        const idx = prev.findIndex(c => c._id === activeConversation._id);
+        if (idx !== -1) {
+          const updated = [...prev];
+          updated[idx] = {
+            ...updated[idx],
+            lastMessage: {
+              body: chatInput,
+              senderId: user.id,
+              createdAt: new Date().toISOString(),
+              direction: 'outbound',
+            },
+            updatedAt: new Date().toISOString(),
+          };
+          return updated;
+        }
+        return prev;
+      });
       setSnackbar({ open: true, message: 'Mensaje enviado', severity: 'success' });
     } catch (error) {
       setSnackbar({ open: true, message: 'Error al enviar el mensaje', severity: 'error' });

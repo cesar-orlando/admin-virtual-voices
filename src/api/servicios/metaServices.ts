@@ -53,12 +53,13 @@ export const fetchUserMessages = async (user: UserProfile, sessionId: string, us
   }
 }
 
-export const sendMessage = async (user: UserProfile, userId: string, message: string) => {
+export const sendMessage = async (user: UserProfile, userId: string, message: string, sessionId: string) => {
   try {
     const response = await api.post(`/meta/messenger/send-message/`, {
-        c_name: user.companySlug,
-        userId,
-        text:message,
+      c_name: user.companySlug,
+      userId,
+      text: message,
+      sessionId
     });
     return response.data;
   } catch (error) {
