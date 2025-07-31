@@ -49,7 +49,7 @@ export default function Layout() {
   const { logoutUser } = useAuth();
   const menuOpen = Boolean(anchorEl);
   const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const isMobile = useMediaQuery("(max-width:600px)");
+  const isMobile = useMediaQuery("(max-width:900px)"); // Cambiado a 900px para tablets y móviles
   const location = useLocation();
 
   const [mode, setMode] = useState<'light' | 'dark'>(() => {
@@ -138,6 +138,14 @@ export default function Layout() {
     }
   };
 
+  // Siempre mantener el menú cerrado en móviles/tabletas
+  useEffect(() => {
+    if (isMobile && mobileOpen) {
+      setMobileOpen(false);
+    }
+    // eslint-disable-next-line
+  }, [isMobile]);
+
   return (
     <ThemeProvider theme={theme}>
       <Box sx={{ display: "flex", minHeight: "100vh", background: theme.palette.background.default }}>
@@ -146,35 +154,66 @@ export default function Layout() {
           position="fixed"
           elevation={0}
           sx={{
-            width: { sm: `calc(100% - ${sidebarHover ? expandedWidth : collapsedWidth}px)` },
-            ml: { sm: `${sidebarHover ? expandedWidth : collapsedWidth}px` },
+            width: { xs: '100%', sm: `calc(100% - ${sidebarHover ? expandedWidth : collapsedWidth}px)` },
+            ml: { xs: 0, sm: `${sidebarHover ? expandedWidth : collapsedWidth}px` },
             transition: 'all 0.2s ease-out',
             zIndex: theme.zIndex.drawer - 1,
             background: 'transparent',
             borderBottom: 'none',
-            backdropFilter: "blur(8px)",
+            // Quitar el blur de la barra superior
+            //backdropFilter: "blur(8px)",
             boxShadow: 'none',
           }}
         >
-          <Toolbar sx={{ 
-            justifyContent: "flex-end",
-            minHeight: { xs: 64, sm: 72 },
-            px: { xs: 2, sm: 3 },
-          }}>
-            <Box sx={{ 
-              display: "flex", 
-              alignItems: "center", 
-              gap: 2,
-              background: theme.palette.mode === 'dark' 
-                ? 'rgba(30,30,40,0.3)' 
-                : 'rgba(255,255,255,0.3)',
-              borderRadius: 3,
-              p: 1,
-              backdropFilter: "blur(8px)",
-              boxShadow: theme.palette.mode === 'dark'
-                ? '0 4px 24px rgba(139, 92, 246, 0.1)'
-                : '0 4px 24px rgba(139, 92, 246, 0.05)',
-            }}>
+          <Toolbar
+            sx={{
+              justifyContent: { xs: "space-between", sm: "flex-end" },
+              minHeight: { xs: 56, sm: 72 },
+              px: { xs: 2, sm: 3 }, // Aumenta padding horizontal en mobile
+            }}
+          >
+            {/* Botón de menú hamburguesa solo en mobile/tablet */}
+            {isMobile && (
+              <IconButton
+                color="inherit"
+                aria-label="Abrir menú"
+                edge="start"
+                onClick={handleDrawerToggle}
+                sx={{
+                  mr: 2,
+                  display: { xs: "inline-flex", sm: "none" },
+                  background: theme.palette.mode === 'dark'
+                    ? 'rgba(30,30,40,0.5)'
+                    : 'rgba(255,255,255,0.5)',
+                  '&:hover': {
+                    background: theme.palette.mode === 'dark'
+                      ? 'rgba(139, 92, 246, 0.1)'
+                      : 'rgba(139, 92, 246, 0.05)',
+                  },
+                  p: { xs: 1.2, sm: 1 }, // Padding más grande en mobile para área táctil
+                  borderRadius: 2, // Más redondeado en mobile
+                  alignSelf: "flex-start",
+                }}
+              >
+                <MenuIcon sx={{ fontSize: 28, color: theme.palette.mode === 'dark' ? '#E05EFF' : '#8B5CF6' }} />
+              </IconButton>
+            )}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: { xs: 1, sm: 2 },
+                background: theme.palette.mode === 'dark'
+                  ? 'rgba(30,30,40,0.3)'
+                  : 'rgba(255,255,255,0.3)',
+                borderRadius: 3,
+                p: { xs: 0.5, sm: 1 },
+                backdropFilter: "blur(8px)",
+                boxShadow: theme.palette.mode === 'dark'
+                  ? '0 4px 24px rgba(139, 92, 246, 0.1)'
+                  : '0 4px 24px rgba(139, 92, 246, 0.05)',
+              }}
+            >
               <Tooltip title="Notificaciones">
                 <IconButton 
                   color="inherit" 
@@ -247,9 +286,9 @@ export default function Layout() {
             </Box>
           </Toolbar>
         </AppBar>
-        <Sidebar 
-          mobileOpen={mobileOpen} 
-          onClose={handleDrawerToggle} 
+        <Sidebar
+          mobileOpen={mobileOpen}
+          onClose={handleDrawerToggle}
           mode={mode}
           onHoverChange={setSidebarHover}
         />
@@ -257,11 +296,11 @@ export default function Layout() {
           component="main"
           sx={{
             flexGrow: 1,
-            p: isMobile ? 1 : 3,
-            pt: { xs: 9, sm: 10 },
-            width: { sm: `calc(100% - ${sidebarHover ? expandedWidth : collapsedWidth}px)` },
+            p: { xs: 1.5, sm: 3 },
+            pt: { xs: 8, sm: 10 },
+            width: { xs: '100%', sm: `calc(100% - ${sidebarHover ? expandedWidth : collapsedWidth}px)` },
             minHeight: '100vh',
-            background: theme.palette.mode === 'dark' 
+            background: theme.palette.mode === 'dark'
               ? 'linear-gradient(to right, rgba(30,30,40,0.95), rgba(30,30,40,0.92))'
               : 'linear-gradient(to right, rgba(255,255,255,0.96), rgba(255,255,255,0.92))',
             backdropFilter: 'blur(16px)',
@@ -271,14 +310,19 @@ export default function Layout() {
             position: 'relative',
             ml: { xs: 0, sm: `${sidebarHover ? expandedWidth : collapsedWidth}px` },
             borderLeft: 'none',
+            fontSize: { xs: '1.08rem', sm: '1rem' }, // Tamaño de fuente mayor en mobile
           }}
         >
           <Fade in={contentVisible} timeout={600}>
-            <Box sx={{ 
-              flex: 1, 
-              width: '100%',
-              position: 'relative',
-            }}>
+            <Box
+              sx={{
+                flex: 1,
+                width: '100%',
+                position: 'relative',
+                px: { xs: 0, sm: 0 },
+                fontSize: { xs: '1.08rem', sm: '1rem' }, // Tamaño de fuente mayor en mobile
+              }}
+            >
               <Outlet />
             </Box>
           </Fade>
@@ -288,9 +332,9 @@ export default function Layout() {
               width: '100%',
               textAlign: 'center',
               color: '#BDBDBD',
-              fontSize: 13,
+              fontSize: { xs: 12, sm: 13 },
               fontFamily: 'Montserrat, Arial, sans-serif',
-              py: 2,
+              py: { xs: 1, sm: 2 },
               mt: 'auto',
               background: 'transparent',
               pointerEvents: 'none',
