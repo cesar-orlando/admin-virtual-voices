@@ -17,6 +17,9 @@ import EditTable from './pages/EditTable'
 import UserProfile from './pages/UserProfile'
 import Metrics from './pages/Metrics'
 import QuickLearningDashboard from './pages/QuickLearningDashboard'
+import CalendarPage from './pages/Calendar'
+import CalendarTest from './components/CalendarTest'
+import CalendarAPITester from './components/CalendarAPITester'
 import { DynamicDashboard } from './components/DynamicDashboard';
 import DateFieldDebugger from './components/DateFieldDebugger';
 
@@ -95,6 +98,7 @@ export default function App() {
           >
             <Route index element={<Metrics />} />
             <Route path="metricas" element={<Metrics />} />
+            <Route path="calendario" element={<CalendarPage />} />
             <Route path="usuarios" element={<Users />} />
             <Route path="ia" element={<AiConfig />} />
             <Route path="equipos" element={<EquiposPage />} />
@@ -107,6 +111,8 @@ export default function App() {
             <Route path="tablas/:tableSlug/nuevo" element={<RecordForm />} />
             <Route path="tablas/:tableSlug/editar/:recordId" element={<RecordForm />} />
             <Route path="debug/date-field" element={<DateFieldDebugger />} />
+            <Route path="debug/calendar" element={<CalendarTest />} />
+            <Route path="debug/calendar-api" element={<CalendarAPITester />} />
 
             {/* Tools System Routes */}
             <Route path="herramientas-dashboard" element={<ToolsDashboard />} />

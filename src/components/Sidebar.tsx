@@ -24,6 +24,7 @@ import GroupIcon from '@mui/icons-material/Group'
 import WhatsAppIcon from '@mui/icons-material/WhatsApp'
 import LogoutIcon from '@mui/icons-material/Logout'
 import TableChartIcon from '@mui/icons-material/TableChart'
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth'
 import ExpandLessIcon from '@mui/icons-material/ExpandLess'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import AddIcon from '@mui/icons-material/Add'
@@ -146,6 +147,11 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
     {
       label: 'Dashboard',
       icon: <AnalyticsIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/',
+    },
+    {
+      label: 'Calendario',
+      icon: <CalendarMonthIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
+      path: '/calendario',
     },
     // Solo mostrar Usuarios si es Administrador
     ...(user.role === 'Administrador' ? [
