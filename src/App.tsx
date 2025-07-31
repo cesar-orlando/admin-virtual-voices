@@ -27,6 +27,7 @@ import ToolForm from './pages/ToolForm'
 import ToolTester from './pages/ToolTester'
 import ToolsTest from './pages/ToolsTest'
 import Messenger from './pages/Messenger'
+import PrivacyPolicy from './pages/PrivacyPolicy'
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth()
@@ -83,6 +84,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/politicas-de-privacidad" element={<PrivacyPolicy />} />
           <Route
             path="/"
             element={
