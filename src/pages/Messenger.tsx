@@ -24,11 +24,18 @@ import SearchIcon from '@mui/icons-material/Search';
 import ForumIcon from '@mui/icons-material/Forum';
 import Badge from '@mui/material/Badge';
 import io from 'socket.io-client';
-import { fetchFacebookUsers, fetchUserMessages, sendMessage, createSession } from '../api/servicios/metaServices';
+import { fetchFacebookUsers, fetchUserMessages, sendMessage, createSession, fetchSessions, updateSession, deleteSession } from '../api/servicios/metaServices';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
+import { fetchAllAiConfigs } from '../api/servicios';
+import { set } from 'date-fns';
 
 const MESSENGER_SOCKET_EVENT = 'messenger-message';
 
@@ -48,6 +55,13 @@ export default function Messenger() {
   const [pageId, setPageId] = useState('');
   const [pageAccessToken, setPageAccessToken] = useState('');
   const [createLoading, setCreateLoading] = useState(false);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [openSessionsModal, setOpenSessionsModal] = useState(false);
+  const [editSession, setEditSession] = useState<any | null>(null);
+  const [editSessionName, setEditSessionName] = useState('');
+  const [editSessionIA, setEditSessionIA] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [availableIAs, setAvailableIAs] = useState<any[]>([]);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   // Fetch Messenger conversations from backend
@@ -72,8 +86,9 @@ export default function Messenger() {
     const socket = io(import.meta.env.VITE_SOCKET_URL);
 
     socket.on(`${MESSENGER_SOCKET_EVENT}-${user.companySlug}`, (newMessageData: any) => {
+      console.log(newMessageData);
       setConversations(prev => {
-        const idx = prev.findIndex(c => c.id === newMessageData.chatId);
+        const idx = prev.findIndex(c => c._id === newMessageData._id);
         if (idx !== -1) {
           const updated = [...prev];
           updated[idx] = {
@@ -184,6 +199,92 @@ export default function Messenger() {
     }
   };
 
+  // Cargar sesiones activas de Messenger
+useEffect(() => {
+  const fetchAllSessions = async () => {
+    try {
+      const data = await fetchSessions(user);
+      setSessions(data || []);
+    } catch (error) {
+      setSnackbar({ open: true, message: 'Error al cargar sesiones', severity: 'error' });
+    }
+  };
+  fetchAllSessions();
+}, [user.companySlug, user.id]);
+
+  // Handler para editar sesión
+  const handleEditSession = (session: any) => {
+    setEditSession(session);
+    setEditSessionName(session.name || '');
+    setEditSessionIA(session.IA ? String(session.IA.id || session.IA._id) : '');
+    // IA se setea en useEffect abajo
+  };
+
+  // Cargar IAs disponibles al abrir el modal de editar sesión
+  useEffect(() => {
+    if (!editSession) return;
+    const fetchIAs = async () => {
+      try {
+        // Reemplaza esto por tu llamada real
+        const data = await fetchAllAiConfigs(user);
+        console.log(data);
+        setAvailableIAs(data);
+      } catch {
+        setAvailableIAs([]);
+      }
+    };
+    fetchIAs();
+  }, [editSession?._id, user.id]);
+
+  const handleSaveEditSession = async () => {
+    if (!editSession) return;
+    setEditLoading(true);
+    try {
+      // Buscar la IA seleccionada por id o _id
+      const selectedIA = availableIAs.find((ia: any) => String(ia.id) === String(editSessionIA) || String(ia._id) === String(editSessionIA));
+
+      const res = await updateSession({
+        _id: editSession._id,
+        name: editSessionName,
+        IA: { id: selectedIA._id, name: selectedIA.name },
+      }, user);
+      setSessions(prev => prev.map(s => s._id === res.session._id ? res.session : s));
+      setSnackbar({ open: true, message: 'Sesión actualizada', severity: 'success' });
+      setEditSession(null);
+    } catch {
+      setSnackbar({ open: true, message: 'Error al actualizar sesión', severity: 'error' });
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
+  // Handler para cambiar status
+  const handleToggleStatus = async (session: any) => {
+    try {
+      const res = await updateSession({
+        _id: session._id,
+        status: session.status === 'connected' ? 'disconnected' : 'connected',
+      }, user);
+      setSessions(prev => prev.map(s => s._id === res.session._id ? res.session : s));
+      setSnackbar({ open: true, message: 'Estado actualizado', severity: 'success' });
+    } catch {
+      setSnackbar({ open: true, message: 'Error al cambiar estado', severity: 'error' });
+    }
+  };
+
+  // Handler para borrar sesión
+  const handleDeleteSession = async (session: any) => {
+    if (!window.confirm('¿Seguro que deseas borrar esta sesión?')) return;
+    try {
+      await deleteSession(user, session._id);
+      setSnackbar({ open: true, message: 'Sesión eliminada', severity: 'success' });
+      setOpenSessionsModal(false);
+      window.location.reload();
+    } catch {
+      setSnackbar({ open: true, message: 'Error al eliminar sesión', severity: 'error' });
+    }
+  };
+
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -226,13 +327,24 @@ export default function Messenger() {
             Gestiona tus conversaciones de Facebook Messenger aquí.
           </Typography>
         </div>
-        <Button
-          variant="contained"
-          sx={{ backgroundColor: '#4267B2', color: '#fff', borderRadius: 2 }}
-          onClick={() => setOpenCreateSession(true)}
-        >
-          Crear Sesión
-        </Button>
+        <Box>
+          <Button
+            variant="contained"
+            sx={{ backgroundColor: '#4267B2', color: '#fff', borderRadius: 2, mr: 2 }}
+            onClick={() => setOpenCreateSession(true)}
+          >
+            Crear Sesión
+          </Button>
+          {sessions.length > 0 && (
+            <Button
+              variant="outlined"
+              sx={{ borderColor: '#4267B2', color: '#4267B2', borderRadius: 2 }}
+              onClick={() => setOpenSessionsModal(true)}
+            >
+              Ver Sesiones
+            </Button>
+          )}
+        </Box>
       </Box>
       <Box sx={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
         {/* Conversation List */}
@@ -422,6 +534,96 @@ export default function Messenger() {
             disabled={createLoading}
           >
             {createLoading ? 'Creando...' : 'Crear'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal para ver y editar sesiones */}
+      <Dialog open={openSessionsModal} onClose={() => setOpenSessionsModal(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Sesiones de Messenger</DialogTitle>
+        <DialogContent>
+          {sessions.length === 0 ? (
+            <Typography color="text.secondary">No hay sesiones activas.</Typography>
+          ) : (
+            <List>
+              {sessions.map(session => (
+                <ListItem key={session._id} divider>
+                  <ListItemText
+                    primary={session.name}
+                    secondary={
+                      <>
+                        <Typography component="span" variant="body2" color="text.secondary">
+                          Estado: {session.status === 'connected' ? 'Conectado' : 'Desconectado'}
+                        </Typography>
+                        {session.IA?.name && (
+                          <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                            IA: {session.IA.name}
+                          </Typography>
+                        )}
+                      </>
+                    }
+                  />
+                  <IconButton onClick={() => handleEditSession(session)} color="primary">
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton onClick={() => handleToggleStatus(session)} color={session.status === 'connected' ? 'success' : 'default'}>
+                    <PowerSettingsNewIcon />
+                  </IconButton>
+                  <IconButton onClick={() => handleDeleteSession(session)} color="error">
+                    <DeleteIcon />
+                  </IconButton>
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenSessionsModal(false)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal para editar sesión */}
+      <Dialog open={!!editSession} onClose={() => setEditSession(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Editar Sesión</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} mt={1}>
+            <TextField
+              label="Nombre de la sesión"
+              value={editSessionName}
+              onChange={e => setEditSessionName(e.target.value)}
+              fullWidth
+              required
+            />
+            <Select
+              label="Selecciona IA"
+              value={editSessionIA ?? ''}
+              onChange={e => setEditSessionIA(e.target.value)}
+              fullWidth
+              required
+            >
+              <MenuItem value="">
+                <em>Sin IA</em>
+              </MenuItem>
+              {availableIAs.map((ia) => {
+                const iaKey = String(ia.id ?? ia._id);
+                return (
+                  <MenuItem key={iaKey} value={iaKey}>
+                    {ia.name}
+                  </MenuItem>
+                );
+              })}
+            </Select>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditSession(null)} disabled={editLoading}>Cancelar</Button>
+          <Button
+            variant="contained"
+            sx={{ backgroundColor: '#4267B2', color: '#fff' }}
+            onClick={handleSaveEditSession}
+            disabled={editLoading}
+          >
+            {editLoading ? 'Guardando...' : 'Guardar'}
           </Button>
         </DialogActions>
       </Dialog>

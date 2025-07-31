@@ -191,7 +191,6 @@ export function ChatsTab() {
         try {
           const messagesData = await fetchUserMessages(user, selectedSessionViewId, activeConversation.phone)
           setActiveMessages(messagesData.chat?.messages || [])
-          console.log(messagesData);
           // Cambia el nombre del chat si el nombre de la sesión es diferente
           if (
             messagesData.chat?.name &&

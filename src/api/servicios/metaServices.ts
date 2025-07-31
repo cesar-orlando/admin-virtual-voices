@@ -66,3 +66,23 @@ export const sendMessage = async (user: UserProfile, userId: string, message: st
     throw new Error('No se pudo enviar el mensaje');
   }
 };
+
+export const updateSession = async (update: Partial<WhatsAppSession>, user: UserProfile) => {
+  try {
+    const response = await api.put(`/sessions/messenger/${user.companySlug}`, update);
+    return response.data;
+  } catch (error) {
+    handleError(error as any);
+    throw new Error('No se pudo actualizar la configuración de la sesión');
+  }
+}
+
+export const deleteSession = async (sessionId: string, user: UserProfile) => {
+  try {
+    const response = await api.delete(`/sessions/messenger/${user.companySlug}/${sessionId}`);
+    return response.data;
+  } catch (error) {
+    handleError(error as any);
+    throw new Error('No se pudo eliminar la sesión');
+  }
+};
