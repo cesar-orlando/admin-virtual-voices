@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Typography,
@@ -25,7 +25,6 @@ import {
   Step,
   StepLabel,
   Paper,
-  useTheme,
   List,
   ListItem,
   ListItemText,
@@ -47,8 +46,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { createTable, importRecords } from '../api/servicios';
 import type { TableField, FieldType } from '../types';
-import * as XLSX from 'xlsx';
-import { ExcelUploader } from '../components/ExcelUploader';
+import { ExcelImportDialog } from '../components/ExcelImportDialog';
 
 const FIELD_TYPES: { value: FieldType; label: string; icon: string }[] = [
   { value: 'text', label: 'Texto', icon: '📝' },
@@ -77,67 +75,6 @@ interface ImportReport {
   duplicateFields: { fieldName: string; count: number }[];
 }
 
-// Utilidad para normalizar encabezados
-function normalizeHeader(header: string, index: number, existing: Set<string>): string {
-  let base = header
-    ? header
-        .toString()
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[^a-z0-9]+/g, '_')
-        .replace(/^_+|_+$/g, '')
-    : `campo_${index + 1}`;
-  let name = base;
-  let count = 1;
-  while (existing.has(name)) {
-    name = `${base}_${count++}`;
-  }
-  existing.add(name);
-  return name;
-}
-
-// Utilidad para detectar tipo de campo
-function detectType(values: any[]): string {
-  const nonEmpty = values.filter((v: any) => v !== undefined && v !== null && v !== '');
-  if (nonEmpty.length === 0) return 'text';
-  if (nonEmpty.every((v: any) => typeof v === 'number' || (!isNaN(Number(v)) && v !== ''))) return 'number';
-  if (nonEmpty.every((v: any) => !isNaN(Date.parse(v)))) return 'date';
-  if (nonEmpty.every((v: any) => ['true', 'false', '1', '0'].includes(String(v).toLowerCase()))) return 'boolean';
-  return 'text';
-}
-
-// Función para detectar registros duplicados basándose en campos específicos
-const detectAndRemoveDuplicates = (records: Record<string, any>[], fields: TableField[]): {
-  uniqueRecords: Record<string, any>[];
-  duplicatesRemoved: number;
-  duplicateFields: { fieldName: string; count: number }[];
-} => {
-  const seen = new Set<string>();
-  const uniqueRecords: Record<string, any>[] = [];
-  let duplicatesRemoved = 0;
-
-  records.forEach((record) => {
-    // Crea una clave única usando TODOS los campos
-    const key = fields.map(field => {
-      const value = record[field.name];
-      return value !== undefined && value !== null && value !== '' ? String(value).toLowerCase().trim() : '';
-    }).join('|');
-
-    if (key && seen.has(key)) {
-      duplicatesRemoved++;
-    } else {
-      if (key) seen.add(key);
-      uniqueRecords.push(record);
-    }
-  });
-
-  return {
-    uniqueRecords,
-    duplicatesRemoved,
-    duplicateFields: [] // Opcional: puedes eliminar este reporte o ajustarlo si quieres
-  };
-};
-
 export default function CreateTable() {
   const [activeStep, setActiveStep] = useState(0);
   const [tableName, setTableName] = useState('');
@@ -145,14 +82,15 @@ export default function CreateTable() {
   const [tableIcon, setTableIcon] = useState('📊');
   const [tableDescription, setTableDescription] = useState('');
   const [fields, setFields] = useState<TableField[]>([]);
-  const [importedRecords, setImportedRecords] = useState<Record<string, any>[]>([]);
+  const [importedRecords, setImportedRecords] = useState<Record<string, unknown>[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [formErrors, setFormErrors] = useState<{ slug?: string; general?: string }>({});
+  const [showMultiSheetDialog, setShowMultiSheetDialog] = useState(false);
   const [importReport, setImportReport] = useState<ImportReport | null>(null);
   const [showIconPicker, setShowIconPicker] = useState(false);
   const [selectOptionsInputs, setSelectOptionsInputs] = useState<{ [index: number]: string }>({});
-  const [duplicateReport, setDuplicateReport] = useState<{
+  const [duplicateReport] = useState<{
     duplicatesRemoved: number;
     duplicateFields: { fieldName: string; count: number }[];
     originalCount: number;
@@ -160,8 +98,6 @@ export default function CreateTable() {
   } | null>(null);
 
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const theme = useTheme();
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -241,85 +177,155 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
     setFields(updatedFields);
   };
 
-  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Función para manejar la importación desde el diálogo de Excel
+  const handleMultiSheetImport = (tableData: {
+    tableName: string;
+    fields: TableField[];
+    records: Record<string, unknown>[];
+  }) => {
+    setTableName(tableData.tableName);
+    setTableSlug(tableData.tableName.toLowerCase().replace(/[^a-z0-9]/g, '_'));
+    setFields(tableData.fields);
+    setImportedRecords(tableData.records);
+    setShowMultiSheetDialog(false);
+  };
 
-    setFormErrors({});
-    setDuplicateReport(null);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const data = event.target?.result;
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-        if (!rows || rows.length === 0) throw new Error('El archivo está vacío.');
+  // Function to generate unique slug
+  const generateUniqueSlug = (baseName: string): string => {
+    const baseSlug = baseName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    const timestamp = Date.now();
+    const randomSuffix = Math.random().toString(36).substring(2, 8);
+    return `${baseSlug}_${timestamp}_${randomSuffix}`;
+  };
 
-        // ¿La primera fila es encabezado?
-        let headers = rows[0];
-        let dataStart = 1;
-        let hasHeader = headers.every(h => typeof h === 'string' && h.trim() !== '');
-        if (!hasHeader) {
-          // Si la primera fila no es encabezado, genera nombres genéricos
-          headers = Array.from({ length: rows[0].length }, (_, i) => `campo_${i + 1}`);
-          dataStart = 0;
+  // Function to transform data values based on field types
+  const transformDataForImport = (data: Record<string, unknown>[], fields: TableField[]): Record<string, unknown>[] => {
+    return data.map((record) => {
+      const transformedRecord: Record<string, unknown> = {};
+      
+      Object.keys(record).forEach(originalKey => {
+        // Find the field by matching the original label
+        const field = fields.find(f => f.label === originalKey);
+        let value = record[originalKey];
+        
+        if (field) {
+          // Use the normalized field name as the key
+          const normalizedKey = field.name;
+          
+          // Transform value based on field type
+          if (field.type === 'date' && value != null) {
+            // Handle different date formats
+            if (typeof value === 'number') {
+              // Excel serial date number (days since 1900-01-01, with 1900-01-01 = 1)
+              const excelEpoch = new Date(1899, 11, 30); // Excel epoch (December 30, 1899)
+              const date = new Date(excelEpoch.getTime() + value * 24 * 60 * 60 * 1000);
+              value = date.toISOString();
+            } else if (typeof value === 'string') {
+              // Transform date from DD/MM/YYYY to ISO format
+              const dateStr = value.trim();
+              if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+                try {
+                  const [day, month, year] = dateStr.split('/');
+                  const isoDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                  if (!isNaN(isoDate.getTime())) {
+                    value = isoDate.toISOString();
+                  }
+                } catch (error) {
+                  console.warn(`Error converting date: ${dateStr}`);
+                }
+              }
+            }
+          } else if (field.type === 'boolean' && value != null) {
+            // Transform boolean values to true/false
+            const strValue = String(value).toLowerCase().trim();
+            
+            if (['true', '1', 'si', 'sí', 'yes', 'y'].includes(strValue)) {
+              value = true;
+            } else if (['false', '0', 'no', 'n'].includes(strValue)) {
+              value = false;
+            } else {
+              value = false; // Default to false for unrecognized values
+            }
+          } else if (field.type === 'text' && typeof value === 'number') {
+            // Convert numbers to strings for text fields (like phone numbers)
+            value = String(value);
+          }
+          
+          // Map using normalized field name
+          transformedRecord[normalizedKey] = value;
+        } else {
+          // If field not found, keep original key
+          transformedRecord[originalKey] = value;
         }
-        // Normaliza encabezados y asegura unicidad
-        const existing: Set<string> = new Set();
-        const normalizedHeaders = headers.map((h: string, i: number) => normalizeHeader(h, i, existing));
+      });
+      
+      return transformedRecord;
+    });
+  };
 
-        // Extrae columnas para detección de tipo
-        const columns = normalizedHeaders.map((_, colIdx) => rows.slice(dataStart).map(row => row[colIdx]));
-        const types = columns.map(col => detectType(col));
-
-        // Crea los campos sugeridos
-        const newFields: TableField[] = normalizedHeaders.map((name, i) => ({
-          name,
-          label: headers[i] || name,
-          type: types[i] as FieldType,
-          required: false,
-          order: i + 1,
-          width: 150,
-        }));
-        setFields(newFields);
-
-        // Mapear los datos de los registros para usar los nombres de campo internos (slugs)
-        const allRecordsData: any[] = rows.slice(dataStart).map(row => {
-          const newRow: Record<string, any> = {};
-          normalizedHeaders.forEach((name, i) => {
-            newRow[name] = row[i];
-          });
-          return newRow;
+  // Function to detect fields from Excel data
+  const detectFieldsFromData = (data: Record<string, unknown>[]): TableField[] => {
+    if (data.length === 0) return [];
+    
+    const sampleRow = data[0];
+    const fields: TableField[] = [];
+    
+    Object.keys(sampleRow).forEach((key, index) => {
+      const values = data.slice(0, 10).map(row => row[key]).filter(val => val != null && val !== '');
+      
+      // Detect field type based on sample values
+      let type: 'text' | 'number' | 'date' | 'boolean' = 'text';
+      
+      if (values.length > 0) {
+        // Check for dates FIRST (including Excel serial dates for fields named like dates)
+        const isDateField = key.toLowerCase().includes('fecha') || key.toLowerCase().includes('date');
+        const isExcelSerialDate = isDateField && values.every(val => {
+          const num = Number(val);
+          // Excel serial dates are typically between 1 (1900-01-01) and 50000+ (modern dates)
+          return !isNaN(num) && num > 1 && num < 100000;
         });
-
-        // Detectar y eliminar duplicados
-        const { uniqueRecords, duplicatesRemoved, duplicateFields } = detectAndRemoveDuplicates(allRecordsData, newFields);
         
-        setImportedRecords(uniqueRecords);
+        const isDate = isExcelSerialDate || values.some(val => {
+          const str = String(val);
+          return /\d{1,2}\/\d{1,2}\/\d{4}/.test(str) || 
+                 /\d{4}-\d{2}-\d{2}/.test(str) ||
+                 (!isNaN(Date.parse(str)) && isNaN(Number(val)));
+        });
         
-        // Mostrar reporte de duplicados
-        if (duplicatesRemoved > 0) {
-          setDuplicateReport({
-            duplicatesRemoved,
-            duplicateFields,
-            originalCount: allRecordsData.length,
-            finalCount: uniqueRecords.length
-          });
-        }
-
-        // Sugerir nombre de tabla basado en el nombre del archivo
-        handleNameChange(file.name.replace(/\.(xlsx|xls|csv)$/, ''));
-      } catch (err) {
-        setFormErrors({ general: err instanceof Error ? err.message : 'Error al procesar el archivo. Asegúrate de que sea un formato válido.' });
-      } finally {
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
+        if (isDate) {
+          type = 'date';
+        } else {
+          // Check for numbers (but exclude dates)
+          const isNumber = values.every(val => !isNaN(Number(val)) && val !== '' && !isNaN(parseFloat(String(val))));
+          
+          if (isNumber) {
+            type = 'number';
+          } else {
+            // Check for booleans
+            const isBoolean = values.every(val => {
+              const str = String(val).toLowerCase();
+              return ['true', 'false', '1', '0', 'si', 'no', 'sí'].includes(str);
+            });
+            
+            if (isBoolean) {
+              type = 'boolean';
+            }
+          }
         }
       }
-    };
-    reader.readAsArrayBuffer(file);
+      
+      const normalizedName = key.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      
+      fields.push({
+        name: normalizedName,
+        label: key,
+        type,
+        required: false,
+        order: index
+      });
+    });
+    
+    return fields;
   };
 
   // Al guardar (handleCreateTable), antes de enviar los fields al backend, genera el nombre interno:
@@ -349,17 +355,6 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
         isActive: true,
       };
 
-      // Enhanced debugging for table creation
-      console.log('🔍 CreateTable: About to create table with data:', tableData);
-      console.log('📋 CreateTable: Fields being sent:', tableData.fields);
-      console.log('👤 CreateTable: User info:', { id: user.id, companySlug: user.companySlug });
-      
-      // Check for date fields specifically
-      const dateFields = tableData.fields.filter(f => f.type === 'date');
-      if (dateFields.length > 0) {
-        console.log('📅 CreateTable: Date fields detected:', dateFields);
-      }
-
       const newTableResponse = await createTable(tableData, user);
 
       if (importedRecords.length > 0 && newTableResponse?.table?.slug) {
@@ -384,8 +379,9 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
         navigate('/tablas');
       }
       
-    } catch (err: any) {
-      const errorMessage = err?.response?.data?.message || (err instanceof Error ? err.message : 'Ocurrió un error inesperado.');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { message?: string } } };
+      const errorMessage = error?.response?.data?.message || (err instanceof Error ? err.message : 'Ocurrió un error inesperado.');
 
       if (errorMessage.includes('slug already exists')) {
         setFormErrors({ slug: 'Este slug ya está en uso. Por favor, elige otro.' });
@@ -492,17 +488,10 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
             <Button
               variant="outlined"
               startIcon={<UploadFileIcon />}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setShowMultiSheetDialog(true)}
             >
-              Importar desde Excel
+              Subir archivo Excel
             </Button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileImport}
-              style={{ display: 'none' }}
-              accept=".xlsx, .xls, .csv"
-            />
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -768,11 +757,33 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
   </Box>
   
   {/* Excel upload button on the right */}
-  <Box>
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Typography variant="body2" color="text.secondary">
+        Ícono:
+      </Typography>
+      <Button
+        variant="outlined"
+        onClick={() => setShowIconPicker(true)}
+        sx={{ 
+          minWidth: 48, 
+          height: 48, 
+          fontSize: 20,
+          borderColor: '#8B5CF6',
+          color: '#8B5CF6',
+          '&:hover': {
+            borderColor: '#7A4CF6',
+            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+          }
+        }}
+      >
+        {tableIcon}
+      </Button>
+    </Box>
     <Button
       variant="outlined"
       startIcon={<UploadFileIcon />}
-      onClick={() => fileInputRef.current?.click()}
+      onClick={() => setShowMultiSheetDialog(true)}
       sx={{
         borderColor: '#8B5CF6',
         color: '#8B5CF6',
@@ -784,13 +795,6 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
     >
       Subir archivo Excel
     </Button>
-    <input
-      type="file"
-      ref={fileInputRef}
-      onChange={handleFileImport}
-      style={{ display: 'none' }}
-      accept=".xlsx, .xls, .csv"
-    />
   </Box>
 </Box>
 
@@ -974,6 +978,89 @@ const handleUpdateField = (index: number, field: Partial<TableField>) => {
           <Button onClick={handleCloseReport}>Cerrar</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Excel Import Dialog */}
+      <ExcelImportDialog
+        open={showMultiSheetDialog}
+        onClose={() => setShowMultiSheetDialog(false)}
+        tableFields={[]}
+        onImport={async (data, options, tableName) => {
+          if (tableName) {
+            // Single table creation
+            handleMultiSheetImport({
+              tableName,
+              fields: [], // Fields will be detected from data
+              records: data as Record<string, unknown>[]
+            });
+          }
+          return { 
+            success: true, 
+            message: 'Importación exitosa',
+            newRecords: data.length,
+            updatedRecords: 0,
+            duplicatesSkipped: 0,
+            errors: []
+          };
+        }}
+        onCreateTable={async (tableName, data) => {
+          try {
+            // Create the table directly instead of just setting state
+            if (!user) {
+              throw new Error('Usuario no autenticado');
+            }
+            
+            // Verify user is still authenticated before proceeding
+            const currentToken = localStorage.getItem('token');
+            if (!currentToken) {
+              throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+            }
+            
+            // Validate table name
+            if (!tableName || typeof tableName !== 'string' || tableName.trim() === '') {
+              throw new Error('El nombre de la tabla es requerido');
+            }
+            
+            // Detect fields from data
+            const detectedFields = detectFieldsFromData(data);
+            
+            // Generate unique slug to avoid duplicates
+            const uniqueSlug = generateUniqueSlug(tableName);
+            
+            const tablePayload = {
+              name: tableName.trim(),
+              slug: uniqueSlug,
+              icon: tableIcon, // Use the selected icon from state
+              description: `Tabla importada desde Excel: ${tableName}`,
+              fields: detectedFields,
+              isActive: true
+            };
+            
+            const response = await createTable(tablePayload, user);
+            
+            if (data.length > 0 && response?.table?.slug) {
+              // Transform data based on field types (especially dates)
+              const transformedData = transformDataForImport(data, detectedFields);
+              
+              const recordsData = transformedData.map((item) => ({ data: item }));
+              
+              try {
+                await importRecords(response.table.slug, recordsData, user);
+              } catch (importError) {
+                console.error('Error importing records:', importError);
+                // Don't throw here, table creation was successful
+                alert('La tabla se creó correctamente, pero hubo un error al importar algunos registros. Puedes importarlos manualmente más tarde.');
+              }
+            }
+            
+            // Navigate to tables page
+            navigate('/tablas');
+            
+          } catch (error) {
+            console.error('Error in onCreateTable:', error);
+            throw error; // Re-throw to let ExcelImportDialog handle it
+          }
+        }}
+      />
     </Box>
   );
-} 
+}

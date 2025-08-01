@@ -28,6 +28,7 @@ export const createTable = async (tableData: CreateTableRequest, user: UserProfi
     console.log('📋 Fields in payload:', payload.fields);
     
     const response = await api.post(`/tables/`, payload);
+    console.log('✅ Table created successfully:', response.data);
     return response.data;
   } catch (error: any) {
     // Enhanced error logging
@@ -44,7 +45,10 @@ export const createTable = async (tableData: CreateTableRequest, user: UserProfi
       console.error('🚫 Validation errors:', validationErrors);
     }
     
-    handleError(error);
+    // Don't call handleError for auth issues to avoid clearing session unexpectedly
+    if (error.response?.status !== 401) {
+      handleError(error);
+    }
     
     // Create a more informative error message
     let fullErrorMessage = backendMessage;
@@ -193,6 +197,34 @@ export const importTable = async (tableData: any, user: UserProfile) => {
   }
 };
 
+// Crear múltiples tablas desde Excel con múltiples hojas
+export const createMultipleTablesFromExcel = async (
+  tablesData: Array<{
+    tableData: CreateTableRequest;
+    records: Array<{ data: Record<string, unknown> }>;
+  }>, 
+  user: UserProfile
+) => {
+  try {
+    console.log('🚀 Creating multiple tables from Excel:', tablesData.length, 'tables');
+    
+    const response = await api.post(`/tables/${user.companySlug}/bulk-create-from-excel`, {
+      tables: tablesData.map(({ tableData, records }) => ({
+        ...tableData,
+        c_name: user.companySlug,
+        createdBy: user.id,
+        records
+      }))
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('❌ Multiple tables creation error:', error);
+    handleError(error as Error);
+    throw new Error('No se pudieron crear las tablas desde Excel');
+  }
+};
+
 // ===== RECORD SERVICES =====
 
 // Crear un nuevo registro
@@ -329,6 +361,75 @@ export const getTableStats = async (tableSlug: string, user: UserProfile) => {
   }
 };
 
+// Obtener estadísticas de columnas con distribución de datos reales
+export const getColumnStats = async (tableSlug: string, user: UserProfile) => {
+  try {
+    const response = await api.get(`/records/column-stats/${user.companySlug}/${tableSlug}`);
+    return response.data;
+  } catch (error) {
+    console.warn(`No se pudieron obtener las estadísticas de columnas para ${tableSlug}:`, error);
+    // Si no existe el endpoint, obtenemos una muestra de datos y calculamos las estadísticas localmente
+    try {
+      const records = await getRecords(tableSlug, user, 1, 1000); // Obtener una muestra grande
+      return calculateColumnStatsFromRecords(records.records);
+    } catch (recordError) {
+      console.error('Error obteniendo registros para calcular estadísticas:', recordError);
+      return null;
+    }
+  }
+};
+
+// Función auxiliar para calcular estadísticas de columnas desde los registros
+const calculateColumnStatsFromRecords = (records: DynamicRecord[]) => {
+  if (!records || records.length === 0) return {};
+  
+  const columnStats: Record<string, unknown> = {};
+  const firstRecord = records[0];
+  
+  // Obtener todas las columnas del primer registro
+  Object.keys(firstRecord.data).forEach(columnName => {
+    if (columnName === 'id' || columnName === 'createdAt' || columnName === 'updatedAt') {
+      return; // Omitir campos de sistema
+    }
+    
+    const values = records.map(record => record.data[columnName]).filter(val => val !== null && val !== undefined && val !== '');
+    const totalValues = records.length;
+    const nullValues = totalValues - values.length;
+    const uniqueValues = new Set(values).size;
+    
+    // Calcular distribución de valores
+    const distribution: { [key: string]: number } = {};
+    values.forEach(value => {
+      const stringValue = String(value);
+      distribution[stringValue] = (distribution[stringValue] || 0) + 1;
+    });
+    
+    // Ordenar por frecuencia y tomar los top 10
+    const sortedDistribution = Object.entries(distribution)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10)
+      .reduce((acc, [key, value]) => {
+        acc[key] = value;
+        return acc;
+      }, {} as { [key: string]: number });
+    
+    const mostCommonValue = Object.keys(sortedDistribution)[0] || '';
+    const mostCommonValueCount = sortedDistribution[mostCommonValue] || 0;
+    
+    columnStats[columnName] = {
+      totalValues,
+      uniqueValues,
+      nullValues,
+      emptyValues: 0, // Calculado como parte de nullValues
+      mostCommonValue,
+      mostCommonValueCount,
+      distributionStats: sortedDistribution
+    };
+  });
+  
+  return columnStats;
+};
+
 // Actualización masiva de registros
 export const bulkUpdateRecords = async (
   tableSlug: string, 
@@ -376,7 +477,7 @@ export const importRecords = async (
   }
 ) => {
   try {
-    console.log("Importing records:", records, "with options:", options, "user:", user);
+    console.log("🚀 Importing records:", records.length, "records with options:", options);
     
     const response = await api.post(`/records/${user.companySlug}/${tableSlug}/import`, {
       records,
@@ -384,11 +485,20 @@ export const importRecords = async (
       options
     });
     
+    console.log("✅ Records imported successfully:", response.data);
     return response.data;
-  } catch (error) {
-    console.error('API Import error:', error);
-    handleError(error as any);
-    throw new Error('No se pudieron importar los registros');
+  } catch (error: any) {
+    console.error('❌ API Import error:', error);
+    console.error('📊 Status code:', error.response?.status);
+    console.error('📋 Error response:', error.response?.data);
+    
+    // Don't call handleError for auth issues to avoid clearing session unexpectedly
+    if (error.response?.status !== 401) {
+      handleError(error as any);
+    }
+    
+    const errorMessage = error.response?.data?.message || 'No se pudieron importar los registros';
+    throw new Error(errorMessage);
   }
 };
 

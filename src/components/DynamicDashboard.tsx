@@ -43,8 +43,6 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
-  Switch,
-  FormControlLabel,
   Collapse,
   Tooltip,
   Button,
@@ -65,22 +63,19 @@ import {
   Edit,
   MoreVert,
   TableChart,
-  Assessment,
   Timeline,
   PieChart,
-  BarChart,
   Analytics,
   Settings,
   DragIndicator,
   VisibilityOff,
   ExpandMore,
   ExpandLess,
-  FilterList,
 } from '@mui/icons-material';
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { useAuth } from '../hooks/useAuth';
-import { getTables } from '../api/servicios/dynamicTableServices';
-import { getRecords } from '../api/servicios/dynamicTableServices';
-import { getTableStats } from '../api/servicios/dynamicTableServices';
+import { getTables, getTableStats, getColumnStats } from '../api/servicios/dynamicTableServices';
+import type { UserProfile } from '../types';
 
 interface SimpleTable {
   name: string;
@@ -101,6 +96,33 @@ interface TableMetric {
   color: 'primary' | 'secondary' | 'success' | 'warning' | 'error';
 }
 
+interface ColumnMetric {
+  id: string;
+  columnName: string;
+  columnType: string;
+  tableSlug: string;
+  tableName: string;
+  totalValues: number;
+  uniqueValues: number;
+  nullValues: number;
+  emptyValues: number;
+  mostCommonValue: string;
+  mostCommonValueCount: number;
+  distributionStats: { [key: string]: number };
+  visible: boolean;
+  order: number;
+  color: 'primary' | 'secondary' | 'success' | 'warning' | 'error';
+}
+
+interface TableColumnGroup {
+  tableSlug: string;
+  tableName: string;
+  tableIcon: string;
+  columns: ColumnMetric[];
+  expanded: boolean;
+  visible: boolean;
+}
+
 interface TableSummaryCard {
   id: string;
   title: string;
@@ -109,13 +131,6 @@ interface TableSummaryCard {
   trend?: 'up' | 'down' | 'neutral';
   icon: React.ReactNode;
   color: 'primary' | 'secondary' | 'success' | 'warning' | 'error';
-  visible: boolean;
-  order: number;
-}
-
-interface DashboardSegment {
-  id: string;
-  title: string;
   visible: boolean;
   order: number;
 }
@@ -224,6 +239,266 @@ function SortableCard({ card, onToggleVisibility }: SortableCardProps) {
   );
 }
 
+// Sortable Column Metric Card Component
+interface SortableColumnMetricProps {
+  columnMetric: ColumnMetric;
+  onToggleVisibility: (metricId: string) => void;
+}
+
+interface TooltipPayload {
+  payload: {
+    name: string;
+    value: number;
+    percentage: string;
+    color: string;
+  };
+}
+
+function SortableColumnMetric({ columnMetric, onToggleVisibility }: SortableColumnMetricProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: columnMetric.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  const getColumnIcon = (columnType: string, columnName?: string) => {
+    // Check column name first for more specific icons
+    if (columnName) {
+      switch (columnName.toLowerCase()) {
+        case 'distribuidor':
+          return <Tooltip title="Distribuidor"><Typography sx={{ fontSize: '16px' }}>🏢</Typography></Tooltip>;
+        case 'medio_contacto':
+          return <Tooltip title="Medio de Contacto"><Typography sx={{ fontSize: '16px' }}>📞</Typography></Tooltip>;
+        case 'pais':
+        case 'ciudad':
+          return <Tooltip title="Ubicación"><Typography sx={{ fontSize: '16px' }}>🌍</Typography></Tooltip>;
+        case 'presupuesto':
+        case 'precio':
+          return <Tooltip title="Precio/Presupuesto"><Typography sx={{ fontSize: '16px' }}>💰</Typography></Tooltip>;
+        case 'prioridad':
+          return <Tooltip title="Prioridad"><Typography sx={{ fontSize: '16px' }}>⭐</Typography></Tooltip>;
+        case 'empresa':
+          return <Tooltip title="Empresa"><Typography sx={{ fontSize: '16px' }}>🏭</Typography></Tooltip>;
+        case 'cargo':
+          return <Tooltip title="Cargo"><Typography sx={{ fontSize: '16px' }}>👔</Typography></Tooltip>;
+        case 'email':
+          return <Tooltip title="Email"><Typography sx={{ fontSize: '16px' }}>📧</Typography></Tooltip>;
+        case 'telefono':
+          return <Tooltip title="Teléfono"><Typography sx={{ fontSize: '16px' }}>📱</Typography></Tooltip>;
+        case 'nombre':
+          return <Tooltip title="Nombre"><Typography sx={{ fontSize: '16px' }}>👤</Typography></Tooltip>;
+        case 'estado':
+          return <Tooltip title="Estado"><Typography sx={{ fontSize: '16px' }}>📊</Typography></Tooltip>;
+        case 'fecha_creacion':
+        case 'fecha_seguimiento':
+          return <Tooltip title="Fecha"><Typography sx={{ fontSize: '16px' }}>📅</Typography></Tooltip>;
+        case 'comentarios':
+          return <Tooltip title="Comentarios"><Typography sx={{ fontSize: '16px' }}>💬</Typography></Tooltip>;
+        case 'id':
+          return <Tooltip title="ID"><Typography sx={{ fontSize: '16px' }}>🔑</Typography></Tooltip>;
+      }
+    }
+    
+    // Fallback to column type
+    switch (columnType.toLowerCase()) {
+      case 'string':
+      case 'text':
+        return <Tooltip title="Texto"><Typography sx={{ fontSize: '16px' }}>📝</Typography></Tooltip>;
+      case 'number':
+      case 'integer':
+        return <Tooltip title="Número"><Typography sx={{ fontSize: '16px' }}>🔢</Typography></Tooltip>;
+      case 'boolean':
+        return <Tooltip title="Booleano"><Typography sx={{ fontSize: '16px' }}>✅</Typography></Tooltip>;
+      case 'date':
+      case 'datetime':
+        return <Tooltip title="Fecha"><Typography sx={{ fontSize: '16px' }}>📅</Typography></Tooltip>;
+      default:
+        return <Tooltip title="General"><Typography sx={{ fontSize: '16px' }}>📊</Typography></Tooltip>;
+    }
+  };
+
+  const fillPercentage = columnMetric.totalValues > 0 
+    ? ((columnMetric.totalValues - columnMetric.nullValues - columnMetric.emptyValues) / columnMetric.totalValues) * 100 
+    : 0;
+
+  // Prepare data for pie chart
+  const chartData = Object.entries(columnMetric.distributionStats).map(([key, value], index) => ({
+    name: key,
+    value: value,
+    percentage: ((value / columnMetric.totalValues) * 100).toFixed(1),
+    color: `hsl(${(index * 60) % 360}, 70%, 60%)` // Generate distinct colors
+  }));
+
+  // Add null/empty values if they exist
+  if (columnMetric.nullValues > 0) {
+    chartData.push({
+      name: 'Valores Nulos',
+      value: columnMetric.nullValues,
+      percentage: ((columnMetric.nullValues / columnMetric.totalValues) * 100).toFixed(1),
+      color: '#e0e0e0'
+    });
+  }
+
+  if (columnMetric.emptyValues > 0) {
+    chartData.push({
+      name: 'Valores Vacíos',
+      value: columnMetric.emptyValues,
+      percentage: ((columnMetric.emptyValues / columnMetric.totalValues) * 100).toFixed(1),
+      color: '#bdbdbd'
+    });
+  }
+
+  // Custom tooltip component
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: TooltipPayload[] }) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <Paper sx={{ p: 1.5, border: 1, borderColor: 'divider', borderRadius: 2 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+            {data.name}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Cantidad: <strong>{data.value.toLocaleString()}</strong>
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Porcentaje: <strong>{data.percentage}%</strong>
+          </Typography>
+        </Paper>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <Card 
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      sx={{ 
+        height: 280, // Increased height to accommodate pie chart
+        borderRadius: 2,
+        border: '1px solid',
+        borderColor: 'divider',
+        transition: 'all 0.2s ease-in-out',
+        cursor: 'grab',
+        '&:hover': {
+          boxShadow: (theme) => theme.shadows[4],
+          transform: 'translateY(-2px)',
+        },
+        '&:active': {
+          cursor: 'grabbing',
+        }
+      }}>
+      <CardContent sx={{ p: 2, position: 'relative', height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleVisibility(columnMetric.id);
+          }}
+          sx={{ 
+            position: 'absolute', 
+            top: 4, 
+            right: 4,
+            opacity: 0.7,
+            '&:hover': { opacity: 1 }
+          }}
+        >
+          <VisibilityOff fontSize="small" />
+        </IconButton>
+        
+        {/* Column Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          {getColumnIcon(columnMetric.columnType, columnMetric.columnName)}
+          <Typography variant="subtitle2" sx={{ fontWeight: 600, fontSize: '0.8rem' }}>
+            {columnMetric.columnName}
+          </Typography>
+        </Box>
+        
+        {/* Main Metrics */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', fontSize: '1rem' }}>
+              {columnMetric.totalValues.toLocaleString()}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Total
+            </Typography>
+          </Box>
+          <Box sx={{ textAlign: 'center' }}>
+            <Typography variant="h6" sx={{ fontWeight: 'bold', fontSize: '1rem', color: 'primary.main' }}>
+              {columnMetric.uniqueValues.toLocaleString()}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              Únicos
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Data Quality Bar */}
+        <Box sx={{ mb: 1 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 0.5 }}>
+            <Typography variant="caption" color="text.secondary">
+              Completitud
+            </Typography>
+            <Typography variant="caption" sx={{ fontWeight: 600 }}>
+              {fillPercentage.toFixed(1)}%
+            </Typography>
+          </Box>
+          <LinearProgress 
+            variant="determinate" 
+            value={fillPercentage} 
+            sx={{ 
+              height: 6, 
+              borderRadius: 3,
+              bgcolor: 'grey.200',
+              '& .MuiLinearProgress-bar': {
+                bgcolor: fillPercentage > 80 ? 'success.main' : fillPercentage > 50 ? 'warning.main' : 'error.main'
+              }
+            }} 
+          />
+        </Box>
+
+        {/* Distribution Pie Chart */}
+        <Box sx={{ flex: 1, minHeight: 120 }}>
+          <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>
+            Distribución de Datos:
+          </Typography>
+          <ResponsiveContainer width="100%" height="100%">
+            <RechartsPieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                innerRadius={20}
+                outerRadius={45}
+                paddingAngle={2}
+                dataKey="value"
+                stroke="none"
+              >
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Pie>
+              <RechartsTooltip content={<CustomTooltip />} />
+            </RechartsPieChart>
+          </ResponsiveContainer>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+}
+
 // Sortable Settings Item Component
 interface SortableSettingsItemProps {
   card: TableSummaryCard;
@@ -268,6 +543,100 @@ function SortableSettingsItem({ card, onToggleVisibility }: SortableSettingsItem
   );
 }
 
+// Helper function to generate real column metrics from API
+const generateRealColumnMetrics = async (table: SimpleTable, totalRecords: number, user: UserProfile): Promise<ColumnMetric[]> => {
+  try {
+    console.log(`Obtaining real column stats for table: ${table.slug}`);
+    
+    // Get real column statistics from the API
+    const columnStats = await getColumnStats(table.slug, user);
+    
+    if (!columnStats) {
+      console.warn(`No column stats available for table: ${table.slug}`);
+      return [];
+    }
+    
+    const columnMetrics: ColumnMetric[] = [];
+    const colors: Array<'primary' | 'secondary' | 'success' | 'warning' | 'error'> = 
+      ['primary', 'secondary', 'success', 'warning', 'error'];
+    
+    Object.entries(columnStats).forEach(([columnName, stats]: [string, unknown], index) => {
+      const statsTyped = stats as {
+        totalValues?: number;
+        uniqueValues?: number;
+        nullValues?: number;
+        emptyValues?: number;
+        mostCommonValue?: string;
+        mostCommonValueCount?: number;
+        distributionStats?: { [key: string]: number };
+      };
+      
+      const columnMetric: ColumnMetric = {
+        id: `${table.slug}-${columnName}`,
+        columnName,
+        columnType: getColumnTypeFromData(statsTyped.distributionStats || {}), // Infer type from data
+        tableSlug: table.slug,
+        tableName: table.name || table.slug,
+        totalValues: statsTyped.totalValues || totalRecords,
+        uniqueValues: statsTyped.uniqueValues || 0,
+        nullValues: statsTyped.nullValues || 0,
+        emptyValues: statsTyped.emptyValues || 0,
+        mostCommonValue: statsTyped.mostCommonValue || '',
+        mostCommonValueCount: statsTyped.mostCommonValueCount || 0,
+        distributionStats: statsTyped.distributionStats || {},
+        visible: true,
+        order: index + 1,
+        color: colors[index % colors.length]
+      };
+      
+      columnMetrics.push(columnMetric);
+    });
+    
+    console.log(`Generated ${columnMetrics.length} real column metrics for ${table.slug}`);
+    return columnMetrics;
+    
+  } catch (error) {
+    console.error(`Error generating real column metrics for ${table.slug}:`, error);
+    return [];
+  }
+};
+
+// Helper function to infer column type from data distribution
+const getColumnTypeFromData = (distributionStats: { [key: string]: number }): string => {
+  if (!distributionStats || Object.keys(distributionStats).length === 0) {
+    return 'string';
+  }
+  
+  const sampleValues = Object.keys(distributionStats).slice(0, 5);
+  
+  // Check if all values are numbers
+  const allNumbers = sampleValues.every(value => !isNaN(Number(value)) && value !== '');
+  if (allNumbers) {
+    return 'number';
+  }
+  
+  // Check if all values are booleans
+  const allBooleans = sampleValues.every(value => 
+    value.toLowerCase() === 'true' || 
+    value.toLowerCase() === 'false' || 
+    value.toLowerCase() === 'verdadero' || 
+    value.toLowerCase() === 'falso'
+  );
+  if (allBooleans) {
+    return 'boolean';
+  }
+  
+  // Check if values look like dates
+  const datePattern = /^\d{4}-\d{2}-\d{2}|^\d{2}\/\d{2}\/\d{4}|^\d{1,2}\/\d{1,2}\/\d{4}/;
+  const allDates = sampleValues.every(value => datePattern.test(value));
+  if (allDates) {
+    return 'date';
+  }
+  
+  // Default to string
+  return 'string';
+};
+
 export function DynamicDashboard({ 
   companySlug, 
   onTableClick, 
@@ -277,10 +646,12 @@ export function DynamicDashboard({
   const [tables, setTables] = useState<SimpleTable[]>([]);
   const [tableMetrics, setTableMetrics] = useState<TableMetric[]>([]);
   const [summaryCards, setSummaryCards] = useState<TableSummaryCard[]>([]);
+  // const [columnMetrics, setColumnMetrics] = useState<ColumnMetric[]>([]);
+  const [tableColumnGroups, setTableColumnGroups] = useState<TableColumnGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // const [error, setError] = useState<string | null>(null);
 
   // New state for dashboard customization
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -296,7 +667,6 @@ const loadDashboardData = useCallback(async () => {
 
   try {
     setLoading(true);
-    setError(null);
     console.log('DynamicDashboard: Starting to load dashboard data...');
 
     // Fetch all tables
@@ -353,14 +723,18 @@ const loadDashboardData = useCallback(async () => {
         }
       ]);
       setTableMetrics([]);
+      // setColumnMetrics([]);
+      setTableColumnGroups([]);
       setLoading(false);
       return;
     }
 
     // Calculate metrics for each table using getTableStats
     const metrics: TableMetric[] = [];
+    const allColumnMetrics: ColumnMetric[] = [];
+    const columnGroups: TableColumnGroup[] = [];
     let totalRecordsAllTables = 0;
-    let totalTablesWithData = 0;
+    // let totalTablesWithData = 0;
     let totalRecordsToday = 0;
     let totalRecordsThisWeek = 0;
 
@@ -410,13 +784,27 @@ const loadDashboardData = useCallback(async () => {
           color
         });
 
+        // Generate real column metrics for each table
+        const realColumns = await generateRealColumnMetrics(table, totalRecords, user);
+        allColumnMetrics.push(...realColumns);
+
+        // Create column group for this table
+        columnGroups.push({
+          tableSlug: table.slug,
+          tableName: table.name || table.slug,
+          tableIcon: table.icon || '📊',
+          columns: realColumns,
+          expanded: false,
+          visible: true
+        });
+
         totalRecordsAllTables += totalRecords;
         totalRecordsToday += recordsToday;
         totalRecordsThisWeek += recordsThisWeek;
         
-        if (totalRecords > 0) {
-          totalTablesWithData++;
-        }
+        // if (totalRecords > 0) {
+        //   totalTablesWithData++;
+        // }
 
         console.log(`DynamicDashboard: Processed table ${table.slug} - ${totalRecords} total records`);
 
@@ -440,16 +828,32 @@ const loadDashboardData = useCallback(async () => {
           lastUpdated: new Date(),
           color
         });
+
+        // Add empty column group for failed tables
+        columnGroups.push({
+          tableSlug: table.slug,
+          tableName: table.name || table.slug,
+          tableIcon: table.icon || '📊',
+          columns: [],
+          expanded: false,
+          visible: true
+        });
       }
     }
 
     setTableMetrics(metrics);
+    // setColumnMetrics(allColumnMetrics);
+    setTableColumnGroups(columnGroups);
     console.log('DynamicDashboard: Final metrics:', metrics);
+    console.log('DynamicDashboard: Column metrics:', allColumnMetrics);
 
     // Create summary cards
-    const avgRecordsPerTable = totalTablesWithData > 0 
-      ? Math.round(totalRecordsAllTables / totalTablesWithData) 
-      : 0;
+    // const avgRecordsPerTable = totalTablesWithData > 0 
+    //   ? Math.round(totalRecordsAllTables / totalTablesWithData) 
+    //   : 0;
+
+    const totalColumns = allColumnMetrics.length;
+    const totalUniqueValues = allColumnMetrics.reduce((sum, col) => sum + col.uniqueValues, 0);
 
     const summaryData: TableSummaryCard[] = [
       {
@@ -471,37 +875,37 @@ const loadDashboardData = useCallback(async () => {
         order: 2
       },
       {
+        id: 'total-columns',
+        title: 'Total de Columnas',
+        value: totalColumns,
+        icon: <Analytics />,
+        color: 'success',
+        visible: true,
+        order: 3
+      },
+      {
         id: 'records-today',
         title: 'Registros Hoy',
         value: totalRecordsToday,
         icon: <TrendingUp />,
-        color: 'success',
+        color: 'warning',
         visible: true,
-        order: 3
+        order: 4
       },
       {
         id: 'records-week',
         title: 'Registros Esta Semana',
         value: totalRecordsThisWeek,
         icon: <Timeline />,
-        color: 'warning',
-        visible: true,
-        order: 4
-      },
-      {
-        id: 'avg-records',
-        title: 'Promedio por Tabla',
-        value: avgRecordsPerTable,
-        icon: <BarChart />,
         color: 'error',
         visible: true,
         order: 5
       },
       {
-        id: 'active-tables',
-        title: 'Tablas Activas',
-        value: totalTablesWithData,
-        icon: <Analytics />,
+        id: 'unique-values',
+        title: 'Valores Únicos Totales',
+        value: totalUniqueValues.toLocaleString(),
+        icon: <PieChart />,
         color: 'primary',
         visible: true,
         order: 6
@@ -513,7 +917,6 @@ const loadDashboardData = useCallback(async () => {
 
   } catch (error) {
     console.error('DynamicDashboard: Error loading dashboard data:', error);
-    setError('Error al cargar los datos del dashboard');
   } finally {
     setLoading(false);
   }
@@ -566,6 +969,27 @@ const loadDashboardData = useCallback(async () => {
     );
   };
 
+  // Toggle column metric visibility
+  const toggleColumnMetricVisibility = (metricId: string) => {
+    setTableColumnGroups(prevGroups =>
+      prevGroups.map(group => ({
+        ...group,
+        columns: group.columns.map(metric =>
+          metric.id === metricId ? { ...metric, visible: !metric.visible } : metric
+        )
+      }))
+    );
+  };
+
+  // Toggle table column group expansion
+  const toggleTableExpansion = (tableSlug: string) => {
+    setTableColumnGroups(prevGroups =>
+      prevGroups.map(group =>
+        group.tableSlug === tableSlug ? { ...group, expanded: !group.expanded } : group
+      )
+    );
+  };
+
   // Toggle table visibility
   const toggleTableVisibility = (tableName: string) => {
     setTableVisibility(prev => ({
@@ -582,7 +1006,7 @@ const loadDashboardData = useCallback(async () => {
   const visibleCards = sortedCards.filter(card => card.visible);
 
   // Get visible tables  
-  const visibleTables = tables.filter((table: SimpleTable) => tableVisibility[table.name]?.visible !== false);
+  // const visibleTables = tables.filter((table: SimpleTable) => tableVisibility[table.name]?.visible !== false);
 
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>, tableSlug: string) => {
     setAnchorEl(event.currentTarget);
@@ -674,6 +1098,109 @@ const loadDashboardData = useCallback(async () => {
           </Grid>
         </SortableContext>
       </DndContext>
+
+      {/* Column Metrics by Table */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h5" gutterBottom sx={{ fontWeight: 600, mb: 3 }}>
+          📋 Métricas de Columnas por Tabla
+        </Typography>
+        
+        {tableColumnGroups.map((group) => (
+          <Paper key={group.tableSlug} sx={{ mb: 3, borderRadius: 2, overflow: 'hidden' }}>
+            {/* Table Header */}
+            <Box 
+              sx={{ 
+                p: 2, 
+                bgcolor: 'grey.50', 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                '&:hover': { bgcolor: 'grey.100' }
+              }}
+              onClick={() => toggleTableExpansion(group.tableSlug)}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Avatar sx={{ bgcolor: 'primary.light', width: 32, height: 32 }}>
+                  <span style={{ fontSize: '16px' }}>{group.tableIcon}</span>
+                </Avatar>
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  {group.tableName}
+                </Typography>
+                <Chip 
+                  label={`${group.columns.length} columnas`}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                />
+              </Box>
+              <IconButton>
+                {group.expanded ? <ExpandLess /> : <ExpandMore />}
+              </IconButton>
+            </Box>
+            
+            {/* Columns Grid */}
+            <Collapse in={group.expanded}>
+              <Box sx={{ p: 3 }}>
+                <DndContext 
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={(event) => {
+                    const { active, over } = event;
+                    if (active.id !== over?.id) {
+                      setTableColumnGroups((prevGroups) => 
+                        prevGroups.map(g => {
+                          if (g.tableSlug === group.tableSlug) {
+                            const items = g.columns;
+                            const oldIndex = items.findIndex((item) => item.id === active.id);
+                            const newIndex = items.findIndex((item) => item.id === over?.id);
+                            const newItems = arrayMove(items, oldIndex, newIndex);
+                            return {
+                              ...g,
+                              columns: newItems.map((metric, index) => ({
+                                ...metric,
+                                order: index + 1
+                              }))
+                            };
+                          }
+                          return g;
+                        })
+                      );
+                    }
+                  }}
+                >
+                  <SortableContext 
+                    items={group.columns.filter(col => col.visible).map(col => col.id)}
+                    strategy={horizontalListSortingStrategy}
+                  >
+                    <Grid container spacing={2}>
+                      {group.columns
+                        .filter(col => col.visible)
+                        .sort((a, b) => a.order - b.order)
+                        .map((columnMetric) => (
+                        <Grid item xs={12} sm={6} md={4} lg={3} key={columnMetric.id}>
+                          <SortableColumnMetric 
+                            columnMetric={columnMetric} 
+                            onToggleVisibility={toggleColumnMetricVisibility} 
+                          />
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </SortableContext>
+                </DndContext>
+                
+                {group.columns.filter(col => col.visible).length === 0 && (
+                  <Box sx={{ textAlign: 'center', py: 4 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      No hay columnas visibles para esta tabla.
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </Collapse>
+          </Paper>
+        ))}
+      </Box>
 
       {/* Tables Overview */}
       <Paper sx={{ borderRadius: 2, overflow: 'hidden' }}>
@@ -807,7 +1334,7 @@ const loadDashboardData = useCallback(async () => {
       </Menu>
 
       {/* Settings Modal */}
-      <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="md" fullWidth>
+      <Dialog open={settingsOpen} onClose={() => setSettingsOpen(false)} maxWidth="lg" fullWidth>
         <DialogTitle>Configuración del Dashboard</DialogTitle>
         <DialogContent>
           <Typography variant="h6" gutterBottom>
@@ -846,6 +1373,32 @@ const loadDashboardData = useCallback(async () => {
               </List>
             </SortableContext>
           </DndContext>
+          
+          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+            Visibilidad de Métricas de Columnas
+          </Typography>
+          
+          {/* Column Metrics Settings by Table */}
+          {tableColumnGroups.map((group) => (
+            <Box key={group.tableSlug} sx={{ mb: 2 }}>
+              <Typography variant="subtitle1" gutterBottom sx={{ fontWeight: 600 }}>
+                {group.tableIcon} {group.tableName}
+              </Typography>
+              <Box sx={{ pl: 2 }}>
+                {group.columns.map((columnMetric) => (
+                  <Box key={columnMetric.id} sx={{ display: 'flex', alignItems: 'center', py: 0.5 }}>
+                    <Checkbox
+                      checked={columnMetric.visible}
+                      onChange={() => toggleColumnMetricVisibility(columnMetric.id)}
+                    />
+                    <Typography variant="body2" sx={{ ml: 1 }}>
+                      {columnMetric.columnName} ({columnMetric.columnType})
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Box>
+          ))}
           
           <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
             Visibilidad de Tablas
