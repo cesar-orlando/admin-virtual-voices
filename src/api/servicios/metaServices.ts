@@ -78,7 +78,7 @@ export const updateSession = async (update: Partial<WhatsAppSession>, user: User
   }
 }
 
-export const deleteSession = async (sessionId: string, user: UserProfile) => {
+export const deleteSession = async (user: UserProfile,sessionId: string) => {
   try {
     const response = await api.delete(`/sessions/messenger/${user.companySlug}/${sessionId}`);
     return response.data;

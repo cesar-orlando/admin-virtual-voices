@@ -36,6 +36,7 @@ import MenuItem from '@mui/material/MenuItem';
 import Select from '@mui/material/Select';
 import { fetchAllAiConfigs } from '../api/servicios';
 import { set } from 'date-fns';
+import Chip from '@mui/material/Chip';
 
 const MESSENGER_SOCKET_EVENT = 'messenger-message';
 
@@ -266,6 +267,17 @@ useEffect(() => {
         name: editSessionName,
         IA: { id: selectedIA._id, name: selectedIA.name },
       }, user);
+      setConversations(prev => {
+        return prev.map(c => {
+          if (c.session?.id === res.session._id) {
+            return { ...c, session: {
+              id: res.session._id,
+              name: res.session.name,
+            }};
+          }
+          return c;
+        });
+      });
       setSessions(prev => prev.map(s => s._id === res.session._id ? res.session : s));
       setSnackbar({ open: true, message: 'Sesión actualizada', severity: 'success' });
       setEditSession(null);
@@ -399,7 +411,7 @@ useEffect(() => {
                 button
                 selected={activeConversation?._id === convo._id}
                 onClick={() => setActiveConversation(convo)}
-                sx={{ borderRadius: 2, mb: 0.5 }}
+                sx={{ borderRadius: 2, mb: 0.5, alignItems: 'flex-start' }}
               >
                 <ListItemAvatar>
                   <Badge
@@ -414,12 +426,29 @@ useEffect(() => {
                     </Avatar>
                   </Badge>
                 </ListItemAvatar>
-                <ListItemText
-                  primary={convo.name || convo.id}
-                  secondary={convo.lastMessage?.body || 'Sin mensajes'}
-                  primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
-                  secondaryTypographyProps={{ noWrap: true, fontStyle: 'italic' }}
-                />
+                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <ListItemText
+                    primary={convo.name || convo.id}
+                    secondary={convo.lastMessage?.body || 'Sin mensajes'}
+                    primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
+                    secondaryTypographyProps={{ noWrap: true, fontStyle: 'italic' }}
+                  />
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    {convo.session?.name && (
+                      <Chip
+                        label={convo.session.name}
+                        size="small"
+                        sx={{
+                          bgcolor: '#e3e9fb',
+                          color: '#4267B2',
+                          fontWeight: 600,
+                          fontSize: 12,
+                          fontStyle: 'italic',
+                        }}
+                      />
+                    )}
+                  </Box>
+                </Box>
               </ListItem>
             )) : (
               <Box sx={{ textAlign: 'center', p: 4 }}>
