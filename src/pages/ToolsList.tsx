@@ -34,11 +34,13 @@ import {
   PlayArrow as PlayIcon,
   Refresh as RefreshIcon,
   Warning as WarningIcon,
+  AutoAwesome as AIIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useTools, useCategories } from '../hooks/useTools';
 import type { ITool, ToolListParams } from '../types';
+import DynamicToolWizard from '../components/DynamicToolWizard';
 
 const ToolsList: React.FC = () => {
   const navigate = useNavigate();
@@ -61,6 +63,8 @@ const ToolsList: React.FC = () => {
     toolId: '',
     toolName: '',
   });
+
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const { data: toolsData, isLoading, error, refetch } = useToolsList(filters);
   const { data: categoriesData } = useCategoriesList();
@@ -162,10 +166,23 @@ const ToolsList: React.FC = () => {
           </Button>
           <Button
             variant="contained"
+            startIcon={<AIIcon />}
+            onClick={() => setWizardOpen(true)}
+            sx={{
+              background: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #D946EF 0%, #7C3AED 100%)',
+              }
+            }}
+          >
+            Herramienta IA
+          </Button>
+          <Button
+            variant="outlined"
             startIcon={<AddIcon />}
             onClick={() => navigate('/herramientas/nueva')}
           >
-            Nueva Herramienta
+            Herramienta Manual
           </Button>
         </Box>
       </Box>
@@ -373,6 +390,16 @@ const ToolsList: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Dynamic Tool Wizard */}
+      <DynamicToolWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onSuccess={() => {
+          refetch();
+          toast.success('¡Herramienta creada exitosamente!');
+        }}
+      />
     </Box>
   );
 };

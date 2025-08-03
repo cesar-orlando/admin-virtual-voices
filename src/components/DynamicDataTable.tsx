@@ -99,9 +99,13 @@ export default function DynamicDataTable({
   // State for date filters
   const [dateFields, setDateFields] = useState<{name: string, label: string}[]>([]);
   const [selectedDateField, setSelectedDateField] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
+  
+  // Calendar state
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   // File handling functions
   const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
@@ -320,7 +324,7 @@ export default function DynamicDataTable({
   };
 
   const handleApplyDateFilter = () => {
-    if (selectedDateField && startDate && endDate) {
+    if (selectedDateField && selectedDates.length > 0) {
       const newFilters = Object.entries(activeFilters)
         .filter(([key, val]) => {
           if (typeof val === 'object' && val !== null && ('$gte' in val || '$lte' in val)) {
@@ -333,11 +337,22 @@ export default function DynamicDataTable({
           return acc;
         }, {} as Record<string, unknown>);
 
-      // Añadir filtro de fecha actual
-      newFilters[selectedDateField] = {
-        $gte: new Date(new Date(startDate).setHours(0, 0, 0, 0)).toISOString(),
-        $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)).toISOString()
-      };
+      // Si solo hay una fecha seleccionada, filtrar por ese día
+      if (selectedDates.length === 1) {
+        const selectedDate = selectedDates[0]; // "YYYY-MM-DD"
+        newFilters[selectedDateField] = {
+          $gte: selectedDate,
+          $lte: selectedDate
+        };
+      } else if (selectedDates.length === 2) {
+        // Si hay dos fechas, usar como rango
+        const sortedDates = [...selectedDates].sort();
+        newFilters[selectedDateField] = {
+          $gte: sortedDates[0],
+          $lte: sortedDates[1]
+        };
+      }
+      
       setActiveFilters(newFilters);
       setPage(0); // Reset page to 1 on new filter
     }
@@ -347,11 +362,167 @@ export default function DynamicDataTable({
   const handleClearFilters = () => {
     setActiveFilters({});
     setSelectedDateField('');
-    setStartDate('');
-    setEndDate('');
+    setSelectedDates([]);
     setPage(0);
     handleFilterClose();
   };
+
+  const handleDateClick = (day: number) => {
+    // Crear fecha string manualmente para evitar problemas de zona horaria
+    const year = currentYear;
+    const month = (currentMonth + 1).toString().padStart(2, '0');
+    const dayStr = day.toString().padStart(2, '0');
+    const dateString = `${year}-${month}-${dayStr}`;
+    
+    setSelectedDates(prev => {
+      if (prev.includes(dateString)) {
+        // Si la fecha ya está seleccionada, la quitamos
+        return prev.filter(d => d !== dateString);
+      } else if (prev.length < 2) {
+        // Si hay menos de 2 fechas, agregamos la nueva
+        return [...prev, dateString].sort();
+      } else {
+        // Si ya hay 2 fechas, reemplazamos con la nueva
+        return [dateString];
+      }
+    });
+  };
+
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    if (direction === 'prev') {
+      if (currentMonth === 0) {
+        setCurrentMonth(11);
+        setCurrentYear(prev => prev - 1);
+      } else {
+        setCurrentMonth(prev => prev - 1);
+      }
+    } else {
+      if (currentMonth === 11) {
+        setCurrentMonth(0);
+        setCurrentYear(prev => prev + 1);
+      } else {
+        setCurrentMonth(prev => prev + 1);
+      }
+    }
+  };
+
+  const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (month: number, year: number) => {
+    const firstDay = new Date(year, month, 1).getDay();
+    return firstDay === 0 ? 6 : firstDay - 1; // Ajustar para que lunes sea 0
+  };
+
+  const isDateSelected = (day: number) => {
+    const year = currentYear;
+    const month = (currentMonth + 1).toString().padStart(2, '0');
+    const dayStr = day.toString().padStart(2, '0');
+    const dateString = `${year}-${month}-${dayStr}`;
+    return selectedDates.includes(dateString);
+  };
+
+  const getDateColor = (day: number) => {
+    const year = currentYear;
+    const month = (currentMonth + 1).toString().padStart(2, '0');
+    const dayStr = day.toString().padStart(2, '0');
+    const dateString = `${year}-${month}-${dayStr}`;
+    const index = selectedDates.indexOf(dateString);
+    if (index === 0) return '#1976d2'; // Azul para primera fecha
+    if (index === 1) return '#e91e63'; // Rosa para segunda fecha
+    return 'transparent';
+  };
+
+  const DatePicker = () => {
+    const daysInMonth = getDaysInMonth(currentMonth, currentYear);
+    const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
+    const monthNames = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    const dayNames = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+    return (
+      <Box sx={{ width: '100%' }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <IconButton onClick={() => navigateMonth('prev')} size="small">
+            <Typography sx={{ fontSize: '1.2rem' }}>←</Typography>
+          </IconButton>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1e3a8a' }}>
+            {monthNames[currentMonth]} {currentYear}
+          </Typography>
+          <IconButton onClick={() => navigateMonth('next')} size="small">
+            <Typography sx={{ fontSize: '1.2rem' }}>→</Typography>
+          </IconButton>
+        </Box>
+
+        {/* Days header */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 1 }}>
+          {dayNames.map(day => (
+            <Box
+              key={day}
+              sx={{
+                textAlign: 'center',
+                fontWeight: 'bold',
+                color: 'text.secondary',
+                fontSize: '0.875rem',
+                p: 1
+              }}
+            >
+              {day}
+            </Box>
+          ))}
+        </Box>
+
+        {/* Calendar days */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
+          {/* Empty cells for days before first day of month */}
+          {Array.from({ length: firstDay }).map((_, index) => (
+            <Box key={`empty-${index}`} sx={{ height: 40 }} />
+          ))}
+          
+          {/* Days of the month */}
+          {Array.from({ length: daysInMonth }).map((_, index) => {
+            const day = index + 1;
+            const isSelected = isDateSelected(day);
+            const bgColor = getDateColor(day);
+            
+            return (
+              <Box
+                key={day}
+                onClick={() => handleDateClick(day)}
+                sx={{
+                  height: 40,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 2,
+                  cursor: 'pointer',
+                  fontWeight: isSelected ? 'bold' : 'normal',
+                  backgroundColor: isSelected ? bgColor : '#f8fafc',
+                  color: isSelected ? 'white' : 'text.primary',
+                  border: isSelected ? 'none' : '1px solid #e2e8f0',
+                  '&:hover': {
+                    backgroundColor: isSelected ? bgColor : '#e2e8f0',
+                    transform: 'scale(1.05)',
+                  },
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {day}
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+    );
+  };
+
+
+
+
 
   const handleFileClick = (files: any[], fieldName: string) => {
     setSelectedFiles(files || []);
@@ -948,11 +1119,13 @@ export default function DynamicDataTable({
         anchorEl={filterAnchorEl}
         open={Boolean(filterAnchorEl)}
         onClose={handleFilterClose}
-        PaperProps={{ sx: { width: 320, p: 2, borderRadius: 2 } }}
+        PaperProps={{ sx: { width: 400, p: 3, borderRadius: 3 } }}
       >
-        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>Filtrar por Fecha</Typography>
+        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: theme.palette.primary.main }}>
+          🗓️ Filtrar por Fecha
+        </Typography>
         
-        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+        <FormControl fullWidth size="small" sx={{ mb: 3 }}>
           <InputLabel>Campo de Fecha</InputLabel>
           <Select
             value={selectedDateField}
@@ -965,31 +1138,50 @@ export default function DynamicDataTable({
           </Select>
         </FormControl>
 
-        <TextField
-          label="Fecha de Inicio"
-          type="date"
-          fullWidth
-          size="small"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          sx={{ mb: 2 }}
-        />
-
-        <TextField
-          label="Fecha de Fin"
-          type="date"
-          fullWidth
-          size="small"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          sx={{ mb: 2 }}
-        />
+        {/* Calendar Component */}
+        {selectedDateField && (
+          <Box sx={{ mb: 3 }}>
+            <DatePicker />
+            
+            {/* Fechas Seleccionadas */}
+            {selectedDates.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: theme.palette.primary.main }}>
+                  Fechas Seleccionadas:
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {selectedDates.map((date, index) => (
+                    <Chip
+                      key={index}
+                      label={new Date(date).toLocaleDateString('es-ES')}
+                      size="small"
+                      sx={{ 
+                        fontSize: '0.75rem',
+                        backgroundColor: index === 0 ? '#1976d2' : '#e91e63',
+                        color: 'white',
+                        fontWeight: 'bold'
+                      }}
+                      onDelete={() => setSelectedDates(prev => prev.filter(d => d !== date))}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Box>
+        )}
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Button onClick={handleClearFilters} size="small">Limpiar</Button>
-          <Button onClick={handleApplyDateFilter} variant="contained" size="small">Aplicar</Button>
+          <Button onClick={handleClearFilters} size="small" variant="outlined">
+            Limpiar
+          </Button>
+          <Button 
+            onClick={handleApplyDateFilter} 
+            variant="contained" 
+            size="small"
+            disabled={!selectedDateField || selectedDates.length === 0}
+          >
+            Aplicar Filtro
+          </Button>
         </Box>
       </Menu>
 
