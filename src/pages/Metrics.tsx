@@ -575,9 +575,13 @@ const Metrics = () => {
   // Estado para los totales
   const [alumnos, setAlumnos] = useState<number>(0);
   const [sinContestar, setSinContestar] = useState<number>(0);
+  const [prospectos, setProspectos] = useState<number>(0);
+  const [nuevoIngreso, setNuevoIngreso] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [alumnosStats, setAlumnosStats] = useState<any>({});
   const [sinContestarStats, setSinContestarStats] = useState<any>({});
+  const [prospectosStats, setProspectosStats] = useState<any>({});
+  const [nuevoIngresoStats, setNuevoIngresoStats] = useState<any>({});
   const [campanaStats, setCampanaStats] = useState<any[]>([]);
   const [medioStats, setMedioStats] = useState<any[]>([]);
   const [ciudadStats, setCiudadStats] = useState<any[]>([]);
@@ -595,27 +599,37 @@ const Metrics = () => {
     
     Promise.all([
       getTableStats('alumnos', user),
-      getTableStats('sin_contestar', user)
-    ]).then(([alumnosStatsRes, sinContestarStatsRes]) => {
+      getTableStats('sin_contestar', user),
+      getTableStats('prospectos', user),
+      getTableStats('nuevo_ingreso', user)
+    ]).then(([alumnosStatsRes, sinContestarStatsRes, prospectosStatsRes, nuevoIngresoStatsRes]) => {
       setAlumnos(alumnosStatsRes?.totalRecords || 0);
       setSinContestar(sinContestarStatsRes?.totalRecords || 0);
+      setProspectos(prospectosStatsRes?.totalRecords || 0);
+      setNuevoIngreso(nuevoIngresoStatsRes?.totalRecords || 0);
       setAlumnosStats(alumnosStatsRes || {});
       setSinContestarStats(sinContestarStatsRes || {});
+      setProspectosStats(prospectosStatsRes || {});
+      setNuevoIngresoStats(nuevoIngresoStatsRes || {});
     }).catch(error => {
       console.error('Error loading data:', error);
       setAlumnos(0);
       setSinContestar(0);
+      setProspectos(0);
+      setNuevoIngreso(0);
       setAlumnosStats({});
       setSinContestarStats({});
+      setProspectosStats({});
+      setNuevoIngresoStats({});
     }).finally(() => setLoading(false));
   }, [isQuickLearning, user, selectedCycle]);
 
   // Orden y datos de las cards
-  const total = alumnos + sinContestar;
+  const total = alumnos + sinContestar + prospectos + nuevoIngreso;
   const metrics = [
-    { title: 'Prospectos', value: 0, color: '#F59E0B', icon: <Assessment /> },
+    { title: 'Prospectos', value: prospectos, color: '#F59E0B', icon: <Assessment /> },
     { title: 'Sin contestar', value: sinContestar, color: '#EF4444', icon: <Cancel /> },
-    { title: 'Nuevo ingreso', value: 0, color: '#10B981', icon: <CheckCircle /> },
+    { title: 'Nuevo ingreso', value: nuevoIngreso, color: '#10B981', icon: <CheckCircle /> },
     { title: 'Alumnos', value: alumnos, color: '#3B82F6', icon: <People /> },
   ];
 
@@ -764,6 +778,18 @@ const Metrics = () => {
             </Box>
           </Grid>
         </Grid>
+        <MetricGroupCard
+          title="Métricas de Prospectos"
+          stats={prospectosStats}
+          color="#F59E0B"
+          icon={<Assessment sx={{ fontSize: 36 }} />}
+        />
+        <MetricGroupCard
+          title="Métricas de Nuevo Ingreso"
+          stats={nuevoIngresoStats}
+          color="#10B981"
+          icon={<CheckCircle sx={{ fontSize: 36 }} />}
+        />
         <MetricGroupCard
           title="Métricas de Alumnos"
           stats={alumnosStats}

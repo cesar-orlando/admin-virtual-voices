@@ -33,6 +33,7 @@ import DashboardCustomizeIcon from '@mui/icons-material/DashboardCustomize'
 import PlayArrowIcon from '@mui/icons-material/PlayArrow'
 import AnalyticsIcon from '@mui/icons-material/Analytics'
 import SettingsIcon from '@mui/icons-material/Settings'
+import AssignmentIcon from '@mui/icons-material/Assignment'
 import { useAuth } from '../hooks/useAuth'
 import { getTables } from '../api/servicios'
 import type { DynamicTable } from '../types'
@@ -148,11 +149,17 @@ export default function Sidebar({ mobileOpen, onClose, mode, onHoverChange }: Si
       label: 'Dashboard',
       icon: <AnalyticsIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />, path: '/',
     },
+    ...(user.role === 'Administrador' ? [
     {
+      label: 'Tareas',
+      icon: <AssignmentIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
+      path: '/tareas',
+    }]: []),
+/*     { Descomentar cuando este bien el calendario
       label: 'Calendario',
       icon: <CalendarMonthIcon sx={{ fontSize: 24, transition: 'all 0.2s ease-out' }} />,
       path: '/calendario',
-    },
+    }, */
     // Solo mostrar Usuarios si es Administrador
     ...(user.role === 'Administrador' ? [
       {
