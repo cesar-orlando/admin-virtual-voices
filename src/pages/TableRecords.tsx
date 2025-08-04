@@ -1,16 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import {
   Box,
-  Typography,
   Alert,
   Skeleton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Button,
   useTheme,
-  Tooltip,
 } from '@mui/material'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
@@ -18,49 +12,10 @@ import { getTableBySlug } from '../api/servicios'
 import DynamicDataTable from '../components/DynamicDataTable'
 import type { DynamicTable, DynamicRecord } from '../types'
 import AddIcon from '@mui/icons-material/Add'
-import * as XLSX from 'xlsx';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
-import { FormControl, InputLabel, Select, MenuItem } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import ExcelImportDialog from '../components/ExcelImportDialog';
+import { ExcelImportDialog } from '../components/ExcelImportDialog';
 import { importRecords } from '../api/servicios/dynamicTableServices';
-
-// Fuzzy match helper
-function fuzzyMatch(str: string, options: string[]): string | null {
-  const normalized = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/gi, '');
-  const strNorm = normalized(str);
-  let best = null;
-  let bestScore = 0;
-  for (const opt of options) {
-    const optNorm = normalized(opt);
-    let score = 0;
-    // Coincidencia exacta
-    if (optNorm === strNorm) score = 100;
-    // Coincidencia parcial
-    else if (optNorm.includes(strNorm) || strNorm.includes(optNorm)) score = 80;
-    // Coincidencia por palabras
-    else {
-      const strParts = strNorm.split(/\s+/);
-      const optParts = optNorm.split(/\s+/);
-      score = strParts.filter(p => optNorm.includes(p)).length * 10;
-      score += optParts.filter(p => strNorm.includes(p)).length * 10;
-    }
-    if (score > bestScore) {
-      best = opt;
-      bestScore = score;
-    }
-  }
-  return bestScore >= 50 ? best : null;
-}
-
-// Al inicializar el mapeo, todos los selects deben estar en 'Ignorar'
-const initializeFieldMapping = (excelFields: string[], tableFields: any[], tableLabels: string[]) => {
-  const mapping: { [excelField: string]: string } = {};
-  for (const excelField of excelFields) {
-    mapping[excelField] = '';
-  }
-  return mapping;
-};
 
 export default function TableRecords() {
   const [table, setTable] = useState<DynamicTable | null>(null)
@@ -82,16 +37,35 @@ export default function TableRecords() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const handleOpenImportDialog = () => setImportDialogOpen(true);
   const handleCloseImportDialog = () => setImportDialogOpen(false);
-  const handleImportExcel = async (mappedRows: any[]) => {
-    if (!table || !tableSlug || !user) return;
+  const handleImportExcel = async (data: any[], options: any) => {
+    if (!table || !tableSlug || !user) {
+      return { newRecords: 0, updatedRecords: 0, duplicatesSkipped: 0, errors: ['No hay tabla o usuario disponible'] };
+    }
+    
     try {
-      const recordsToImport = mappedRows.map(data => ({ data }));
-      await importRecords(tableSlug, recordsToImport, user);
-      enqueueSnackbar('Registros importados exitosamente', { variant: 'success' });
+      const recordsToImport = data.map(rowData => ({ data: rowData }));
+      const result = await importRecords(tableSlug, recordsToImport, user, options);
+      
+      enqueueSnackbar(`Importación completada: ${result.created || 0} registros creados`, { variant: 'success' });
       setRefreshTrigger(prev => prev + 1);
+      
+      return {
+        newRecords: result.created || 0,
+        updatedRecords: result.updated || 0,
+        duplicatesSkipped: result.skipped || 0,
+        errors: result.errors || []
+      };
     } catch (err) {
-      enqueueSnackbar('Error al importar registros', { variant: 'error' });
+      const errorMsg = 'Error al importar registros';
+      enqueueSnackbar(errorMsg, { variant: 'error' });
       console.error('Error al importar registros:', err);
+      
+      return {
+        newRecords: 0,
+        updatedRecords: 0,
+        duplicatesSkipped: 0,
+        errors: [errorMsg]
+      };
     }
   };
 
@@ -132,16 +106,6 @@ export default function TableRecords() {
   const handleRefresh = () => {
     setRefreshTrigger(prev => prev + 1)
   }
-
-  // Validación para habilitar el botón Importar
-  // const mappedValues = Object.values(fieldMapping).filter(v => v);
-  // const hasDuplicates = new Set(mappedValues).size !== mappedValues.length;
-  // const canImport = importedRows.length > 0 && mappedValues.length > 0 && !hasDuplicates;
-
-  // Para saber si un campo de la tabla es requerido
-  const isFieldRequired = (f: any) => f.required;
-  const requiredFields = table ? (table.fields as any[]).filter(isFieldRequired) : [];
-  const requiredFieldKeys = requiredFields.map(f => f.key);
 
   if (loading && !table) {
     return (
@@ -187,8 +151,7 @@ export default function TableRecords() {
           : 'rgba(255,255,255,0.96)',
       }}
     >
-      
-{/*       <Button
+      <Button
         variant="outlined"
         startIcon={<UploadFileIcon />}
         onClick={handleOpenImportDialog}
@@ -199,9 +162,9 @@ export default function TableRecords() {
       <ExcelImportDialog
         open={importDialogOpen}
         onClose={handleCloseImportDialog}
-        tableFields={table ? (table.fields as any[]).map(f => ({ key: f.key, label: f.label, required: f.required })) : []}
+        tableFields={table ? (table.fields as any[]).map(f => ({ key: f.key, label: f.label, required: f.required, type: f.type })) : []}
         onImport={handleImportExcel}
-      /> */}
+      />
      
       {/* Tabla dinámica */}
       <DynamicDataTable

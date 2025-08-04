@@ -4,7 +4,7 @@ import type { UserProfile, WhatsAppSession } from "../../types";
 
 export const fetchSessions = async (user: UserProfile) => {
   try {
-    const response = await api.get(`/whatsapp/session/${user.companySlug}/${user.id}`);
+    const response = await api.get(`/sessions/whatsapp/${user.companySlug}/${user.id}`);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -14,7 +14,7 @@ export const fetchSessions = async (user: UserProfile) => {
 
 export const requestNewQr = async (sessionName: string, user: UserProfile) => {
   try {
-    const response = await api.post('/whatsapp/session', {
+    const response = await api.post('/sessions/whatsapp/', {
       sessionName,
       c_name: user.companySlug,
       user_id: user.id,
@@ -29,7 +29,7 @@ export const requestNewQr = async (sessionName: string, user: UserProfile) => {
 
 export const updateSession = async (update: Partial<WhatsAppSession>, user: UserProfile) => {
   try {
-    const response = await api.put(`/whatsapp/session/${user.companySlug}`, update);
+    const response = await api.put(`/sessions/whatsapp/${user.companySlug}`, update);
     return response.data;
   } catch (error) {
     handleError(error as any);
@@ -39,7 +39,7 @@ export const updateSession = async (update: Partial<WhatsAppSession>, user: User
 
 export const deleteSession = async (sessionId: string, user: UserProfile) => {
   try {
-    const response = await api.delete(`/whatsapp/session/${user.companySlug}/${sessionId}`);
+    const response = await api.delete(`/sessions/whatsapp/${user.companySlug}/${sessionId}`);
     return response.data;
   } catch (error) {
     handleError(error as any);

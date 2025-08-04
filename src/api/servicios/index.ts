@@ -18,3 +18,9 @@ export * from './toolsServices';
 
 // Quick Learning Twilio Services
 export * from './quickLearningTwilioServices';
+
+// Chat Metrics Services
+export * from './chatMetricsServices';
+
+// Task Services
+export * from './taskServices';

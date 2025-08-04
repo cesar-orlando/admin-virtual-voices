@@ -57,10 +57,11 @@ import {
   deleteRecord, 
   exportRecords,
   getTableStats,
+  importRecords,
 } from '../api/servicios';
 import { exportTableData } from '../utils/exportUtils';
 import type { DynamicTable, DynamicRecord, TableField, TableStats } from '../types';
-import * as XLSX from 'xlsx';
+import { ExcelImportDialog } from './ExcelImportDialog';
 
 interface DynamicDataTableProps {
   table: DynamicTable;
@@ -93,13 +94,18 @@ export default function DynamicDataTable({
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [filterAnchorEl, setFilterAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedRecord, setSelectedRecord] = useState<DynamicRecord | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   
   // State for date filters
   const [dateFields, setDateFields] = useState<{name: string, label: string}[]>([]);
   const [selectedDateField, setSelectedDateField] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
+  const [selectedDates, setSelectedDates] = useState<string[]>([]);
   const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
+  
+  // Calendar state
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 
   // File handling functions
   const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
@@ -154,6 +160,37 @@ export default function DynamicDataTable({
       setPage(0); // reset to first page when search is cleared
     }
   }, [debouncedSearchQuery]);
+
+  const handleImportExcel = async (data: any[], options: any) => {
+  if (!user) {
+    throw new Error('Usuario no autenticado');
+  }
+
+  try {
+    console.log('Sending import request with data:', data, 'options:', options, 'user:', user);
+    
+    const result = await importRecords(
+      table.slug, 
+      data.map(record => ({ data: record })), 
+      user, 
+      options
+    );
+    
+    // Refresh the table data
+    await loadRecords();
+    await loadStats();
+    
+    return {
+      newRecords: result.summary?.newRecords || 0,
+      updatedRecords: result.summary?.updatedRecords || 0,
+      duplicatesSkipped: result.summary?.duplicatesSkipped || 0,
+      errors: result.errors || []
+    };
+  } catch (error: any) {
+    console.error('Import error:', error);
+    throw new Error('Error during import: ' + (error.message || 'Unknown error'));
+  }
+};
 
   const loadRecords = async () => {
     if (!user) return;
@@ -287,7 +324,7 @@ export default function DynamicDataTable({
   };
 
   const handleApplyDateFilter = () => {
-    if (selectedDateField && startDate && endDate) {
+    if (selectedDateField && selectedDates.length > 0) {
       const newFilters = Object.entries(activeFilters)
         .filter(([key, val]) => {
           if (typeof val === 'object' && val !== null && ('$gte' in val || '$lte' in val)) {
@@ -298,13 +335,24 @@ export default function DynamicDataTable({
         .reduce((acc, [key, val]) => {
           acc[key] = val;
           return acc;
-        }, {} as Record<string, any>);
+        }, {} as Record<string, unknown>);
 
-      // Añadir filtro de fecha actual
-      newFilters[selectedDateField] = {
-        $gte: new Date(new Date(startDate).setHours(0, 0, 0, 0)).toISOString(),
-        $lte: new Date(new Date(endDate).setHours(23, 59, 59, 999)).toISOString()
-      };
+      // Si solo hay una fecha seleccionada, filtrar por ese día
+      if (selectedDates.length === 1) {
+        const selectedDate = selectedDates[0]; // "YYYY-MM-DD"
+        newFilters[selectedDateField] = {
+          $gte: selectedDate,
+          $lte: selectedDate
+        };
+      } else if (selectedDates.length === 2) {
+        // Si hay dos fechas, usar como rango
+        const sortedDates = [...selectedDates].sort();
+        newFilters[selectedDateField] = {
+          $gte: sortedDates[0],
+          $lte: sortedDates[1]
+        };
+      }
+      
       setActiveFilters(newFilters);
       setPage(0); // Reset page to 1 on new filter
     }
@@ -314,11 +362,167 @@ export default function DynamicDataTable({
   const handleClearFilters = () => {
     setActiveFilters({});
     setSelectedDateField('');
-    setStartDate('');
-    setEndDate('');
+    setSelectedDates([]);
     setPage(0);
     handleFilterClose();
   };
+
+  const handleDateClick = (day: number) => {
+    // Crear fecha string manualmente para evitar problemas de zona horaria
+    const year = currentYear;
+    const month = (currentMonth + 1).toString().padStart(2, '0');
+    const dayStr = day.toString().padStart(2, '0');
+    const dateString = `${year}-${month}-${dayStr}`;
+    
+    setSelectedDates(prev => {
+      if (prev.includes(dateString)) {
+        // Si la fecha ya está seleccionada, la quitamos
+        return prev.filter(d => d !== dateString);
+      } else if (prev.length < 2) {
+        // Si hay menos de 2 fechas, agregamos la nueva
+        return [...prev, dateString].sort();
+      } else {
+        // Si ya hay 2 fechas, reemplazamos con la nueva
+        return [dateString];
+      }
+    });
+  };
+
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    if (direction === 'prev') {
+      if (currentMonth === 0) {
+        setCurrentMonth(11);
+        setCurrentYear(prev => prev - 1);
+      } else {
+        setCurrentMonth(prev => prev - 1);
+      }
+    } else {
+      if (currentMonth === 11) {
+        setCurrentMonth(0);
+        setCurrentYear(prev => prev + 1);
+      } else {
+        setCurrentMonth(prev => prev + 1);
+      }
+    }
+  };
+
+  const getDaysInMonth = (month: number, year: number) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (month: number, year: number) => {
+    const firstDay = new Date(year, month, 1).getDay();
+    return firstDay === 0 ? 6 : firstDay - 1; // Ajustar para que lunes sea 0
+  };
+
+  const isDateSelected = (day: number) => {
+    const year = currentYear;
+    const month = (currentMonth + 1).toString().padStart(2, '0');
+    const dayStr = day.toString().padStart(2, '0');
+    const dateString = `${year}-${month}-${dayStr}`;
+    return selectedDates.includes(dateString);
+  };
+
+  const getDateColor = (day: number) => {
+    const year = currentYear;
+    const month = (currentMonth + 1).toString().padStart(2, '0');
+    const dayStr = day.toString().padStart(2, '0');
+    const dateString = `${year}-${month}-${dayStr}`;
+    const index = selectedDates.indexOf(dateString);
+    if (index === 0) return '#1976d2'; // Azul para primera fecha
+    if (index === 1) return '#e91e63'; // Rosa para segunda fecha
+    return 'transparent';
+  };
+
+  const DatePicker = () => {
+    const daysInMonth = getDaysInMonth(currentMonth, currentYear);
+    const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
+    const monthNames = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    const dayNames = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+    return (
+      <Box sx={{ width: '100%' }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+          <IconButton onClick={() => navigateMonth('prev')} size="small">
+            <Typography sx={{ fontSize: '1.2rem' }}>←</Typography>
+          </IconButton>
+          <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#1e3a8a' }}>
+            {monthNames[currentMonth]} {currentYear}
+          </Typography>
+          <IconButton onClick={() => navigateMonth('next')} size="small">
+            <Typography sx={{ fontSize: '1.2rem' }}>→</Typography>
+          </IconButton>
+        </Box>
+
+        {/* Days header */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, mb: 1 }}>
+          {dayNames.map(day => (
+            <Box
+              key={day}
+              sx={{
+                textAlign: 'center',
+                fontWeight: 'bold',
+                color: 'text.secondary',
+                fontSize: '0.875rem',
+                p: 1
+              }}
+            >
+              {day}
+            </Box>
+          ))}
+        </Box>
+
+        {/* Calendar days */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1 }}>
+          {/* Empty cells for days before first day of month */}
+          {Array.from({ length: firstDay }).map((_, index) => (
+            <Box key={`empty-${index}`} sx={{ height: 40 }} />
+          ))}
+          
+          {/* Days of the month */}
+          {Array.from({ length: daysInMonth }).map((_, index) => {
+            const day = index + 1;
+            const isSelected = isDateSelected(day);
+            const bgColor = getDateColor(day);
+            
+            return (
+              <Box
+                key={day}
+                onClick={() => handleDateClick(day)}
+                sx={{
+                  height: 40,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: 2,
+                  cursor: 'pointer',
+                  fontWeight: isSelected ? 'bold' : 'normal',
+                  backgroundColor: isSelected ? bgColor : '#f8fafc',
+                  color: isSelected ? 'white' : 'text.primary',
+                  border: isSelected ? 'none' : '1px solid #e2e8f0',
+                  '&:hover': {
+                    backgroundColor: isSelected ? bgColor : '#e2e8f0',
+                    transform: 'scale(1.05)',
+                  },
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {day}
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+    );
+  };
+
+
+
+
 
   const handleFileClick = (files: any[], fieldName: string) => {
     setSelectedFiles(files || []);
@@ -339,7 +543,11 @@ export default function DynamicDataTable({
   };
 
   // Update your formatFieldValue function
-  const formatFieldValue = (value: any, field: TableField, isFirstColumn = false): { content: string | JSX.Element; tooltip?: string } => {
+  const formatFieldValue = (
+    value: unknown,
+    field: TableField,
+    isFirstColumn = false
+  ): { content: string | JSX.Element; tooltip?: string } => {
     // Handle "numero" field formatting (ignoring accents and caps)
     if (normalizeText(field.name).includes('numero') || normalizeText(field.label).includes('numero')) {
       const numero = String(value || '').replace(/\D/g, ''); // Remove non-digits
@@ -367,10 +575,15 @@ export default function DynamicDataTable({
         } catch {
           name = value;
         }
-      } else if (typeof value === 'object' && value !== null && value.name) {
-        name = value.name;
+      } else if (
+        typeof value === 'object' &&
+        value !== null &&
+        'name' in value &&
+        typeof (value as { name?: unknown }).name === 'string'
+      ) {
+        name = (value as { name: string }).name;
       } else {
-        name = value;
+        name = value as string;
       }
       return { 
         content: <Chip label={name} size="small" color="primary" sx={{ fontWeight: 600, color: '#fff' }} />,
@@ -380,7 +593,7 @@ export default function DynamicDataTable({
     // Si el campo es 'medio', renderiza un Chip de color
     if (field.name === 'medio') {
       const label = String(value || '').toLowerCase();
-      let sx: any = { fontWeight: 600, color: '#fff', border: 0 };
+      const sx: React.CSSProperties = { fontWeight: 600, color: '#fff', border: 0 };
       const display = label.charAt(0).toUpperCase() + label.slice(1);
       switch (label) {
         case 'meta':
@@ -405,7 +618,7 @@ export default function DynamicDataTable({
       return { 
         content: (
           <Chip
-            label={value}
+            label={String(value)}
             size="small"
             color="primary"
             sx={{ fontWeight: 600, color: '#fff' }}
@@ -418,7 +631,12 @@ export default function DynamicDataTable({
     
     switch (field.type) {
       case 'date': {
-        const date = new Date(value);
+        // Ensure value is string, number, or Date before passing to Date constructor
+        let dateValue: string | number | Date = '';
+        if (typeof value === 'string' || typeof value === 'number' || value instanceof Date) {
+          dateValue = value;
+        }
+        const date = new Date(dateValue);
         if (isNaN(date.getTime())) {
           return { content: '-' };
         }
@@ -435,14 +653,16 @@ export default function DynamicDataTable({
       case 'boolean':
         return { content: value ? 'Sí' : 'No' };
       case 'currency': {
+        const numericValue = typeof value === 'number' ? value : Number(value);
         const formattedCurrency = new Intl.NumberFormat('es-MX', {
           style: 'currency',
           currency: 'MXN'
-        }).format(value);
+        }).format(isNaN(numericValue) ? 0 : numericValue);
         return { content: formattedCurrency };
       }
       case 'number': {
-        const formattedNumber = new Intl.NumberFormat('es-MX').format(value);
+        const numericValue = typeof value === 'number' ? value : Number(value);
+        const formattedNumber = new Intl.NumberFormat('es-MX').format(isNaN(numericValue) ? 0 : numericValue);
         return { content: formattedNumber };
       }
       case 'file': {
@@ -456,10 +676,10 @@ export default function DynamicDataTable({
             files = [value];
           }
         } else if (value && typeof value === 'object') {
-          if (value.urls && Array.isArray(value.urls)) {
-            files = value.urls;
-          } else if (value.files && Array.isArray(value.files)) {
-            files = value.files;
+          if ('urls' in value && Array.isArray((value as { urls?: unknown }).urls)) {
+            files = (value as { urls: string[] }).urls;
+          } else if ('files' in value && Array.isArray((value as { files?: unknown }).files)) {
+            files = (value as { files: string[] }).files;
           } else {
             files = Object.values(value).filter(v => typeof v === 'string' && v.startsWith('http'));
           }
@@ -541,7 +761,7 @@ export default function DynamicDataTable({
   // Antes del renderizado de las filas, ordena los records si sortBy está definido y es de tipo sortable
   const sortableTypes = ['number', 'currency', 'date'];
   const sortableField = table.fields.find(f => f.name === sortBy && sortableTypes.includes(f.type));
-  let sortedRecords = [...records];
+  const sortedRecords = [...records];
 
   if (sortableField && sortBy) {
     sortedRecords.sort((a, b) => {
@@ -673,12 +893,13 @@ export default function DynamicDataTable({
             open={Boolean(actionsAnchorEl)}
             onClose={() => setActionsAnchorEl(null)}
           >
-            {/*
-            <MenuItem onClick={() => { setActionsAnchorEl(null); onImportExcel && onImportExcel(); }}>
+            <MenuItem onClick={() => { 
+              setActionsAnchorEl(null); 
+              setImportDialogOpen(true);
+            }}>
               <ListItemIcon><ImportIcon fontSize="small" /></ListItemIcon>
               <ListItemText>Importar Excel</ListItemText>
             </MenuItem>
-            */}
             <MenuItem onClick={async () => { 
               setActionsAnchorEl(null); 
               try {
@@ -734,7 +955,7 @@ export default function DynamicDataTable({
           )}
           
           {onRecordCreate && (
-             <Button
+            <Button
               variant="contained"
               startIcon={<AddIcon />}
               onClick={onRecordCreate}
@@ -898,11 +1119,13 @@ export default function DynamicDataTable({
         anchorEl={filterAnchorEl}
         open={Boolean(filterAnchorEl)}
         onClose={handleFilterClose}
-        PaperProps={{ sx: { width: 320, p: 2, borderRadius: 2 } }}
+        PaperProps={{ sx: { width: 400, p: 3, borderRadius: 3 } }}
       >
-        <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 2 }}>Filtrar por Fecha</Typography>
+        <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: theme.palette.primary.main }}>
+          🗓️ Filtrar por Fecha
+        </Typography>
         
-        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+        <FormControl fullWidth size="small" sx={{ mb: 3 }}>
           <InputLabel>Campo de Fecha</InputLabel>
           <Select
             value={selectedDateField}
@@ -915,31 +1138,50 @@ export default function DynamicDataTable({
           </Select>
         </FormControl>
 
-        <TextField
-          label="Fecha de Inicio"
-          type="date"
-          fullWidth
-          size="small"
-          value={startDate}
-          onChange={(e) => setStartDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          sx={{ mb: 2 }}
-        />
-
-        <TextField
-          label="Fecha de Fin"
-          type="date"
-          fullWidth
-          size="small"
-          value={endDate}
-          onChange={(e) => setEndDate(e.target.value)}
-          InputLabelProps={{ shrink: true }}
-          sx={{ mb: 2 }}
-        />
+        {/* Calendar Component */}
+        {selectedDateField && (
+          <Box sx={{ mb: 3 }}>
+            <DatePicker />
+            
+            {/* Fechas Seleccionadas */}
+            {selectedDates.length > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 1, color: theme.palette.primary.main }}>
+                  Fechas Seleccionadas:
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {selectedDates.map((date, index) => (
+                    <Chip
+                      key={index}
+                      label={new Date(date).toLocaleDateString('es-ES')}
+                      size="small"
+                      sx={{ 
+                        fontSize: '0.75rem',
+                        backgroundColor: index === 0 ? '#1976d2' : '#e91e63',
+                        color: 'white',
+                        fontWeight: 'bold'
+                      }}
+                      onDelete={() => setSelectedDates(prev => prev.filter(d => d !== date))}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Box>
+        )}
 
         <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-          <Button onClick={handleClearFilters} size="small">Limpiar</Button>
-          <Button onClick={handleApplyDateFilter} variant="contained" size="small">Aplicar</Button>
+          <Button onClick={handleClearFilters} size="small" variant="outlined">
+            Limpiar
+          </Button>
+          <Button 
+            onClick={handleApplyDateFilter} 
+            variant="contained" 
+            size="small"
+            disabled={!selectedDateField || selectedDates.length === 0}
+          >
+            Aplicar Filtro
+          </Button>
         </Box>
       </Menu>
 
@@ -1054,6 +1296,19 @@ export default function DynamicDataTable({
           }} variant="outlined">Cerrar</Button>
         </DialogActions>
       </Dialog>
+
+      {/* Import Excel Dialog */}
+      <ExcelImportDialog
+        open={importDialogOpen}
+        onClose={() => setImportDialogOpen(false)}
+        tableFields={table.fields.map(f => ({ 
+          key: f.name, 
+          label: f.label, 
+          required: f.required || false,
+          type: f.type 
+        }))}
+        onImport={handleImportExcel}
+      />
     </Box>
   );
 }

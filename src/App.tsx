@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { UserProvider } from './context/useAuth'
 import { useAuth } from './hooks/useAuth'
 import Login from './pages/Login'
@@ -17,6 +17,9 @@ import EditTable from './pages/EditTable'
 import UserProfile from './pages/UserProfile'
 import Metrics from './pages/Metrics'
 import QuickLearningDashboard from './pages/QuickLearningDashboard'
+import CalendarPage from './pages/Calendar'
+import { DynamicDashboard } from './components/DynamicDashboard';
+import DateFieldDebugger from './components/DateFieldDebugger';
 
 // Tools System imports
 import ToolsDashboard from './pages/ToolsDashboard'
@@ -24,6 +27,9 @@ import ToolsList from './pages/ToolsList'
 import ToolForm from './pages/ToolForm'
 import ToolTester from './pages/ToolTester'
 import ToolsTest from './pages/ToolsTest'
+import Messenger from './pages/Messenger'
+import PrivacyPolicy from './pages/PrivacyPolicy'
+import TasksPage from './pages/TasksPage'
 
 function ProtectedRoute({ children }: React.PropsWithChildren) {
   const { user } = useAuth()
@@ -43,13 +49,24 @@ function QuickLearningProtectedRoute({ children }: React.PropsWithChildren) {
   return <>{children}</>
 }
 
-function DashboardPage() {
+function Dashboard() {
+  const navigate = useNavigate();
+
+  const handleTableClick = (tableSlug: string) => {
+    navigate(`/tablas/${tableSlug}`);
+  };
+
+  const handleCreateTable = () => {
+    navigate('/crear-tabla');
+  };
+
   return (
-    <div>
-      <h1>Dashboard</h1>
-      <p>Bienvenido al dashboard de Virtual Voices</p>
-    </div>
-  )
+    <DynamicDashboard 
+      companySlug={localStorage.getItem('companySlug')!}
+      onTableClick={handleTableClick}
+      onCreateTable={handleCreateTable}
+    />
+  );
 }
 
 function EquiposPage() {
@@ -69,6 +86,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/politicas-de-privacidad" element={<PrivacyPolicy />} />
           <Route
             path="/"
             element={
@@ -79,6 +97,7 @@ export default function App() {
           >
             <Route index element={<Metrics />} />
             <Route path="metricas" element={<Metrics />} />
+            <Route path="calendario" element={<CalendarPage />} />
             <Route path="usuarios" element={<Users />} />
             <Route path="ia" element={<AiConfig />} />
             <Route path="equipos" element={<EquiposPage />} />
@@ -90,6 +109,7 @@ export default function App() {
             <Route path="tablas/:tableSlug/editar" element={<EditTable />} />
             <Route path="tablas/:tableSlug/nuevo" element={<RecordForm />} />
             <Route path="tablas/:tableSlug/editar/:recordId" element={<RecordForm />} />
+            <Route path="debug/date-field" element={<DateFieldDebugger />} />
 
             {/* Tools System Routes */}
             <Route path="herramientas-dashboard" element={<ToolsDashboard />} />
@@ -101,6 +121,8 @@ export default function App() {
             <Route path="herramientas-test" element={<ToolsTest />} />
 
             <Route path="chats" element={<ChatsTab />} />
+            <Route path="messenger" element={<Messenger />} />
+            <Route path="tareas" element={<TasksPage />} />
             <Route path="quicklearning/whatsapp" element={
               <QuickLearningProtectedRoute>
                 <QuickLearningDashboard />

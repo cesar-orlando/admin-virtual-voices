@@ -45,6 +45,8 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 import { useAuth } from '../hooks/useAuth';
 import { getTableStats } from '../api/servicios/dynamicTableServices';
 import { keyframes } from '@mui/system';
+import DynamicDashboard from '../components/DynamicDashboard';
+import { useNavigate } from 'react-router-dom';
 
 // Mock data para las métricas - COMENTADO PARA USAR DATOS REALES
 /*
@@ -565,18 +567,27 @@ const Metrics = () => {
   // Elimina cualquier declaración previa de isAdmin y deja solo esta:
   const isAdmin = user?.role === 'Administrador' as any;
 
+  const navigate = useNavigate();
+
   // Estado para el ciclo seleccionado
   const [selectedCycle, setSelectedCycle] = useState(getCurrentCycle());
 
   // Estado para los totales
   const [alumnos, setAlumnos] = useState<number>(0);
   const [sinContestar, setSinContestar] = useState<number>(0);
+  const [prospectos, setProspectos] = useState<number>(0);
+  const [nuevoIngreso, setNuevoIngreso] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [alumnosStats, setAlumnosStats] = useState<any>({});
   const [sinContestarStats, setSinContestarStats] = useState<any>({});
+  const [prospectosStats, setProspectosStats] = useState<any>({});
+  const [nuevoIngresoStats, setNuevoIngresoStats] = useState<any>({});
   const [campanaStats, setCampanaStats] = useState<any[]>([]);
   const [medioStats, setMedioStats] = useState<any[]>([]);
   const [ciudadStats, setCiudadStats] = useState<any[]>([]);
+  const handleTableClick = (tableSlug: string) => {
+    navigate(`/tablas/${tableSlug}`);
+  };
 
   // Cargar datos reales al montar y cuando cambie el ciclo
   useEffect(() => {
@@ -588,27 +599,37 @@ const Metrics = () => {
     
     Promise.all([
       getTableStats('alumnos', user),
-      getTableStats('sin_contestar', user)
-    ]).then(([alumnosStatsRes, sinContestarStatsRes]) => {
+      getTableStats('sin_contestar', user),
+      getTableStats('prospectos', user),
+      getTableStats('nuevo_ingreso', user)
+    ]).then(([alumnosStatsRes, sinContestarStatsRes, prospectosStatsRes, nuevoIngresoStatsRes]) => {
       setAlumnos(alumnosStatsRes?.totalRecords || 0);
       setSinContestar(sinContestarStatsRes?.totalRecords || 0);
+      setProspectos(prospectosStatsRes?.totalRecords || 0);
+      setNuevoIngreso(nuevoIngresoStatsRes?.totalRecords || 0);
       setAlumnosStats(alumnosStatsRes || {});
       setSinContestarStats(sinContestarStatsRes || {});
+      setProspectosStats(prospectosStatsRes || {});
+      setNuevoIngresoStats(nuevoIngresoStatsRes || {});
     }).catch(error => {
       console.error('Error loading data:', error);
       setAlumnos(0);
       setSinContestar(0);
+      setProspectos(0);
+      setNuevoIngreso(0);
       setAlumnosStats({});
       setSinContestarStats({});
+      setProspectosStats({});
+      setNuevoIngresoStats({});
     }).finally(() => setLoading(false));
   }, [isQuickLearning, user, selectedCycle]);
 
   // Orden y datos de las cards
-  const total = alumnos + sinContestar;
+  const total = alumnos + sinContestar + prospectos + nuevoIngreso;
   const metrics = [
-    { title: 'Prospectos', value: 0, color: '#F59E0B', icon: <Assessment /> },
+    { title: 'Prospectos', value: prospectos, color: '#F59E0B', icon: <Assessment /> },
     { title: 'Sin contestar', value: sinContestar, color: '#EF4444', icon: <Cancel /> },
-    { title: 'Nuevo ingreso', value: 0, color: '#10B981', icon: <CheckCircle /> },
+    { title: 'Nuevo ingreso', value: nuevoIngreso, color: '#10B981', icon: <CheckCircle /> },
     { title: 'Alumnos', value: alumnos, color: '#3B82F6', icon: <People /> },
   ];
 
@@ -758,6 +779,18 @@ const Metrics = () => {
           </Grid>
         </Grid>
         <MetricGroupCard
+          title="Métricas de Prospectos"
+          stats={prospectosStats}
+          color="#F59E0B"
+          icon={<Assessment sx={{ fontSize: 36 }} />}
+        />
+        <MetricGroupCard
+          title="Métricas de Nuevo Ingreso"
+          stats={nuevoIngresoStats}
+          color="#10B981"
+          icon={<CheckCircle sx={{ fontSize: 36 }} />}
+        />
+        <MetricGroupCard
           title="Métricas de Alumnos"
           stats={alumnosStats}
           color="#3B82F6"
@@ -775,13 +808,8 @@ const Metrics = () => {
 
   // Para otras empresas o si no es admin, dejar mensaje de "Próximamente"
   return (
+    console.log(user?.companySlug, 'is not QuickLearning'),
     <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
-      <Typography variant="h3" sx={{ fontWeight: 800, color: '#222', mb: 1 }}>
-        Dashboard de Métricas
-      </Typography>
-      <Typography variant="subtitle1" sx={{ color: '#6C63FF', mb: 4 }}>
-        Análisis completo del rendimiento de tu negocio
-      </Typography>
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
         <Paper elevation={0} sx={{
           p: { xs: 3, md: 6 },
@@ -789,7 +817,7 @@ const Metrics = () => {
           background: 'linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%)',
           border: '1.5px solid #d1d5db',
           width: '100%',
-          maxWidth: 700,
+          maxWidth: '100%',
           textAlign: 'center',
           boxShadow: '0 4px 32px #6C63FF10',
         }}>
@@ -809,16 +837,13 @@ const Metrics = () => {
             }}>
               <span role="img" aria-label="metrics">📊</span>
             </Box>
-            <Typography variant="h5" sx={{ fontWeight: 800, color: '#6C63FF', mb: 1 }}>
-              Dashboard de Métricas
-            </Typography>
+            
+            {/* Tables Dashboard */}
+            <DynamicDashboard 
+              companySlug={user?.companySlug ?? ''}
+              onTableClick={handleTableClick}
+            />
           </Box>
-          <Typography variant="body1" sx={{ color: '#6C63FF', fontWeight: 600, mb: 1 }}>
-            Próximamente: Centro de análisis y seguimiento de tu negocio
-          </Typography>
-          <Typography variant="body2" sx={{ color: '#6C63FF', opacity: 0.8 }}>
-            Estamos trabajando para traerte métricas detalladas y análisis avanzados
-          </Typography>
         </Paper>
       </Box>
     </Box>
