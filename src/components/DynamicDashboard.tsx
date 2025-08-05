@@ -548,11 +548,37 @@ const generateRealColumnMetrics = async (table: SimpleTable, totalRecords: numbe
   try {
     console.log(`Obtaining real column stats for table: ${table.slug}`);
     
+    // Validate inputs
+    if (!table.slug || !user) {
+      console.warn('Invalid inputs for generateRealColumnMetrics:', { table, user: !!user });
+      return [];
+    }
+    
     // Get real column statistics from the API
     const columnStats = await getColumnStats(table.slug, user);
     
+    // Only log successful responses to reduce console noise
+    if (columnStats && Object.keys(columnStats).length > 0) {
+      console.log(`Column stats response for ${table.slug}: found ${Object.keys(columnStats).length} columns`);
+    } else {
+      console.log(`No column stats available for ${table.slug}, will use fallback data`);
+    }
+    
     if (!columnStats) {
       console.warn(`No column stats available for table: ${table.slug}`);
+      return [];
+    }
+    
+    // Handle different response structures
+    let statsData = columnStats;
+    if (columnStats.data && typeof columnStats.data === 'object') {
+      statsData = columnStats.data;
+    } else if ('success' in columnStats && columnStats.success && 'data' in columnStats) {
+      statsData = (columnStats as { success: boolean; data: unknown }).data;
+    }
+    
+    if (!statsData || typeof statsData !== 'object') {
+      console.warn(`Invalid column stats data structure for ${table.slug}:`, statsData);
       return [];
     }
     
@@ -560,36 +586,45 @@ const generateRealColumnMetrics = async (table: SimpleTable, totalRecords: numbe
     const colors: Array<'primary' | 'secondary' | 'success' | 'warning' | 'error'> = 
       ['primary', 'secondary', 'success', 'warning', 'error'];
     
-    Object.entries(columnStats).forEach(([columnName, stats]: [string, unknown], index) => {
-      const statsTyped = stats as {
-        totalValues?: number;
-        uniqueValues?: number;
-        nullValues?: number;
-        emptyValues?: number;
-        mostCommonValue?: string;
-        mostCommonValueCount?: number;
-        distributionStats?: { [key: string]: number };
-      };
-      
-      const columnMetric: ColumnMetric = {
-        id: `${table.slug}-${columnName}`,
-        columnName,
-        columnType: getColumnTypeFromData(statsTyped.distributionStats || {}), // Infer type from data
-        tableSlug: table.slug,
-        tableName: table.name || table.slug,
-        totalValues: statsTyped.totalValues || totalRecords,
-        uniqueValues: statsTyped.uniqueValues || 0,
-        nullValues: statsTyped.nullValues || 0,
-        emptyValues: statsTyped.emptyValues || 0,
-        mostCommonValue: statsTyped.mostCommonValue || '',
-        mostCommonValueCount: statsTyped.mostCommonValueCount || 0,
-        distributionStats: statsTyped.distributionStats || {},
-        visible: true,
-        order: index + 1,
-        color: colors[index % colors.length]
-      };
-      
-      columnMetrics.push(columnMetric);
+    Object.entries(statsData).forEach(([columnName, stats]: [string, unknown], index) => {
+      try {
+        if (!stats || typeof stats !== 'object') {
+          console.warn(`Invalid stats for column ${columnName} in table ${table.slug}:`, stats);
+          return;
+        }
+        
+        const statsTyped = stats as {
+          totalValues?: number;
+          uniqueValues?: number;
+          nullValues?: number;
+          emptyValues?: number;
+          mostCommonValue?: string;
+          mostCommonValueCount?: number;
+          distributionStats?: { [key: string]: number };
+        };
+        
+        const columnMetric: ColumnMetric = {
+          id: `${table.slug}-${columnName}`,
+          columnName,
+          columnType: getColumnTypeFromData(statsTyped.distributionStats || {}), // Infer type from data
+          tableSlug: table.slug,
+          tableName: table.name || table.slug,
+          totalValues: statsTyped.totalValues || totalRecords,
+          uniqueValues: statsTyped.uniqueValues || 0,
+          nullValues: statsTyped.nullValues || 0,
+          emptyValues: statsTyped.emptyValues || 0,
+          mostCommonValue: statsTyped.mostCommonValue || '',
+          mostCommonValueCount: statsTyped.mostCommonValueCount || 0,
+          distributionStats: statsTyped.distributionStats || {},
+          visible: true,
+          order: index + 1,
+          color: colors[index % colors.length]
+        };
+        
+        columnMetrics.push(columnMetric);
+      } catch (columnError) {
+        console.error(`Error processing column ${columnName} for table ${table.slug}:`, columnError);
+      }
     });
     
     console.log(`Generated ${columnMetrics.length} real column metrics for ${table.slug}`);
@@ -649,9 +684,10 @@ export function DynamicDashboard({
   // const [columnMetrics, setColumnMetrics] = useState<ColumnMetric[]>([]);
   const [tableColumnGroups, setTableColumnGroups] = useState<TableColumnGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  // const [error, setError] = useState<string | null>(null);
+  const [isLoadingData, setIsLoadingData] = useState(false); // Add loading guard
 
   // New state for dashboard customization
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -665,9 +701,21 @@ const loadDashboardData = useCallback(async () => {
     return;
   }
 
+  // Prevent multiple simultaneous calls
+  if (isLoadingData) {
+    console.log('DynamicDashboard: Already loading data, skipping...');
+    return;
+  }
+
   try {
+    setIsLoadingData(true);
     setLoading(true);
-    console.log('DynamicDashboard: Starting to load dashboard data...');
+    setError(null); // Clear any previous errors
+    console.log('DynamicDashboard: Starting to load dashboard data for user:', {
+      id: user.id,
+      email: user.email,
+      companySlug: user.companySlug
+    });
 
     // Fetch all tables
     console.log('DynamicDashboard: Fetching tables...');
@@ -683,6 +731,14 @@ const loadDashboardData = useCallback(async () => {
       tablesList = tablesResponse.tables;
     } else if (tablesResponse && Array.isArray(tablesResponse.data)) {
       tablesList = tablesResponse.data;
+    } else if (tablesResponse && typeof tablesResponse === 'object' && 'success' in tablesResponse) {
+      // Handle API response with success property
+      const successResponse = tablesResponse as { success?: boolean; data?: unknown; tables?: unknown };
+      if (Array.isArray(successResponse.data)) {
+        tablesList = successResponse.data;
+      } else if (Array.isArray(successResponse.tables)) {
+        tablesList = successResponse.tables;
+      }
     } else {
       console.warn('DynamicDashboard: Unexpected tables response structure:', tablesResponse);
       tablesList = [];
@@ -692,7 +748,7 @@ const loadDashboardData = useCallback(async () => {
     setTables(tablesList);
 
     if (!tablesList || tablesList.length === 0) {
-      console.log('DynamicDashboard: No tables found');
+      console.log('DynamicDashboard: No tables found, setting empty dashboard');
       setSummaryCards([
         {
           id: 'total-tables',
@@ -723,7 +779,6 @@ const loadDashboardData = useCallback(async () => {
         }
       ]);
       setTableMetrics([]);
-      // setColumnMetrics([]);
       setTableColumnGroups([]);
       setLoading(false);
       return;
@@ -744,12 +799,44 @@ const loadDashboardData = useCallback(async () => {
       try {
         console.log(`DynamicDashboard: Loading stats for table ${table.slug}...`);
         
+        // Validate table object
+        if (!table.slug) {
+          console.warn('DynamicDashboard: Table missing slug:', table);
+          continue;
+        }
+        
         // Use getTableStats instead of getRecords
         const tableStats = await getTableStats(table.slug, user);
         console.log(`DynamicDashboard: Table stats for ${table.slug}:`, tableStats);
 
-        // Extract data from tableStats
-        const totalRecords = tableStats?.totalRecords || 0;
+        // Handle different possible response structures
+        let totalRecords = 0;
+        let growthRate = 0;
+        let lastUpdated = new Date();
+
+        if (tableStats) {
+          // Try different possible property names
+          totalRecords = tableStats.totalRecords || 
+                        tableStats.total_records || 
+                        tableStats.count || 
+                        tableStats.records || 
+                        0;
+          
+          growthRate = tableStats.growthRate || 
+                      tableStats.growth_rate || 
+                      tableStats.growth || 
+                      0;
+          
+          if (tableStats.lastUpdated) {
+            lastUpdated = new Date(tableStats.lastUpdated);
+          } else if (tableStats.last_updated) {
+            lastUpdated = new Date(tableStats.last_updated);
+          } else if (tableStats.updated_at) {
+            lastUpdated = new Date(tableStats.updated_at);
+          }
+        }
+        
+        console.log(`DynamicDashboard: Processed stats for ${table.slug} - Total records: ${totalRecords}`);
         
         // Note: getTableStats might not have time-based breakdowns by default
         // You might need to calculate these or modify your backend to include them
@@ -758,18 +845,10 @@ const loadDashboardData = useCallback(async () => {
         const recordsThisWeek = Math.round(totalRecords * 0.15); // 15% estimate  
         const recordsThisMonth = Math.round(totalRecords * 0.30); // 30% estimate
 
-        // Calculate growth (if you have historical data in tableStats)
-        const growthRate = tableStats?.growthRate || 0;
-
         // Assign colors cyclically
         const colors: Array<'primary' | 'secondary' | 'success' | 'warning' | 'error'> = 
           ['primary', 'secondary', 'success', 'warning', 'error'];
         const color = colors[metrics.length % colors.length];
-
-        // Use lastUpdated from tableStats or current date
-        const lastUpdated = tableStats?.lastUpdated 
-          ? new Date(tableStats.lastUpdated) 
-          : new Date();
 
         metrics.push({
           tableSlug: table.slug,
@@ -785,18 +864,34 @@ const loadDashboardData = useCallback(async () => {
         });
 
         // Generate real column metrics for each table
-        const realColumns = await generateRealColumnMetrics(table, totalRecords, user);
-        allColumnMetrics.push(...realColumns);
+        try {
+          console.log(`DynamicDashboard: Loading column metrics for ${table.slug}...`);
+          const realColumns = await generateRealColumnMetrics(table, totalRecords, user);
+          console.log(`DynamicDashboard: Loaded ${realColumns.length} column metrics for ${table.slug}`);
+          allColumnMetrics.push(...realColumns);
 
-        // Create column group for this table
-        columnGroups.push({
-          tableSlug: table.slug,
-          tableName: table.name || table.slug,
-          tableIcon: table.icon || '📊',
-          columns: realColumns,
-          expanded: false,
-          visible: true
-        });
+          // Create column group for this table
+          columnGroups.push({
+            tableSlug: table.slug,
+            tableName: table.name || table.slug,
+            tableIcon: table.icon || '📊',
+            columns: realColumns,
+            expanded: false,
+            visible: true
+          });
+        } catch (columnError) {
+          console.warn(`DynamicDashboard: Error loading column metrics for ${table.slug}:`, columnError);
+          
+          // Add empty column group even if column metrics fail
+          columnGroups.push({
+            tableSlug: table.slug,
+            tableName: table.name || table.slug,
+            tableIcon: table.icon || '📊',
+            columns: [],
+            expanded: false,
+            visible: true
+          });
+        }
 
         totalRecordsAllTables += totalRecords;
         totalRecordsToday += recordsToday;
@@ -916,17 +1011,51 @@ const loadDashboardData = useCallback(async () => {
     console.log('DynamicDashboard: Dashboard data loaded successfully');
 
   } catch (error) {
-    console.error('DynamicDashboard: Error loading dashboard data:', error);
+    console.error('DynamicDashboard: Critical error loading dashboard data:', error);
+    
+    // Set fallback data in case of critical errors
+    setSummaryCards([
+      {
+        id: 'error-state',
+        title: 'Error al cargar datos',
+        value: 'Intente más tarde',
+        icon: <Storage />,
+        color: 'error',
+        visible: true,
+        order: 1
+      }
+    ]);
+    setTableMetrics([]);
+    setTableColumnGroups([]);
+    setTables([]);
   } finally {
     setLoading(false);
+    setIsLoadingData(false); // Reset loading guard
   }
-}, [user]); // useCallback dependency array
+}, [user, isLoadingData]); // useCallback dependency array with user object and loading guard
 
   useEffect(() => {
-    if (user && companySlug) {
-      loadDashboardData();
+    let mounted = true;
+    let timeoutId: NodeJS.Timeout;
+    
+    if (user && companySlug && mounted) {
+      console.log('DynamicDashboard: useEffect triggered', { userId: user.id, companySlug });
+      
+      // Debounce the call to prevent multiple rapid executions
+      timeoutId = setTimeout(() => {
+        if (mounted) {
+          loadDashboardData();
+        }
+      }, 100); // 100ms debounce
     }
-  }, [user, companySlug, loadDashboardData]);
+    
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [user, companySlug, loadDashboardData]); // Keep all dependencies but add mounted guard and debouncing
 
   // dnd-kit sensors for drag and drop
   const sensors = useSensors(
@@ -1042,6 +1171,34 @@ const loadDashboardData = useCallback(async () => {
         <Typography variant="h6" color="text.secondary">
           Cargando dashboard...
         </Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        gap: 2, 
+        p: 4 
+      }}>
+        <Typography variant="h6" color="error">
+          Error al cargar el dashboard
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {error}
+        </Typography>
+        <Button 
+          variant="contained" 
+          onClick={() => {
+            setError(null);
+            loadDashboardData();
+          }}
+        >
+          Reintentar
+        </Button>
       </Box>
     );
   }

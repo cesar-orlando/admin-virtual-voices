@@ -14,6 +14,30 @@ export interface UserProfile {
   status?: 'active' | 'inactive'
   companySlug?: string
   c_name?: string
+  permissions?: string[];
+}
+
+// Chat Assignment types
+export interface ChatAssignment {
+  _id?: string;
+  phone?: string;
+  chatId?: string; // Para compatibilidad con datos simulados
+  advisor?: {
+    id: string;
+    name: string;
+  } | null;
+  advisorId?: string; // Para compatibilidad con datos simulados
+  assignedBy?: string;
+  assignedAt?: Date | string;
+  isVisibleToAll?: boolean;
+  sessionId?: string;
+}
+
+export interface AssignChatRequest {
+  sessionId: string;
+  number: string; // Phone number without @c.us
+  advisorId?: string | null; // null to unassign
+  isVisibleToAll?: boolean;
 }
 
 export interface UserProfileToken extends UserProfile {
@@ -147,6 +171,36 @@ export interface WhatsAppUser extends BaseEntity {
 // Nueva interfaz para los agrupados por número
 export interface GroupedWhatsAppUser extends WhatsAppUser {
   sessions: string[]; // IDs de sesiones donde aparece este número
+  advisor?: {
+    id: string;
+    name: string;
+  };
+  isVisibleToAll?: boolean;
+}
+
+// Interfaz para chats filtrados del backend
+export interface FilteredWhatsAppChat extends BaseEntity {
+  phone: string;
+  name?: string;
+  tableSlug?: string;
+  botActive?: boolean;
+  messages?: Array<{
+    body: string;
+    direction: 'inbound' | 'outbound' | 'outbound-api';
+    status: string;
+    createdAt: string;
+    respondedBy: 'user' | 'bot' | 'human';
+    msgId: string;
+    _id: string;
+  }>;
+  session?: {
+    id: string;
+    name: string;
+  };
+  advisor?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 export interface WhatsAppMessage extends BaseEntity {

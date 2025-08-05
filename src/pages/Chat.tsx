@@ -26,6 +26,7 @@ import {
   MenuItem,
   Snackbar,
   Alert,
+  Chip,
 } from '@mui/material'
 import SendIcon from '@mui/icons-material/Send'
 import SearchIcon from '@mui/icons-material/Search'
@@ -33,10 +34,13 @@ import ForumIcon from '@mui/icons-material/Forum'
 import AddIcon from '@mui/icons-material/Add'
 import AnalyticsIcon from '@mui/icons-material/Analytics'
 import CloseIcon from '@mui/icons-material/Close'
+import LabelIcon from '@mui/icons-material/Label'
 import Badge from '@mui/material/Badge'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import Checkbox from '@mui/material/Checkbox'
 
-import { fetchWhatsAppUsers, fetchUserMessages, sendMessages, fetchSessions } from '../api/servicios'
-import type { UserProfile, WhatsAppSession, WhatsAppUser, WhatsAppMessage, GroupedWhatsAppUser } from '../types'
+import { fetchUserMessages, sendMessages, fetchSessions, assignChatToAdvisor, getAvailableAdvisors, getChatAssignments, fetchFilteredChats } from '../api/servicios/whatsappServices'
+import type { UserProfile, WhatsAppSession, WhatsAppMessage, GroupedWhatsAppUser, ChatAssignment, FilteredWhatsAppChat } from '../types'
 import { MetricsDashboard } from '../components/MetricsDashboard'
 import io from 'socket.io-client'
 
@@ -62,30 +66,133 @@ export function ChatsTab() {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' | 'info' })
   const [selectedSessionViewId, setSelectedSessionViewId] = useState<string>(''); // <-- NUEVO
   const [openMetricsModal, setOpenMetricsModal] = useState(false) // <-- NUEVO ESTADO PARA MODAL DE MÉTRICAS
+  
+  // Estados para asignación de chats
+  const [availableAdvisors, setAvailableAdvisors] = useState<UserProfile[]>([])
+  const [openAssignModal, setOpenAssignModal] = useState(false)
+  const [selectedChatForAssign, setSelectedChatForAssign] = useState<GroupedWhatsAppUser | null>(null)
+  const [selectedAdvisorId, setSelectedAdvisorId] = useState<string>('')
+  const [isVisibleToAll, setIsVisibleToAll] = useState(false)
+  const [assignLoading, setAssignLoading] = useState(false)
+  const [chatAssignments, setChatAssignments] = useState<Map<string, { advisor: { id: string; name: string } | null; isVisibleToAll: boolean }>>(new Map())
 
-  // Agrupa conversaciones por número de teléfono
-  function groupConversationsByPhone(users: WhatsAppUser[]): GroupedWhatsAppUser[] {
-    const map = new Map<string, GroupedWhatsAppUser>();
-    users.forEach(u => {
-      if (!map.has(u.phone)) {
-        map.set(u.phone, { ...u, sessions: [u.session.id], unreadMessages: u.unreadMessages || 0 });
-      } else {
-        const existing = map.get(u.phone)!;
-        existing.sessions.push(u.session.id);
-        // Suma los mensajes no leídos de todas las sesiones
-        existing.unreadMessages = (existing.unreadMessages || 0) + (u.unreadMessages || 0);
-        // Actualiza el último mensaje si es más reciente
-        if (
-          u.lastMessage &&
-          (!existing.lastMessage ||
-            new Date(u.lastMessage.date).getTime() > new Date(existing.lastMessage.date).getTime())
-        ) {
-          existing.lastMessage = u.lastMessage;
-        }
-      }
-    });
-    return Array.from(map.values());
+  // Función para manejar la asignación de chat
+  async function handleAssignChat() {
+    if (!selectedChatForAssign) return;
+    
+    setAssignLoading(true);
+    try {
+      // Usar la primera sesión disponible para el chat si selectedSessionViewId está vacío
+      const sessionToUse = selectedSessionViewId || 
+        (selectedChatForAssign.sessions && selectedChatForAssign.sessions.length > 0 ? 
+          selectedChatForAssign.sessions[0] : 
+          (sessions.length > 0 ? sessions[0]._id || sessions[0].id : ''));
+      
+      console.log('🔄 Iniciando asignación de chat:', {
+        sessionId: sessionToUse,
+        number: selectedChatForAssign.phone.replace('@c.us', ''),
+        advisorId: selectedAdvisorId || null,
+        isVisibleToAll,
+        chatForAssign: selectedChatForAssign.name,
+        user: { id: user.id, companySlug: user.companySlug }
+      });
+
+      const result = await assignChatToAdvisor(user, {
+        sessionId: sessionToUse,
+        number: selectedChatForAssign.phone.replace('@c.us', ''),
+        advisorId: selectedAdvisorId || null,
+        isVisibleToAll
+      });
+      
+      console.log('✅ Asignación exitosa:', result);
+      
+      const advisorName = selectedAdvisorId ? 
+        availableAdvisors.find(a => a.id === selectedAdvisorId)?.name || 'Desconocido' : 
+        null;
+      
+      // Actualizar el estado local de asignaciones
+      setChatAssignments(prev => {
+        const newMap = new Map(prev);
+        // Normalizar el teléfono para que coincida con el formato usado en las conversaciones
+        const phoneKey = selectedChatForAssign.phone.replace('@c.us', '');
+        const newAssignment = {
+          advisor: advisorName ? { id: selectedAdvisorId, name: advisorName } : null,
+          isVisibleToAll
+        };
+        
+        // También guardar con el formato @c.us para asegurar compatibilidad
+        newMap.set(phoneKey, newAssignment);
+        newMap.set(phoneKey + '@c.us', newAssignment);
+        
+        console.log('🗂️ Asignaciones actualizadas localmente:', {
+          phone: phoneKey,
+          phoneWithSuffix: phoneKey + '@c.us',
+          assignment: newAssignment,
+          totalAssignments: newMap.size,
+          allAssignments: Array.from(newMap.entries()).map(([phone, assignment]) => ({
+            phone,
+            advisor: assignment.advisor?.name || 'Sin asignar',
+            isVisibleToAll: assignment.isVisibleToAll
+          }))
+        });
+        return newMap;
+      });
+      
+      // También actualizar el array de conversaciones para reflejar el cambio inmediatamente
+      setConversations(prev => 
+        prev.map(convo => 
+          convo.phone === selectedChatForAssign.phone ? {
+            ...convo,
+            advisor: advisorName ? { id: selectedAdvisorId, name: advisorName } : undefined,
+            isVisibleToAll
+          } : convo
+        )
+      );
+      
+      const message = advisorName ? 
+        `Chat asignado correctamente a ${advisorName}` : 
+        'Chat desasignado correctamente';
+      
+      setSnackbar({ open: true, message, severity: 'success' });
+      setOpenAssignModal(false);
+      setSelectedAdvisorId('');
+      setIsVisibleToAll(false);
+      
+    } catch (error) {
+      console.error('❌ Error en asignación:', {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined,
+        chatPhone: selectedChatForAssign?.phone,
+        advisorId: selectedAdvisorId
+      });
+      setSnackbar({ 
+        open: true, 
+        message: error instanceof Error ? error.message : 'Error al asignar chat', 
+        severity: 'error' 
+      });
+    } finally {
+      setAssignLoading(false);
+    }
   }
+
+  // Debug de asignaciones (solo cuando cambian las asignaciones)
+  useEffect(() => {
+    if (chatAssignments.size > 0) {
+      console.log('🐛 DEBUG - Asignaciones actualizadas:', {
+        assignmentsCount: chatAssignments.size,
+        assignments: Array.from(chatAssignments.entries()).map(([phone, assignment]) => ({
+          phone,
+          advisorId: assignment.advisor?.id,
+          advisorName: assignment.advisor?.name,
+          isVisibleToAll: assignment.isVisibleToAll
+        })),
+        userInfo: {
+          id: user.id,
+          role: user.role
+        }
+      });
+    }
+  }, [chatAssignments]);
 
   useEffect(() => {
     const socket = io(import.meta.env.VITE_SOCKET_URL) // Use environment variable
@@ -128,28 +235,76 @@ export function ChatsTab() {
     // Fetch initial data
     const loadData = async () => {
       try {
-        const sessionsData = await fetchSessions(user) as WhatsAppSession[];
-        setSessions(sessionsData);
-        // Selecciona la primera sesión por defecto si no hay una seleccionada
-        if (!selectedSessionViewId && sessionsData.length > 0) {
-          setSelectedSessionViewId(sessionsData[0]._id || sessionsData[0].id);
+        console.log('🔄 Cargando datos iniciales...');
+        
+        // Intentar cargar sesiones, pero no fallar si no existen
+        let sessionsData: WhatsAppSession[] = [];
+        try {
+          sessionsData = await fetchSessions(user) as WhatsAppSession[];
+          console.log('📡 Sesiones obtenidas:', sessionsData);
+          setSessions(sessionsData);
+          
+          // Selecciona la primera sesión por defecto si no hay una seleccionada
+          if (!selectedSessionViewId && sessionsData.length > 0) {
+            const firstSessionId = sessionsData[0]._id || sessionsData[0].id;
+            console.log('🎯 Seleccionando primera sesión:', firstSessionId);
+            setSelectedSessionViewId(firstSessionId);
+          }
+        } catch (sessionsError) {
+          console.log('⚠️ No se pudieron cargar sesiones, continuando sin sesiones:', sessionsError);
         }
-        // Solo carga usuarios si hay una sesión seleccionada
-        if ((selectedSessionViewId || sessionsData[0]?._id || sessionsData[0]?.id)) {
-          const usersData = await fetchWhatsAppUsers(user, ['prospectos', 'clientes', 'nuevo_ingreso']) as WhatsAppUser[];
-          console.log("Fetched users:", usersData);
-          // Agrupa por número
-          const grouped = groupConversationsByPhone(usersData);
+        
+        console.log('🚀 Cargando chats filtrados por asignaciones...');
+        
+        // Determinar si mostrar todos los chats (solo para admins)
+        const showAll = user.role === 'Administrador' || user.role === 'Gerente';
+        
+        const chatsData = await fetchFilteredChats(user, showAll);
+        console.log("📊 Chats filtrados obtenidos:", chatsData);
+        
+        // Convertir los chats a formato de conversaciones
+        const conversationsFromChats = chatsData.map((chat: FilteredWhatsAppChat) => ({
+          _id: chat._id,
+          phone: chat.phone,
+          name: chat.name || chat.phone,
+          tableSlug: chat.tableSlug || 'clientes',
+          botActive: chat.botActive || false,
+          sessions: chat.session ? [chat.session.id] : ['default-session'], // Usar el sessionId real del chat
+          unreadMessages: chat.messages?.length || 0, // Usar el conteo real de mensajes
+          lastMessage: chat.messages && chat.messages.length > 0 ? {
+            body: chat.messages[chat.messages.length - 1].body,
+            date: chat.messages[chat.messages.length - 1].createdAt,
+            direction: chat.messages[chat.messages.length - 1].direction
+          } : undefined,
+          advisor: chat.advisor ? {
+            id: chat.advisor.id,
+            name: chat.advisor.name
+          } : undefined,
+          isVisibleToAll: !chat.advisor, // Si no tiene advisor asignado, es visible para todos
+          createdAt: chat.createdAt || new Date().toISOString(),
+          updatedAt: chat.updatedAt || new Date().toISOString()
+        })) as GroupedWhatsAppUser[];
+        
+        // También actualizar el selectedSessionViewId con la primera sesión real disponible
+        if (!selectedSessionViewId && conversationsFromChats.length > 0 && conversationsFromChats[0].sessions.length > 0) {
+          const firstRealSessionId = conversationsFromChats[0].sessions[0];
+          if (firstRealSessionId !== 'default-session') {
+            console.log('🎯 Seleccionando sesión real del primer chat:', firstRealSessionId);
+            setSelectedSessionViewId(firstRealSessionId);
+          }
+        }
+          
           // Ordena por fecha de último mensaje
-          const sortedConversations = grouped.sort((a, b) => {
+          const sortedConversations = conversationsFromChats.sort((a, b) => {
             const lastMessageDateA = a.lastMessage ? new Date(a.lastMessage.date).getTime() : 0;
             const lastMessageDateB = b.lastMessage ? new Date(b.lastMessage.date).getTime() : 0;
             return lastMessageDateB - lastMessageDateA;
-          }) as GroupedWhatsAppUser[];
+          });
+          
+          console.log("✅ Conversaciones finales:", sortedConversations);
           setConversations(sortedConversations)
-        }
       } catch (error) {
-        console.error("Error loading conversations:", error)
+        console.error("❌ Error loading conversations:", error)
         setSnackbar({ open: true, message: 'Error al cargar datos iniciales', severity: 'error' })
       } finally {
         setIsLoading(false)
@@ -164,19 +319,116 @@ export function ChatsTab() {
     }
   }, [user.companySlug, user.id]) // No agregues selectedSessionViewId aquí
 
+  // Cargar asesores disponibles si es admin
   useEffect(() => {
+    const loadAdvisors = async () => {
+      if (user.role === 'Administrador' || user.role === 'Gerente') {
+        try {
+          const advisors = await getAvailableAdvisors(user);
+          setAvailableAdvisors(advisors);
+        } catch (error) {
+          console.error('Error loading advisors:', error);
+        }
+      }
+    };
 
-    const updatedConversations = conversations
+    if (user.id && user.companySlug) {
+      loadAdvisors();
+    }
+  }, [user.id, user.companySlug, user.role]);
+
+  // Cargar asignaciones de chats existentes
+  useEffect(() => {
+    const loadChatAssignments = async () => {
+      try {
+        console.log('🔄 Cargando asignaciones de chats...');
+        const assignments = await getChatAssignments(user);
+        
+        console.log('📋 Asignaciones recibidas del backend:', assignments);
+        
+        // Validar que assignments sea un array
+        if (!Array.isArray(assignments)) {
+          console.warn('⚠️ Las asignaciones no son un array:', assignments);
+          setChatAssignments(new Map());
+          return;
+        }
+        
+        // Convertir el array de asignaciones a un Map
+        const assignmentsMap = new Map();
+        assignments.forEach((assignment: ChatAssignment) => {
+          console.log('🔍 Procesando asignación:', assignment);
+          
+          // Buscar phone o chatId (por compatibilidad con diferentes estructuras)
+          const phoneId = assignment.phone || assignment.chatId;
+          
+          console.log('📱 PhoneId extraído:', phoneId);
+          
+          if (phoneId) {
+            const phoneWithoutSuffix = phoneId.replace('@c.us', '');
+            const phoneWithSuffix = phoneWithoutSuffix.endsWith('@c.us') ? phoneWithoutSuffix : phoneWithoutSuffix + '@c.us';
+            
+            // Crear objeto de asignación con estructura consistente
+            const assignmentData = {
+              advisor: assignment.advisor || null,
+              isVisibleToAll: assignment.isVisibleToAll || false,
+              assignedAt: assignment.assignedAt,
+              assignedBy: assignment.assignedBy
+            };
+            
+            console.log('💾 Guardando asignación:', {
+              phoneWithoutSuffix,
+              phoneWithSuffix,
+              assignmentData
+            });
+            
+            // Guardar en ambos formatos para máxima compatibilidad
+            assignmentsMap.set(phoneWithoutSuffix, assignmentData);
+            assignmentsMap.set(phoneWithSuffix, assignmentData);
+          } else {
+            console.warn('⚠️ Asignación sin phone/chatId:', assignment);
+          }
+        });
+        
+        console.log('🗂️ Asignaciones convertidas a Map:', {
+          totalAssignments: assignmentsMap.size,
+          assignmentEntries: Array.from(assignmentsMap.entries()).map(([phone, data]) => ({
+            phone,
+            advisorId: data.advisor?.id,
+            advisorName: data.advisor?.name,
+            isVisibleToAll: data.isVisibleToAll
+          }))
+        });
+        
+        setChatAssignments(assignmentsMap);
+      } catch (error) {
+        console.error('❌ Error cargando asignaciones de chats:', error);
+        // Establecer Map vacío en caso de error
+        setChatAssignments(new Map());
+      }
+    };
+
+    if (user.id && user.companySlug) {
+      loadChatAssignments();
+    }
+  }, [user.id, user.companySlug, user.role]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let updatedConversations = conversations
       .filter(convo =>
         convo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         convo.phone.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-      .sort((a, b) => {
-        const lastMessageDateA = a.lastMessage && a.lastMessage.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
-        const lastMessageDateB = b.lastMessage && b.lastMessage.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
-        
-        return lastMessageDateB - lastMessageDateA;  // Descending order
-      });
+      );
+
+    // Ya no necesitamos filtrar por permisos aquí ya que el backend lo hace
+    // updatedConversations = filterConversationsByUserPermissions(updatedConversations);
+
+    // Ordenar por fecha del último mensaje
+    updatedConversations = updatedConversations.sort((a, b) => {
+      const lastMessageDateA = a.lastMessage && a.lastMessage.createdAt ? new Date(a.lastMessage.createdAt).getTime() : 0;
+      const lastMessageDateB = b.lastMessage && b.lastMessage.createdAt ? new Date(b.lastMessage.createdAt).getTime() : 0;
+      
+      return lastMessageDateB - lastMessageDateA;  // Descending order
+    });
 
     setFilteredConversations(updatedConversations);
   }, [conversations, searchTerm]);
@@ -381,6 +633,11 @@ export function ChatsTab() {
           >
             Gestiona todas tus conversaciones de WhatsApp en un solo lugar.
           </Typography>
+          {/* Leyenda de colores para admins */}
+          {(user.role === 'Administrador' || user.role === 'Gerente') && (
+            <Box sx={{ display: 'flex', gap: 3, mt: 1, flexWrap: 'wrap' }}>
+            </Box>
+          )}
         </div>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
@@ -448,13 +705,28 @@ export function ChatsTab() {
           </Box>
           <Divider />
           <List sx={{ flex: 1, overflowY: 'auto', p: 1 }}>
-            {filteredConversations.length > 0 ? filteredConversations.map(convo => (
-              <ListItem 
+            {filteredConversations.length > 0 ? filteredConversations.map(convo => {
+              // Buscar asignación primero en los datos del backend, luego en el Map local
+              const phoneWithoutSuffix = convo.phone.replace('@c.us', '');
+              const phoneWithSuffix = phoneWithoutSuffix.endsWith('@c.us') ? phoneWithoutSuffix : phoneWithoutSuffix + '@c.us';
+              
+              // Priorizar los datos del backend (más actualizados) sobre el Map local
+              const assignment = convo.advisor ? {
+                advisor: convo.advisor,
+                isVisibleToAll: convo.isVisibleToAll || false
+              } : (
+                chatAssignments.get(convo.phone) || 
+                chatAssignments.get(phoneWithoutSuffix) || 
+                chatAssignments.get(phoneWithSuffix)
+              );
+              
+              return (
+                <ListItem
                 key={convo._id}
                 button
                 selected={activeConversation?._id === convo._id}
                 onClick={() => setActiveConversation(convo)}
-                sx={{ borderRadius: 2, mb: 0.5 }}
+                sx={{ borderRadius: 2, mb: 0.5, alignItems: 'flex-start', position: 'relative' }}
               >
                 <ListItemAvatar>
                   <Badge
@@ -464,19 +736,66 @@ export function ChatsTab() {
                     overlap="circular"
                     anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
                   >
-                    <Avatar sx={{ backgroundColor: '#8B5CF6' }}>
+                    <Avatar sx={{ 
+                      backgroundColor: assignment?.advisor ? '#4CAF50' : '#8B5CF6',
+                      border: assignment?.isVisibleToAll ? '2px solid #FF9800' : 'none'
+                    }}>
                       {convo.name.substring(0, 2).toUpperCase()}
                     </Avatar>
                   </Badge>
                 </ListItemAvatar>
-                <ListItemText
-                  primary={convo.name}
-                  secondary={convo.lastMessage?.body || 'Sin mensajes'}
-                  primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
-                  secondaryTypographyProps={{ noWrap: true, fontStyle: 'italic' }}
-                />
-              </ListItem>
-            )) : (
+                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <ListItemText
+                    primary={convo.name}
+                    secondary={convo.lastMessage?.body || 'Sin mensajes'}
+                    primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
+                    secondaryTypographyProps={{ noWrap: true, fontStyle: 'italic' }}
+                  />
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    {assignment?.advisor && (
+                      <Chip
+                        label={assignment.advisor.name}
+                        size="small"
+                        sx={{
+                          bgcolor: '#e8f5e8',
+                          color: '#2e7d32',
+                          fontWeight: 600,
+                          fontSize: 12,
+                          fontStyle: 'italic',
+                        }}
+                      />
+                    )}
+                    {!assignment?.advisor && assignment?.isVisibleToAll && (
+                      <Chip
+                        label="Todos los asesores"
+                        size="small"
+                        sx={{
+                          bgcolor: '#fff3e0',
+                          color: '#f57c00',
+                          fontWeight: 600,
+                          fontSize: 12,
+                          fontStyle: 'italic',
+                        }}
+                      />
+                    )}
+                    {!assignment?.advisor && !assignment?.isVisibleToAll && (
+                      <Chip
+                        label="Sin asignar"
+                        size="small"
+                        sx={{
+                          bgcolor: '#f5f5f5',
+                          color: '#757575',
+                          fontWeight: 600,
+                          fontSize: 12,
+                          fontStyle: 'italic',
+                        }}
+                      />
+                    )}
+                  </Box>
+                </Box>
+                </ListItem>
+              );
+            }) : (
               <Box sx={{ textAlign: 'center', p: 4 }}>
                 <Typography color="text.secondary">No hay conversaciones</Typography>
               </Box>
@@ -488,31 +807,60 @@ export function ChatsTab() {
         <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {activeConversation ? (
             <>
-              <Box sx={{ p: 2, display: 'flex', alignItems: 'center', borderBottom: `1px solid ${theme.palette.divider}` }}>
-                <Avatar sx={{ backgroundColor: '#8B5CF6', mr: 2 }}>{activeConversation.name.substring(0, 2).toUpperCase()}</Avatar>
-                <Typography variant="h6" fontWeight={600}>{activeConversation.name}</Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-                  {activeConversation.phone}
-                </Typography>
-                {/* Selector de sesión si hay más de una sesión para este número */}
-                {activeConversation.sessions && activeConversation.sessions.length > 1 && (
-                  <FormControl size="small" sx={{ minWidth: 180, ml: 3 }}>
-                    <InputLabel id="session-view-chat-label">Sesión</InputLabel>
-                    <Select
-                      labelId="session-view-chat-label"
-                      value={selectedSessionViewId}
-                      label="Sesión"
-                      onChange={e => setSelectedSessionViewId(e.target.value)}
-                    >
-                      {sessions
-                        .filter(s => activeConversation.sessions.includes(s._id || s.id))
-                        .map(session => (
-                          <MenuItem key={session._id || session.id} value={session._id || session.id}>
-                            {session.name || session._id || session.id}
-                          </MenuItem>
-                        ))}
-                    </Select>
-                  </FormControl>
+              <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${theme.palette.divider}` }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                  <Avatar sx={{ backgroundColor: '#8B5CF6', mr: 2 }}>{activeConversation.name.substring(0, 2).toUpperCase()}</Avatar>
+                  <Typography variant="h6" fontWeight={600}>{activeConversation.name}</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
+                    {activeConversation.phone}
+                  </Typography>
+                  {/* Selector de sesión si hay más de una sesión para este número */}
+                  {activeConversation.sessions && activeConversation.sessions.length > 1 && (
+                    <FormControl size="small" sx={{ minWidth: 180, ml: 3 }}>
+                      <InputLabel id="session-view-chat-label">Sesión</InputLabel>
+                      <Select
+                        labelId="session-view-chat-label"
+                        value={selectedSessionViewId}
+                        label="Sesión"
+                        onChange={e => setSelectedSessionViewId(e.target.value)}
+                      >
+                        {sessions
+                          .filter(s => activeConversation.sessions.includes(s._id || s.id))
+                          .map(session => (
+                            <MenuItem key={session._id || session.id} value={session._id || session.id}>
+                              {session.name || session._id || session.id}
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                  )}
+                </Box>
+                
+                {/* Botón de asignación en el header del chat */}
+                {(user.role === 'Administrador' || user.role === 'Gerente') && (
+                  <IconButton
+                    onClick={() => {
+                      setSelectedChatForAssign(activeConversation);
+                      // Pre-llenar el modal con la asignación actual
+                      const assignment = chatAssignments.get(activeConversation.phone) || chatAssignments.get(activeConversation.phone.replace('@c.us', ''));
+                      if (assignment) {
+                        setSelectedAdvisorId(assignment.advisor?.id || '');
+                        setIsVisibleToAll(assignment.isVisibleToAll);
+                      } else {
+                        setSelectedAdvisorId('');
+                        setIsVisibleToAll(false);
+                      }
+                      setOpenAssignModal(true);
+                    }}
+                    sx={{ 
+                      backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+                      '&:hover': {
+                        backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)',
+                      }
+                    }}
+                  >
+                    <LabelIcon />
+                  </IconButton>
                 )}
               </Box>
               <Box sx={{ flex: 1, p: 3, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -669,6 +1017,72 @@ export function ChatsTab() {
             }}
           >
             {sendLoading ? <CircularProgress size={24} color="inherit" /> : 'Enviar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal para asignación de chat */}
+      <Dialog open={openAssignModal} onClose={() => setOpenAssignModal(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          Asignar Chat
+          {selectedChatForAssign && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              {selectedChatForAssign.name} - {selectedChatForAssign.phone}
+            </Typography>
+          )}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Stack spacing={3} sx={{ pt: 1 }}>
+            <FormControl fullWidth>
+              <InputLabel id="advisor-select-label">Asignar a Asesor</InputLabel>
+              <Select
+                labelId="advisor-select-label"
+                value={selectedAdvisorId}
+                label="Asignar a Asesor"
+                onChange={e => setSelectedAdvisorId(e.target.value)}
+              >
+                <MenuItem value="">Sin asignar</MenuItem>
+                {availableAdvisors.map(advisor => (
+                  <MenuItem key={advisor.id} value={advisor.id}>
+                    {advisor.name} ({advisor.email})
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={isVisibleToAll}
+                  onChange={(e) => setIsVisibleToAll(e.target.checked)}
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body2">Visible para todos los usuarios</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Cuando está activado, todos los usuarios pueden ver esta conversación, 
+                    independientemente de a quién esté asignada.
+                  </Typography>
+                </Box>
+              }
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: '16px 24px' }}>
+          <Button onClick={() => setOpenAssignModal(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleAssignChat}
+            disabled={assignLoading}
+            sx={{
+              backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+              boxShadow: '0 4px 24px rgba(139, 92, 246, 0.3)',
+            }}
+          >
+            {assignLoading ? <CircularProgress size={24} color="inherit" /> : 'Asignar'}
           </Button>
         </DialogActions>
       </Dialog>
