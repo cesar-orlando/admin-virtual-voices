@@ -52,6 +52,7 @@ import {
   BarChart,
   ShowChart,
   InsertChart,
+  FileDownload
 } from '@mui/icons-material';
 import { 
   PieChart, 
@@ -78,6 +79,11 @@ import type {
   QuickLearningDashboardData,
   QuickLearningMetricsData 
 } from '../api/servicios/quickLearningMetricsServices';
+import { 
+  getTableBySlug, 
+  getRecords 
+} from '../api/servicios/dynamicTableServices';
+import type { DynamicRecord } from '../types';
 
 // Definición de ciclos (fechas reales de QuickLearning)
 const CYCLES = [
@@ -676,6 +682,93 @@ const DashboardQuickLearning = () => {
     color: m.color
   }));
 
+  const exportAllTables = async () => {
+    try {
+      if (!user) {
+        console.error('No hay usuario autenticado');
+        return;
+      }
+  
+      const tablesToExport = [
+        'sin_contestar',
+        'alumnos',
+        'prospectos',
+        'nuevo_ingreso'
+      ];
+  
+      const exportPromises = tablesToExport.map(async (tableSlug) => {
+        const table = await getTableBySlug(tableSlug, user);
+        const records = await getRecords(tableSlug, user, 1, 10000);
+        // Agrega el nombre de la tabla al registro, para identificar después
+        return records.records.map((record) => ({
+          ...record,
+          tableName: table.name,
+          tableSlug: tableSlug
+        }));
+      });
+  
+      // Junta todos los registros de todas las tablas en un solo array
+      const allRecordsArrays = await Promise.all(exportPromises);
+      const allRecords = allRecordsArrays.flat(); // <-- aquí ya tienes TODOS juntos
+  
+      import('xlsx').then(XLSX => {
+        const wsData = allRecords.map((record) => {
+          const createdDate = record.createdAt ? new Date(record.createdAt) : new Date();
+  
+          return {
+            'FECHA DE CONTACTO': createdDate.toLocaleDateString('es-ES', {
+              day: '2-digit',
+              month: '2-digit',
+              year: '2-digit'
+            }),
+            'HORA DE CONTACTO': createdDate.toLocaleTimeString('es-ES', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false
+            }),
+            'MEDIO': record.data['medio'] || '',
+            'NOMBRE PROSPECTO': record.data['nombre'] || '',
+            'EMAIL': record.data['email'] || '',
+            'TELÉFONO': record.data['telefono'] || '',
+            'CIUDAD': record.data['ciudad'] || '',
+            'CURSO': record.data['curso'] || '',
+            'CAMPAÑA': record.data['campana'] || '',
+            'CONSEJERO': record.data['consecutivo'] || '',
+            'FECHA DE ÚLTIMO MENSAJE': record.data['lastMessageDate'] || '',
+            'FECHA DEL ÚLTIMO MENSAJE': record.data['lastMessage'] || '',
+            'CLAVE ALUMNO': record.data['CLAVE ALUMNO'] || '',
+            'CLAVE PERSONA': record.data['CLAVE PERSONA'] || '',
+            'ASESOR': record.data['asesor'] || '',
+            'TIPO DE REGISTRO': record.tableSlug || '',
+            'CLASIFICACIÓN DEL REGISTRO': record.data['clasificacion'] || '',
+            'MONTO': record.data['monto'] || '',
+            'IA': record.data['aiEnabled'] || ''
+          };
+        });
+  
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(wsData);
+  
+        // Ajustar ancho de columnas
+        const colWidths = [
+          { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 25 }, { wch: 30 },
+          { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 20 },
+          { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 },
+          { wch: 20 }, { wch: 25 }, { wch: 15 }, { wch: 10 }
+        ];
+        ws['!cols'] = colWidths;
+  
+        XLSX.utils.book_append_sheet(wb, ws, 'Todos los registros');
+        const filename = `QuickLearning_Ciclo_${selectedCycle.label}_${new Date().toISOString().split('T')[0]}`;
+        XLSX.writeFile(wb, `${filename}.xlsx`);
+      });
+  
+    } catch (error) {
+      console.error('Error exportando tablas:', error);
+      // Mostrar toast de error
+    }
+  };
+
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, minHeight: '80vh', minWidth: '90vw' }}>
       {/* Header */}
@@ -733,6 +826,21 @@ const DashboardQuickLearning = () => {
               }}
             >
               <Refresh />
+            </IconButton>
+          </Tooltip>
+
+          <Tooltip title="Exportar todas las tablas a Excel">
+            <IconButton 
+              onClick={exportAllTables}
+              disabled={loading || realTimeLoading} 
+              sx={{ 
+                bgcolor: theme.palette.success.main, 
+                color: '#fff', 
+                ml: 1,
+                '&:hover': { bgcolor: theme.palette.success.dark } 
+              }}
+            >
+              <FileDownload />
             </IconButton>
           </Tooltip>
         </Box>
