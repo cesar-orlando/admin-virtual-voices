@@ -302,10 +302,11 @@ export function ChatsTab() {
         return prev;
       });
 
+      const incomingPhone = newMessageData.phone.endsWith('@c.us') ? newMessageData.phone : newMessageData.phone + '@c.us';
       if (activeConversation && activeConversation.phone === incomingPhone) {
-        setActiveMessages(prev => [...prev, newMessageData.lastMessage])
+        setActiveMessages(prev => [...prev, newMessageData.lastMessage]);
       }
-    })
+    });
 
     // Fetch initial data
     const loadData = async () => {
