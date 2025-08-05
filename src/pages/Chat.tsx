@@ -780,6 +780,42 @@ export function ChatsTab() {
     }
   }, [activeConversation, selectedSessionViewId]);
 
+  // Estado para galería de imágenes
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+
+  // Extrae todas las imágenes del chat para la galería
+  const allChatImages = activeMessages
+    .map(m => m.body.match(/https?:\/\/[^\s]+?\.(?:jpg|jpeg|png|gif)/gi))
+    .filter(Boolean)
+    .flat()
+    .filter((img): img is string => img !== null);
+
+  // Función para renderizar mensajes con imagenes
+  function renderMessageWithImages(text: string) {
+    const imageRegex = /(https?:\/\/[^\s]+?\.(?:jpg|jpeg|png|gif))/gi;
+    const parts = text.split(imageRegex);
+    return parts.map((part, idx) => {
+      if (imageRegex.test(part)) {
+        return (
+          <img
+            key={idx}
+            src={part}
+            alt="Imagen enviada"
+            style={{ width: 100, height: 100, objectFit: 'cover', borderRadius: '12px', margin: '4px 0', cursor: 'pointer' }}
+            onClick={() => {
+              setGalleryImages(allChatImages);
+              setGalleryIndex(allChatImages.indexOf(part));
+              setGalleryOpen(true);
+            }}
+          />
+        );
+      }
+      return <span key={idx}>{part}</span>;
+    });
+  }
+
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -1066,7 +1102,7 @@ export function ChatsTab() {
                         color: msg.direction === 'inbound' ? 'text.primary' : 'primary.contrastText',
                       }}
                     >
-                      <Typography variant="body1">{msg.body}</Typography>
+                      {renderMessageWithImages(msg.body)}
                     </Paper>
                   </Box>
                 ))}
@@ -1270,6 +1306,40 @@ export function ChatsTab() {
         </DialogActions>
       </Dialog>
       
+      {/* Modal galería de imágenes */}
+      <Dialog open={galleryOpen} onClose={() => setGalleryOpen(false)} maxWidth="md">
+        <DialogTitle>Galería de Imágenes</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', p: 2 }}>
+          {galleryImages.length > 0 && (
+            <>
+              <img
+                src={galleryImages[galleryIndex]}
+                alt={`Imagen ${galleryIndex + 1}`}
+                style={{ maxWidth: '100%', maxHeight: '60vh', borderRadius: '12px' }}
+              />
+              <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {galleryImages.map((img, idx) => (
+                  <img
+                    key={idx}
+                    src={img}
+                    alt={`Miniatura ${idx + 1}`}
+                    style={{
+                      width: 60,
+                      height: 60,
+                      objectFit: 'cover',
+                      borderRadius: 8,
+                      border: idx === galleryIndex ? '2px solid #8B5CF6' : '2px solid transparent',
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => setGalleryIndex(idx)}
+                  />
+                ))}
+              </Box>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
         <Alert elevation={6} variant="filled" onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
           {snackbar.message}
