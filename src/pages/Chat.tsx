@@ -39,8 +39,8 @@ import Badge from '@mui/material/Badge'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Checkbox from '@mui/material/Checkbox'
 
-import { fetchUserMessages, sendMessages, fetchSessions, assignChatToAdvisor, getAvailableAdvisors, getChatAssignments, fetchFilteredChats } from '../api/servicios/whatsappServices'
-import type { UserProfile, WhatsAppSession, WhatsAppMessage, GroupedWhatsAppUser, ChatAssignment, FilteredWhatsAppChat } from '../types'
+import { fetchWhatsAppUsers, fetchUserMessages, sendMessages, fetchSessions, assignChatToAdvisor, getAvailableAdvisors, getChatAssignments, fetchFilteredChats } from '../api/servicios/whatsappServices'
+import type { UserProfile, WhatsAppSession, WhatsAppUser, WhatsAppMessage, GroupedWhatsAppUser, ChatAssignment, FilteredWhatsAppChat } from '../types'
 import { MetricsDashboard } from '../components/MetricsDashboard'
 import io from 'socket.io-client'
 
@@ -75,6 +75,79 @@ export function ChatsTab() {
   const [isVisibleToAll, setIsVisibleToAll] = useState(false)
   const [assignLoading, setAssignLoading] = useState(false)
   const [chatAssignments, setChatAssignments] = useState<Map<string, { advisor: { id: string; name: string } | null; isVisibleToAll: boolean }>>(new Map())
+
+  // Agrupa conversaciones por número de teléfono para manejar múltiples sesiones
+  function groupConversationsByPhone(users: WhatsAppUser[]): GroupedWhatsAppUser[] {
+    console.log('🔗 Iniciando agrupación por teléfono. Total usuarios:', users.length);
+    const map = new Map<string, GroupedWhatsAppUser>();
+    
+    users.forEach((u, index) => {
+      // Normalizar el número de teléfono para asegurar consistencia
+      let phoneKey = u.phone;
+      
+      // Asegurar que termine con @c.us
+      if (!phoneKey.endsWith('@c.us')) {
+        phoneKey = phoneKey + '@c.us';
+      }
+      
+      console.log(`📞 Procesando usuario ${index + 1}:`, {
+        originalPhone: u.phone,
+        phoneKey,
+        sessionId: u.session?.id,
+        name: u.name,
+        unreadMessages: u.unreadMessages
+      });
+      
+      if (!map.has(phoneKey)) {
+        map.set(phoneKey, { 
+          ...u, 
+          phone: phoneKey, // Usar el phoneKey normalizado
+          sessions: [u.session.id], 
+          unreadMessages: u.unreadMessages || 0 
+        });
+        console.log(`✨ Nueva conversación creada para ${phoneKey} con sesión ${u.session.id}`);
+      } else {
+        const existing = map.get(phoneKey)!;
+        
+        // Evitar duplicar sesiones
+        if (!existing.sessions.includes(u.session.id)) {
+          existing.sessions.push(u.session.id);
+          console.log(`🔄 Sesión ${u.session.id} agregada a ${phoneKey}. Sesiones actuales:`, existing.sessions);
+          
+          // Suma los mensajes no leídos de todas las sesiones
+          existing.unreadMessages = (existing.unreadMessages || 0) + (u.unreadMessages || 0);
+          
+          // Actualiza el último mensaje si es más reciente
+          if (
+            u.lastMessage &&
+            (!existing.lastMessage ||
+              new Date(u.lastMessage.date).getTime() > new Date(existing.lastMessage.date).getTime())
+          ) {
+            existing.lastMessage = u.lastMessage;
+            console.log(`📝 Último mensaje actualizado para ${phoneKey}`);
+          }
+          
+          // Actualizar el nombre si el nuevo usuario tiene un nombre más específico
+          if (u.name && u.name !== phoneKey.replace('@c.us', '') && (!existing.name || existing.name === phoneKey.replace('@c.us', ''))) {
+            existing.name = u.name;
+            console.log(`👤 Nombre actualizado para ${phoneKey}: ${u.name}`);
+          }
+        } else {
+          console.log(`⚠️ Sesión ${u.session.id} ya existe para ${phoneKey}, saltando...`);
+        }
+      }
+    });
+    
+    const result = Array.from(map.values());
+    console.log('🎯 Resultado de agrupación:', result.map(r => ({
+      phone: r.phone,
+      name: r.name,
+      sessionsCount: r.sessions?.length || 0,
+      sessions: r.sessions
+    })));
+    
+    return result;
+  }
 
   // Función para manejar la asignación de chat
   async function handleAssignChat() {
@@ -201,7 +274,9 @@ export function ChatsTab() {
     socket.on(`whatsapp-message-${user.companySlug}`, (newMessageData: any) => {
       // Update conversations when new messages arrive
       setConversations(prev => {
-        const existingConvoIndex = prev.findIndex(m => m.phone === newMessageData.phone.replace('@c.us', ''));
+        // Normalizar el número del mensaje entrante para que coincida con el formato de las conversaciones
+        const incomingPhone = newMessageData.phone.endsWith('@c.us') ? newMessageData.phone : newMessageData.phone + '@c.us';
+        const existingConvoIndex = prev.findIndex(m => m.phone === incomingPhone);
         if (existingConvoIndex !== -1) {
           const updatedConversations = [...prev];
           updatedConversations[existingConvoIndex] = {
@@ -227,7 +302,7 @@ export function ChatsTab() {
         return prev;
       });
 
-      if (activeConversation && activeConversation.phone === newMessageData.phone) {
+      if (activeConversation && activeConversation.phone === incomingPhone) {
         setActiveMessages(prev => [...prev, newMessageData.lastMessage])
       }
     })
@@ -259,35 +334,117 @@ export function ChatsTab() {
         // Determinar si mostrar todos los chats (solo para admins)
         const showAll = user.role === 'Administrador' || user.role === 'Gerente';
         
-        const chatsData = await fetchFilteredChats(user, showAll);
-        console.log("📊 Chats filtrados obtenidos:", chatsData);
+        let finalConversations: GroupedWhatsAppUser[] = [];
         
-        // Convertir los chats a formato de conversaciones
-        const conversationsFromChats = chatsData.map((chat: FilteredWhatsAppChat) => ({
-          _id: chat._id,
-          phone: chat.phone,
-          name: chat.name || chat.phone,
-          tableSlug: chat.tableSlug || 'clientes',
-          botActive: chat.botActive || false,
-          sessions: chat.session ? [chat.session.id] : ['default-session'], // Usar el sessionId real del chat
-          unreadMessages: chat.messages?.length || 0, // Usar el conteo real de mensajes
-          lastMessage: chat.messages && chat.messages.length > 0 ? {
-            body: chat.messages[chat.messages.length - 1].body,
-            date: chat.messages[chat.messages.length - 1].createdAt,
-            direction: chat.messages[chat.messages.length - 1].direction
-          } : undefined,
-          advisor: chat.advisor ? {
-            id: chat.advisor.id,
-            name: chat.advisor.name
-          } : undefined,
-          isVisibleToAll: !chat.advisor, // Si no tiene advisor asignado, es visible para todos
-          createdAt: chat.createdAt || new Date().toISOString(),
-          updatedAt: chat.updatedAt || new Date().toISOString()
-        })) as GroupedWhatsAppUser[];
+        try {
+          // Método principal: usar chats filtrados del backend
+          const chatsData = await fetchFilteredChats(user, showAll);
+          console.log("📊 Chats filtrados obtenidos:", chatsData);
+          
+          // Convertir los chats a formato de conversaciones y agrupar por teléfono
+          const conversationsMap = new Map<string, GroupedWhatsAppUser>();
+          
+          chatsData.forEach((chat: FilteredWhatsAppChat) => {
+            // Normalizar el número de teléfono para asegurar consistencia
+            let phoneKey = chat.phone;
+            
+            // Asegurar que termine con @c.us
+            if (!phoneKey.endsWith('@c.us')) {
+              phoneKey = phoneKey + '@c.us';
+            }
+            
+            console.log('🔄 Procesando chat filtrado:', {
+              originalPhone: chat.phone,
+              phoneKey,
+              sessionId: chat.session?.id,
+              name: chat.name
+            });
+            
+            const conversationData = {
+              _id: chat._id,
+              phone: phoneKey, // Usar phoneKey normalizado
+              name: chat.name || phoneKey.replace('@c.us', ''),
+              tableSlug: chat.tableSlug || 'clientes',
+              botActive: chat.botActive || false,
+              sessions: chat.session ? [chat.session.id] : ['default-session'],
+              unreadMessages: chat.messages?.length || 0,
+              lastMessage: chat.messages && chat.messages.length > 0 ? {
+                body: chat.messages[chat.messages.length - 1].body,
+                date: chat.messages[chat.messages.length - 1].createdAt,
+                direction: chat.messages[chat.messages.length - 1].direction
+              } : undefined,
+              advisor: chat.advisor ? {
+                id: chat.advisor.id,
+                name: chat.advisor.name
+              } : undefined,
+              isVisibleToAll: !chat.advisor,
+              createdAt: chat.createdAt || new Date().toISOString(),
+              updatedAt: chat.updatedAt || new Date().toISOString()
+            } as GroupedWhatsAppUser;
+            
+            if (!conversationsMap.has(phoneKey)) {
+              conversationsMap.set(phoneKey, conversationData);
+              console.log(`✨ Nueva conversación filtrada creada para ${phoneKey}`);
+            } else {
+              const existing = conversationsMap.get(phoneKey)!;
+              
+              // Agregar sesión si no existe
+              if (chat.session?.id && !existing.sessions.includes(chat.session.id)) {
+                existing.sessions.push(chat.session.id);
+                console.log(`🔄 Sesión ${chat.session.id} agregada a conversación filtrada ${phoneKey}`);
+              }
+              
+              // Actualizar mensajes no leídos
+              existing.unreadMessages = (existing.unreadMessages || 0) + (conversationData.unreadMessages || 0);
+              
+              // Actualizar último mensaje si es más reciente
+              if (
+                conversationData.lastMessage &&
+                (!existing.lastMessage ||
+                  new Date(conversationData.lastMessage.date).getTime() > new Date(existing.lastMessage.date).getTime())
+              ) {
+                existing.lastMessage = conversationData.lastMessage;
+                console.log(`📝 Último mensaje actualizado para conversación filtrada ${phoneKey}`);
+              }
+              
+              // Mantener el advisor más específico
+              if (conversationData.advisor && !existing.advisor) {
+                existing.advisor = conversationData.advisor;
+                existing.isVisibleToAll = conversationData.isVisibleToAll;
+              }
+            }
+          });
+          
+          finalConversations = Array.from(conversationsMap.values());
+          console.log("🎯 Conversaciones filtradas agrupadas por teléfono:", finalConversations.map(c => ({
+            phone: c.phone,
+            name: c.name,
+            sessionsCount: c.sessions?.length || 0,
+            sessions: c.sessions
+          })));
+          
+        } catch (filterError) {
+          console.log('⚠️ Error con chats filtrados, usando método de fallback:', filterError);
+          
+          // Método de fallback: usar WhatsAppUsers y agrupar por teléfono
+          if (selectedSessionViewId || sessionsData[0]?._id || sessionsData[0]?.id) {
+            try {
+              const usersData = await fetchWhatsAppUsers(user, ['prospectos', 'clientes', 'nuevo_ingreso']) as WhatsAppUser[];
+              console.log("📋 Usuarios fallback obtenidos:", usersData);
+              
+              // Agrupa por número de teléfono para manejar múltiples sesiones
+              finalConversations = groupConversationsByPhone(usersData);
+              console.log("🔗 Conversaciones agrupadas por teléfono:", finalConversations);
+            } catch (fallbackError) {
+              console.error("❌ Error también en método de fallback:", fallbackError);
+              finalConversations = [];
+            }
+          }
+        }
         
         // También actualizar el selectedSessionViewId con la primera sesión real disponible
-        if (!selectedSessionViewId && conversationsFromChats.length > 0 && conversationsFromChats[0].sessions.length > 0) {
-          const firstRealSessionId = conversationsFromChats[0].sessions[0];
+        if (!selectedSessionViewId && finalConversations.length > 0 && finalConversations[0].sessions && finalConversations[0].sessions.length > 0) {
+          const firstRealSessionId = finalConversations[0].sessions[0];
           if (firstRealSessionId !== 'default-session') {
             console.log('🎯 Seleccionando sesión real del primer chat:', firstRealSessionId);
             setSelectedSessionViewId(firstRealSessionId);
@@ -295,7 +452,7 @@ export function ChatsTab() {
         }
           
           // Ordena por fecha de último mensaje
-          const sortedConversations = conversationsFromChats.sort((a, b) => {
+          const sortedConversations = finalConversations.sort((a, b) => {
             const lastMessageDateA = a.lastMessage ? new Date(a.lastMessage.date).getTime() : 0;
             const lastMessageDateB = b.lastMessage ? new Date(b.lastMessage.date).getTime() : 0;
             return lastMessageDateB - lastMessageDateA;
@@ -482,6 +639,15 @@ export function ChatsTab() {
 
   async function handleSendMessage() {
     if (!chatInput.trim() || !activeConversation || !sessions.length) return
+    
+    console.log('📤 Enviando mensaje:', {
+      activeConversation: activeConversation.name,
+      phone: activeConversation.phone,
+      sessionsAvailable: activeConversation.sessions,
+      selectedSessionViewId,
+      isSessionValid: activeConversation.sessions?.includes(selectedSessionViewId)
+    });
+    
     const userMessage = chatInput
     setChatInput('')
 
@@ -505,11 +671,19 @@ export function ChatsTab() {
     setActiveMessages(prev => [...prev, newMessage])
 
     try {
-      if (
-        activeConversation?.phone &&
-        activeConversation.sessions?.includes(selectedSessionViewId)
-      ) {
-        await sendMessages(selectedSessionViewId, user, phone, userMessage);
+      // Determinar qué sesión usar para enviar el mensaje
+      let sessionToUse = selectedSessionViewId;
+      
+      // Si la sesión seleccionada no es válida para esta conversación, usar la primera disponible
+      if (!activeConversation.sessions?.includes(selectedSessionViewId)) {
+        sessionToUse = activeConversation.sessions?.[0] || selectedSessionViewId;
+        console.log('⚠️ Sesión no válida, usando:', sessionToUse);
+      }
+      
+      console.log('🚀 Enviando mensaje con sesión:', sessionToUse);
+      
+      if (activeConversation?.phone && sessionToUse) {
+        await sendMessages(sessionToUse, user, phone, userMessage);
         // Update conversations if message sent successfully
         setConversations((prevConvos) =>
           prevConvos.map((convo) =>
@@ -522,6 +696,9 @@ export function ChatsTab() {
               : convo
           )
         );
+        console.log('✅ Mensaje enviado exitosamente');
+      } else {
+        throw new Error('No hay sesión válida para enviar el mensaje');
       }
     } catch (error) {
       // If the message fails, show error
@@ -574,12 +751,21 @@ export function ChatsTab() {
 
   useEffect(() => {
     if (!activeConversation) return;
-    // Si el selectedSessionViewId no es válido para este número, selecciona la primera sesión disponible
+    
+    console.log('🔄 Verificando sesión para conversación activa:', {
+      phone: activeConversation.phone,
+      availableSessions: activeConversation.sessions,
+      currentSelected: selectedSessionViewId,
+      sessionsCount: activeConversation.sessions?.length || 0
+    });
+    
+    // Si la selectedSessionViewId no es válida para este número, selecciona la primera sesión disponible
     if (
       !activeConversation.sessions?.includes(selectedSessionViewId) &&
       activeConversation.sessions &&
       activeConversation.sessions.length > 0
     ) {
+      console.log('⚠️ Sesión no válida, cambiando a:', activeConversation.sessions[0]);
       setSelectedSessionViewId(activeConversation.sessions[0]);
     }
     // Si solo hay una sesión, asegúrate de que esté seleccionada
@@ -588,9 +774,10 @@ export function ChatsTab() {
       activeConversation.sessions.length === 1 &&
       selectedSessionViewId !== activeConversation.sessions[0]
     ) {
+      console.log('🎯 Estableciendo única sesión disponible:', activeConversation.sessions[0]);
       setSelectedSessionViewId(activeConversation.sessions[0]);
     }
-  }, [activeConversation]);
+  }, [activeConversation, selectedSessionViewId]);
 
   if (isLoading) {
     return (
@@ -633,11 +820,6 @@ export function ChatsTab() {
           >
             Gestiona todas tus conversaciones de WhatsApp en un solo lugar.
           </Typography>
-          {/* Leyenda de colores para admins */}
-          {(user.role === 'Administrador' || user.role === 'Gerente') && (
-            <Box sx={{ display: 'flex', gap: 3, mt: 1, flexWrap: 'wrap' }}>
-            </Box>
-          )}
         </div>
         <Box sx={{ display: 'flex', gap: 2 }}>
           <Button
@@ -814,7 +996,7 @@ export function ChatsTab() {
                   <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
                     {activeConversation.phone}
                   </Typography>
-                  {/* Selector de sesión si hay más de una sesión para este número */}
+                  {/* Selector de sesión - mostrar solo cuando hay múltiples sesiones */}
                   {activeConversation.sessions && activeConversation.sessions.length > 1 && (
                     <FormControl size="small" sx={{ minWidth: 180, ml: 3 }}>
                       <InputLabel id="session-view-chat-label">Sesión</InputLabel>
@@ -825,7 +1007,7 @@ export function ChatsTab() {
                         onChange={e => setSelectedSessionViewId(e.target.value)}
                       >
                         {sessions
-                          .filter(s => activeConversation.sessions.includes(s._id || s.id))
+                          .filter(s => activeConversation.sessions?.includes(s._id || s.id))
                           .map(session => (
                             <MenuItem key={session._id || session.id} value={session._id || session.id}>
                               {session.name || session._id || session.id}
