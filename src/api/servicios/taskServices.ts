@@ -228,10 +228,14 @@ export const addTaskComment = async (
   userRole?: string,
   userCompany?: string
 ): Promise<ApiResponse<Task>> => {
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+
   try {
-    const response = await api.post(`/tasks/${taskId}/comments`, { comment }, {
-      headers: getTaskHeaders(companySlug, userRole, userCompany)
-    })
+    const response = await api.post(
+      `/tasks/${taskId}/comments`,
+      { comment, userId: user.id, userName: user.name },
+      { headers: getTaskHeaders(user.companySlug, userRole, userCompany) }
+    )
     
     return {
       success: true,
