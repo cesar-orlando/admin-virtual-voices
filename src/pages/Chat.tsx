@@ -94,7 +94,7 @@ export function ChatsTab() {
   const [selectedClientPhone, setSelectedClientPhone] = useState<string>('')
 
   // Agrupa conversaciones por número de teléfono para manejar múltiples sesiones
-  function groupConversationsByPhone(users: WhatsAppUser[]): GroupedWhatsAppUser[] {
+  function groupConversationsByPhone(users: GroupedWhatsAppUser[]): GroupedWhatsAppUser[] {
     const map = new Map<string, GroupedWhatsAppUser>();
     
     users.forEach((u, index) => {
@@ -166,30 +166,9 @@ export function ChatsTab() {
         cleanPhone: cleanPhone,
         tableSlug: currentConversation?.tableSlug || 'prospectos'
       });
-      
-      // Primero, vamos a ver qué registros existen en la tabla
-      console.log('🔍 Verificando registros existentes en la tabla...');
-      try {
-        const allRecords = await getRecords(currentConversation?.tableSlug || 'prospectos', user, 1, 10, 'createdAt', 'desc');
-        console.log('📊 Registros encontrados en la tabla:', {
-          total: allRecords.records?.length || 0,
-          records: allRecords.records?.map(r => ({
-            _id: r._id,
-            data: r.data,
-            telefono: r.data?.telefono,
-            phone: r.data?.phone,
-            celular: r.data?.celular,
-            numero: r.data?.numero,
-            whatsapp: r.data?.whatsapp,
-            nombre: r.data?.nombre || r.data?.name
-          }))
-        });
-      } catch (error) {
-        console.log('❌ Error obteniendo registros de la tabla:', error);
-      }
 
       // Buscar el registro del cliente por teléfono
-      const record = await getRecordByPhone(phone, user, currentConversation?.tableSlug || 'prospectos');
+      const record = currentConversation?.prospectRecord
       console.log('📋 Resultado de búsqueda:', record);
       
       // Obtener la estructura de la tabla
@@ -288,6 +267,20 @@ export function ChatsTab() {
         // Actualizar registro existente
         const updateData = { data: clientFormData };
         await updateRecord(clientRecord._id, updateData, user);
+        setConversations(prev => 
+          prev.map(convo => 
+            convo.phone === selectedClientPhone ? {
+              ...convo,
+              prospectRecord: {
+                ...convo.prospectRecord,
+                data: {
+                  ...convo.prospectRecord?.data,
+                  ...clientFormData
+                }
+              }
+            } : convo
+          )
+        );
         setSnackbar({ 
           open: true, 
           message: 'Cliente actualizado correctamente', 
@@ -520,6 +513,7 @@ export function ChatsTab() {
                 id: chat.advisor.id,
                 name: chat.advisor.name
               } : undefined,
+              prospectRecord: chat.prospectRecord,
               isVisibleToAll: !chat.advisor,
               createdAt: chat.createdAt || new Date().toISOString(),
               updatedAt: chat.updatedAt || new Date().toISOString()
@@ -569,7 +563,7 @@ export function ChatsTab() {
           // Método de fallback: usar WhatsAppUsers y agrupar por teléfono
           if (selectedSessionViewId || sessionsData[0]?._id || sessionsData[0]?.id) {
             try {
-              const usersData = await fetchWhatsAppUsers(user, ['prospectos', 'clientes', 'nuevo_ingreso']) as WhatsAppUser[];
+              const usersData = await fetchWhatsAppUsers(user, ['prospectos', 'clientes', 'nuevo_ingreso']) as GroupedWhatsAppUser[];
               console.log("📋 Usuarios fallback obtenidos:", usersData);
               
               // Agrupa por número de teléfono para manejar múltiples sesiones
@@ -706,8 +700,8 @@ export function ChatsTab() {
         // Filtro por estado de IA
         const matchesIAFilter = 
           iaFilter === 'all' ? true :
-          iaFilter === 'withIA' ? convo.botActive === true :
-          convo.botActive !== true;
+          iaFilter === 'withIA' ? convo.prospectRecord?.data.ia === true :
+          convo.prospectRecord?.data.ia !== true;
         
         return matchesSearch && matchesIAFilter;
       });
