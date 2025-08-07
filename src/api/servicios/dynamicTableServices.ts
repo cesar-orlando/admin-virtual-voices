@@ -350,6 +350,96 @@ export const validateRecord = async (tableSlug: string, data: Record<string, any
   }
 };
 
+// Buscar un registro por teléfono en la tabla de prospectos
+export const getRecordByPhone = async (phone: string, user: UserProfile, tableSlug: string = 'prospectos') => {
+  try {
+    // Normalizar el número de teléfono
+    const normalizedPhone = phone.replace('@c.us', '').replace(/^\+?521/, '').replace(/^\+?52/, '');
+    
+    console.log('🔍 getRecordByPhone - Iniciando búsqueda:', {
+      originalPhone: phone,
+      normalizedPhone: normalizedPhone,
+      tableSlug: tableSlug,
+      user: user.companySlug
+    });
+    
+    // Crear filtros para buscar por diferentes formatos de teléfono
+    const phoneVariations = [
+      normalizedPhone,
+      `52${normalizedPhone}`,
+      `521${normalizedPhone}`,
+      `+52${normalizedPhone}`,
+      `+521${normalizedPhone}`
+    ];
+    
+    console.log('📱 Variaciones de teléfono a buscar:', phoneVariations);
+    
+    // Primero intentar búsqueda simple por cada campo común
+    const commonPhoneFields = ['telefono', 'phone', 'celular', 'numero', 'whatsapp'];
+    
+    for (const field of commonPhoneFields) {
+      console.log(`🔎 Buscando en campo: ${field}`);
+      
+      for (const phoneVar of phoneVariations) {
+        const simpleFilter = { [field]: phoneVar };
+        console.log(`📞 Buscando ${field} = "${phoneVar}"`);
+        
+        try {
+          const response = await getRecords(tableSlug, user, 1, 5, 'createdAt', 'desc', simpleFilter);
+          console.log(`📊 Respuesta para ${field} = "${phoneVar}":`, {
+            totalRecords: response.records?.length || 0,
+            records: response.records?.map(r => ({ 
+              _id: r._id, 
+              [field]: r.data?.[field],
+              nombre: r.data?.nombre || r.data?.name 
+            }))
+          });
+          
+          if (response.records && response.records.length > 0) {
+            console.log('✅ Registro encontrado:', response.records[0]);
+            return response.records[0];
+          }
+        } catch (fieldError) {
+          console.log(`⚠️ Error buscando en campo ${field}:`, fieldError);
+        }
+      }
+    }
+    
+    console.log('❌ No se encontró registro con búsquedas simples, intentando búsqueda compleja...');
+    
+    // Si no encuentra nada, intentar con $or complejo
+    const filters = {
+      $or: phoneVariations.flatMap(phoneVar => 
+        commonPhoneFields.map(field => ({ [field]: phoneVar }))
+      )
+    };
+    
+    console.log('🔍 Filtros complejos:', filters);
+
+    const response = await getRecords(tableSlug, user, 1, 5, 'createdAt', 'desc', filters);
+    console.log('📊 Respuesta búsqueda compleja:', {
+      totalRecords: response.records?.length || 0,
+      records: response.records?.map(r => ({ 
+        _id: r._id, 
+        telefono: r.data?.telefono,
+        phone: r.data?.phone,
+        nombre: r.data?.nombre || r.data?.name 
+      }))
+    });
+    
+    if (response.records && response.records.length > 0) {
+      console.log('✅ Registro encontrado con búsqueda compleja:', response.records[0]);
+      return response.records[0];
+    }
+    
+    console.log('❌ No se encontró ningún registro');
+    return null;
+  } catch (error) {
+    console.error('❌ Error buscando registro por teléfono:', error);
+    return null;
+  }
+};
+
 // Obtener estadísticas de la tabla
 export const getTableStats = async (tableSlug: string, user: UserProfile) => {
   try {

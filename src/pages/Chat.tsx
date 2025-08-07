@@ -27,6 +27,9 @@ import {
   Snackbar,
   Alert,
   Chip,
+  Grid,
+  Switch,
+  ButtonGroup,
 } from '@mui/material'
 import SendIcon from '@mui/icons-material/Send'
 import SearchIcon from '@mui/icons-material/Search'
@@ -38,9 +41,12 @@ import LabelIcon from '@mui/icons-material/Label'
 import Badge from '@mui/material/Badge'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Checkbox from '@mui/material/Checkbox'
+import SmartToyIcon from '@mui/icons-material/SmartToy'
 
 import { fetchWhatsAppUsers, fetchUserMessages, sendMessages, fetchSessions, assignChatToAdvisor, getAvailableAdvisors, getChatAssignments, fetchFilteredChats } from '../api/servicios/whatsappServices'
-import type { UserProfile, WhatsAppSession, WhatsAppUser, WhatsAppMessage, GroupedWhatsAppUser, ChatAssignment, FilteredWhatsAppChat } from '../types'
+import { getRecordByPhone, getTableBySlug, updateRecord, createRecord, getRecords } from '../api/servicios'
+import { fetchCompanyUsers } from '../api/servicios/userServices'
+import type { UserProfile, WhatsAppSession, WhatsAppUser, WhatsAppMessage, GroupedWhatsAppUser, ChatAssignment, FilteredWhatsAppChat, DynamicTable, DynamicRecord, TableField } from '../types'
 import { MetricsDashboard } from '../components/MetricsDashboard'
 import io from 'socket.io-client'
 
@@ -54,6 +60,7 @@ export function ChatsTab() {
   const [isLoading, setIsLoading] = useState(true)
   const [chatInput, setChatInput] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [iaFilter, setIaFilter] = useState<'all' | 'withIA' | 'withoutIA'>('all')
   const chatEndRef = useRef<HTMLDivElement | null>(null)
 
   // State for the new message modal
@@ -76,9 +83,18 @@ export function ChatsTab() {
   const [assignLoading, setAssignLoading] = useState(false)
   const [chatAssignments, setChatAssignments] = useState<Map<string, { advisor: { id: string; name: string } | null; isVisibleToAll: boolean }>>(new Map())
 
+  // Estados para edición de cliente
+  const [openClientEditModal, setOpenClientEditModal] = useState(false)
+  const [clientRecord, setClientRecord] = useState<DynamicRecord | null>(null)
+  const [clientTable, setClientTable] = useState<DynamicTable | null>(null)
+  const [clientFormData, setClientFormData] = useState<Record<string, any>>({})
+  const [clientLoading, setClientLoading] = useState(false)
+  const [clientSaving, setClientSaving] = useState(false)
+  const [asesores, setAsesores] = useState<any[]>([])
+  const [selectedClientPhone, setSelectedClientPhone] = useState<string>('')
+
   // Agrupa conversaciones por número de teléfono para manejar múltiples sesiones
   function groupConversationsByPhone(users: WhatsAppUser[]): GroupedWhatsAppUser[] {
-    console.log('🔗 Iniciando agrupación por teléfono. Total usuarios:', users.length);
     const map = new Map<string, GroupedWhatsAppUser>();
     
     users.forEach((u, index) => {
@@ -90,14 +106,6 @@ export function ChatsTab() {
         phoneKey = phoneKey + '@c.us';
       }
       
-      console.log(`📞 Procesando usuario ${index + 1}:`, {
-        originalPhone: u.phone,
-        phoneKey,
-        sessionId: u.session?.id,
-        name: u.name,
-        unreadMessages: u.unreadMessages
-      });
-      
       if (!map.has(phoneKey)) {
         map.set(phoneKey, { 
           ...u, 
@@ -105,14 +113,12 @@ export function ChatsTab() {
           sessions: [u.session.id], 
           unreadMessages: u.unreadMessages || 0 
         });
-        console.log(`✨ Nueva conversación creada para ${phoneKey} con sesión ${u.session.id}`);
       } else {
         const existing = map.get(phoneKey)!;
         
         // Evitar duplicar sesiones
         if (!existing.sessions.includes(u.session.id)) {
           existing.sessions.push(u.session.id);
-          console.log(`🔄 Sesión ${u.session.id} agregada a ${phoneKey}. Sesiones actuales:`, existing.sessions);
           
           // Suma los mensajes no leídos de todas las sesiones
           existing.unreadMessages = (existing.unreadMessages || 0) + (u.unreadMessages || 0);
@@ -124,13 +130,11 @@ export function ChatsTab() {
               new Date(u.lastMessage.date).getTime() > new Date(existing.lastMessage.date).getTime())
           ) {
             existing.lastMessage = u.lastMessage;
-            console.log(`📝 Último mensaje actualizado para ${phoneKey}`);
           }
           
           // Actualizar el nombre si el nuevo usuario tiene un nombre más específico
           if (u.name && u.name !== phoneKey.replace('@c.us', '') && (!existing.name || existing.name === phoneKey.replace('@c.us', ''))) {
             existing.name = u.name;
-            console.log(`👤 Nombre actualizado para ${phoneKey}: ${u.name}`);
           }
         } else {
           console.log(`⚠️ Sesión ${u.session.id} ya existe para ${phoneKey}, saltando...`);
@@ -139,14 +143,204 @@ export function ChatsTab() {
     });
     
     const result = Array.from(map.values());
-    console.log('🎯 Resultado de agrupación:', result.map(r => ({
-      phone: r.phone,
-      name: r.name,
-      sessionsCount: r.sessions?.length || 0,
-      sessions: r.sessions
-    })));
     
     return result;
+  }
+
+  // Función para abrir el modal de edición de cliente
+  async function handleOpenClientEdit(phone: string) {
+    setClientLoading(true);
+    setSelectedClientPhone(phone);
+    setOpenClientEditModal(true);
+    
+    try {
+      
+      // Obtener información del chat actual
+      const currentConversation = conversations.find(conv => conv.phone === phone);
+      console.log("currentConversation", currentConversation);
+      
+      // Debug: ver qué número vamos a buscar
+      const cleanPhone = phone.replace('@c.us', '').replace(/^\+?521/, '').replace(/^\+?52/, '');
+      console.log('🔍 Buscando registro con:', {
+        originalPhone: phone,
+        cleanPhone: cleanPhone,
+        tableSlug: currentConversation?.tableSlug || 'prospectos'
+      });
+      
+      // Primero, vamos a ver qué registros existen en la tabla
+      console.log('🔍 Verificando registros existentes en la tabla...');
+      try {
+        const allRecords = await getRecords(currentConversation?.tableSlug || 'prospectos', user, 1, 10, 'createdAt', 'desc');
+        console.log('📊 Registros encontrados en la tabla:', {
+          total: allRecords.records?.length || 0,
+          records: allRecords.records?.map(r => ({
+            _id: r._id,
+            data: r.data,
+            telefono: r.data?.telefono,
+            phone: r.data?.phone,
+            celular: r.data?.celular,
+            numero: r.data?.numero,
+            whatsapp: r.data?.whatsapp,
+            nombre: r.data?.nombre || r.data?.name
+          }))
+        });
+      } catch (error) {
+        console.log('❌ Error obteniendo registros de la tabla:', error);
+      }
+
+      // Buscar el registro del cliente por teléfono
+      const record = await getRecordByPhone(phone, user, currentConversation?.tableSlug || 'prospectos');
+      console.log('📋 Resultado de búsqueda:', record);
+      
+      // Obtener la estructura de la tabla
+      const tableData = await getTableBySlug('prospectos', user);
+      console.log('🏗️ Estructura de la tabla:', {
+        name: tableData.name,
+        slug: tableData.slug,
+        fields: tableData.fields.map((f: TableField) => ({
+          name: f.name,
+          label: f.label,
+          type: f.type,
+          required: f.required
+        }))
+      });
+      setClientTable(tableData);
+      
+      if (record) {
+        setClientRecord(record);
+        setClientFormData(record.data || {});
+      } else {
+        console.log('⚠️ Cliente no encontrado, creando registro nuevo con datos del chat');
+        
+        // Inicializar con datos por defecto y información del chat
+        const defaultData: Record<string, any> = {};
+        tableData.fields.forEach((field: TableField) => {
+          if (field.name === 'telefono' || field.name === 'phone' || field.name === 'celular' || field.name === 'numero' || field.name === 'whatsapp') {
+            defaultData[field.name] = cleanPhone;
+          } else if (field.name === 'nombre' || field.name === 'name') {
+            // Usar el nombre del chat si no es un número de teléfono
+            const chatName = currentConversation?.name || '';
+            if (chatName && !chatName.match(/^\+?[\d\s\-\(\)]+$/)) {
+              defaultData[field.name] = chatName;
+            } else {
+              defaultData[field.name] = field.defaultValue ?? '';
+            }
+          } else if (field.name === 'ia' || field.name === 'IA') {
+            // Usar el estado de bot del chat actual
+            defaultData[field.name] = currentConversation?.botActive ?? false;
+          } else if (field.name === 'tableSlug') {
+            // Usar la tabla del chat actual
+            defaultData[field.name] = currentConversation?.tableSlug || 'prospectos';
+          } else if (field.name === 'asesor' && currentConversation?.advisor) {
+            // Usar el asesor asignado del chat
+            defaultData[field.name] = currentConversation.advisor.name;
+          } else if (field.type === 'file') {
+            defaultData[field.name] = field.defaultValue ?? [];
+          } else if (field.type === 'boolean') {
+            defaultData[field.name] = field.defaultValue ?? false;
+          } else {
+            defaultData[field.name] = field.defaultValue ?? '';
+          }
+        });
+        
+        console.log('📋 Datos prellenados con información del chat:', {
+          chatData: {
+            name: currentConversation?.name,
+            phone: currentConversation?.phone,
+            botActive: currentConversation?.botActive,
+            tableSlug: currentConversation?.tableSlug,
+            advisor: currentConversation?.advisor
+          },
+          formData: defaultData
+        });
+        
+        setClientRecord(null);
+        setClientFormData(defaultData);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error cargando datos del cliente:', error);
+      setSnackbar({ 
+        open: true, 
+        message: 'Error al cargar datos del cliente', 
+        severity: 'error' 
+      });
+    } finally {
+      setClientLoading(false);
+    }
+  }
+
+  // Función para manejar cambios en el formulario de cliente
+  function handleClientInputChange(fieldName: string, value: any) {
+    setClientFormData(prev => ({
+      ...prev,
+      [fieldName]: value
+    }));
+  }
+
+  // Función para guardar los cambios del cliente
+  async function handleSaveClient() {
+    if (!clientTable) return;
+    
+    setClientSaving(true);
+    try {
+      if (clientRecord) {
+        // Actualizar registro existente
+        const updateData = { data: clientFormData };
+        await updateRecord(clientRecord._id, updateData, user);
+        setSnackbar({ 
+          open: true, 
+          message: 'Cliente actualizado correctamente', 
+          severity: 'success' 
+        });
+      } else {
+        // Crear nuevo registro
+        const createData = { tableSlug: 'prospectos', data: clientFormData };
+        await createRecord(createData, user);
+        setSnackbar({ 
+          open: true, 
+          message: 'Cliente creado correctamente', 
+          severity: 'success' 
+        });
+      }
+      
+      setOpenClientEditModal(false);
+      
+      // Actualizar información en la conversación si cambió
+      const newName = clientFormData.nombre || clientFormData.name;
+      const newIAStatus = clientFormData.ia || clientFormData.IA;
+      
+      if (newName || newIAStatus !== undefined) {
+        setConversations(prev => 
+          prev.map(convo => 
+            convo.phone === selectedClientPhone ? {
+              ...convo,
+              ...(newName && { name: newName }),
+              ...(newIAStatus !== undefined && { botActive: Boolean(newIAStatus) })
+            } : convo
+          )
+        );
+        
+        // También actualizar la conversación activa si es la misma
+        if (activeConversation && activeConversation.phone === selectedClientPhone) {
+          setActiveConversation(prev => prev ? {
+            ...prev,
+            ...(newName && { name: newName }),
+            ...(newIAStatus !== undefined && { botActive: Boolean(newIAStatus) })
+          } : prev);
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ Error guardando cliente:', error);
+      setSnackbar({ 
+        open: true, 
+        message: 'Error al guardar cliente', 
+        severity: 'error' 
+      });
+    } finally {
+      setClientSaving(false);
+    }
   }
 
   // Función para manejar la asignación de chat
@@ -160,15 +354,6 @@ export function ChatsTab() {
         (selectedChatForAssign.sessions && selectedChatForAssign.sessions.length > 0 ? 
           selectedChatForAssign.sessions[0] : 
           (sessions.length > 0 ? sessions[0]._id || sessions[0].id : ''));
-      
-      console.log('🔄 Iniciando asignación de chat:', {
-        sessionId: sessionToUse,
-        number: selectedChatForAssign.phone.replace('@c.us', ''),
-        advisorId: selectedAdvisorId || null,
-        isVisibleToAll,
-        chatForAssign: selectedChatForAssign.name,
-        user: { id: user.id, companySlug: user.companySlug }
-      });
 
       const result = await assignChatToAdvisor(user, {
         sessionId: sessionToUse,
@@ -177,7 +362,6 @@ export function ChatsTab() {
         isVisibleToAll
       });
       
-      console.log('✅ Asignación exitosa:', result);
       
       const advisorName = selectedAdvisorId ? 
         availableAdvisors.find(a => a.id === selectedAdvisorId)?.name || 'Desconocido' : 
@@ -197,17 +381,6 @@ export function ChatsTab() {
         newMap.set(phoneKey, newAssignment);
         newMap.set(phoneKey + '@c.us', newAssignment);
         
-        console.log('🗂️ Asignaciones actualizadas localmente:', {
-          phone: phoneKey,
-          phoneWithSuffix: phoneKey + '@c.us',
-          assignment: newAssignment,
-          totalAssignments: newMap.size,
-          allAssignments: Array.from(newMap.entries()).map(([phone, assignment]) => ({
-            phone,
-            advisor: assignment.advisor?.name || 'Sin asignar',
-            isVisibleToAll: assignment.isVisibleToAll
-          }))
-        });
         return newMap;
       });
       
@@ -247,25 +420,6 @@ export function ChatsTab() {
       setAssignLoading(false);
     }
   }
-
-  // Debug de asignaciones (solo cuando cambian las asignaciones)
-  useEffect(() => {
-    if (chatAssignments.size > 0) {
-      console.log('🐛 DEBUG - Asignaciones actualizadas:', {
-        assignmentsCount: chatAssignments.size,
-        assignments: Array.from(chatAssignments.entries()).map(([phone, assignment]) => ({
-          phone,
-          advisorId: assignment.advisor?.id,
-          advisorName: assignment.advisor?.name,
-          isVisibleToAll: assignment.isVisibleToAll
-        })),
-        userInfo: {
-          id: user.id,
-          role: user.role
-        }
-      });
-    }
-  }, [chatAssignments]);
 
   useEffect(() => {
     const socket = io(import.meta.env.VITE_SOCKET_URL) // Use environment variable
@@ -311,26 +465,22 @@ export function ChatsTab() {
     // Fetch initial data
     const loadData = async () => {
       try {
-        console.log('🔄 Cargando datos iniciales...');
         
         // Intentar cargar sesiones, pero no fallar si no existen
         let sessionsData: WhatsAppSession[] = [];
         try {
           sessionsData = await fetchSessions(user) as WhatsAppSession[];
-          console.log('📡 Sesiones obtenidas:', sessionsData);
           setSessions(sessionsData);
           
           // Selecciona la primera sesión por defecto si no hay una seleccionada
           if (!selectedSessionViewId && sessionsData.length > 0) {
             const firstSessionId = sessionsData[0]._id || sessionsData[0].id;
-            console.log('🎯 Seleccionando primera sesión:', firstSessionId);
             setSelectedSessionViewId(firstSessionId);
           }
         } catch (sessionsError) {
           console.log('⚠️ No se pudieron cargar sesiones, continuando sin sesiones:', sessionsError);
         }
         
-        console.log('🚀 Cargando chats filtrados por asignaciones...');
         
         // Determinar si mostrar todos los chats (solo para admins)
         const showAll = user.role === 'Administrador' || user.role === 'Gerente';
@@ -340,7 +490,6 @@ export function ChatsTab() {
         try {
           // Método principal: usar chats filtrados del backend
           const chatsData = await fetchFilteredChats(user, showAll);
-          console.log("📊 Chats filtrados obtenidos:", chatsData);
           
           // Convertir los chats a formato de conversaciones y agrupar por teléfono
           const conversationsMap = new Map<string, GroupedWhatsAppUser>();
@@ -353,13 +502,6 @@ export function ChatsTab() {
             if (!phoneKey.endsWith('@c.us')) {
               phoneKey = phoneKey + '@c.us';
             }
-            
-            console.log('🔄 Procesando chat filtrado:', {
-              originalPhone: chat.phone,
-              phoneKey,
-              sessionId: chat.session?.id,
-              name: chat.name
-            });
             
             const conversationData = {
               _id: chat._id,
@@ -385,14 +527,12 @@ export function ChatsTab() {
             
             if (!conversationsMap.has(phoneKey)) {
               conversationsMap.set(phoneKey, conversationData);
-              console.log(`✨ Nueva conversación filtrada creada para ${phoneKey}`);
             } else {
               const existing = conversationsMap.get(phoneKey)!;
               
               // Agregar sesión si no existe
               if (chat.session?.id && !existing.sessions.includes(chat.session.id)) {
                 existing.sessions.push(chat.session.id);
-                console.log(`🔄 Sesión ${chat.session.id} agregada a conversación filtrada ${phoneKey}`);
               }
               
               // Actualizar mensajes no leídos
@@ -405,7 +545,6 @@ export function ChatsTab() {
                   new Date(conversationData.lastMessage.date).getTime() > new Date(existing.lastMessage.date).getTime())
               ) {
                 existing.lastMessage = conversationData.lastMessage;
-                console.log(`📝 Último mensaje actualizado para conversación filtrada ${phoneKey}`);
               }
               
               // Mantener el advisor más específico
@@ -499,10 +638,8 @@ export function ChatsTab() {
   useEffect(() => {
     const loadChatAssignments = async () => {
       try {
-        console.log('🔄 Cargando asignaciones de chats...');
         const assignments = await getChatAssignments(user);
         
-        console.log('📋 Asignaciones recibidas del backend:', assignments);
         
         // Validar que assignments sea un array
         if (!Array.isArray(assignments)) {
@@ -514,12 +651,10 @@ export function ChatsTab() {
         // Convertir el array de asignaciones a un Map
         const assignmentsMap = new Map();
         assignments.forEach((assignment: ChatAssignment) => {
-          console.log('🔍 Procesando asignación:', assignment);
           
           // Buscar phone o chatId (por compatibilidad con diferentes estructuras)
           const phoneId = assignment.phone || assignment.chatId;
           
-          console.log('📱 PhoneId extraído:', phoneId);
           
           if (phoneId) {
             const phoneWithoutSuffix = phoneId.replace('@c.us', '');
@@ -533,28 +668,12 @@ export function ChatsTab() {
               assignedBy: assignment.assignedBy
             };
             
-            console.log('💾 Guardando asignación:', {
-              phoneWithoutSuffix,
-              phoneWithSuffix,
-              assignmentData
-            });
-            
             // Guardar en ambos formatos para máxima compatibilidad
             assignmentsMap.set(phoneWithoutSuffix, assignmentData);
             assignmentsMap.set(phoneWithSuffix, assignmentData);
           } else {
             console.warn('⚠️ Asignación sin phone/chatId:', assignment);
           }
-        });
-        
-        console.log('🗂️ Asignaciones convertidas a Map:', {
-          totalAssignments: assignmentsMap.size,
-          assignmentEntries: Array.from(assignmentsMap.entries()).map(([phone, data]) => ({
-            phone,
-            advisorId: data.advisor?.id,
-            advisorName: data.advisor?.name,
-            isVisibleToAll: data.isVisibleToAll
-          }))
         });
         
         setChatAssignments(assignmentsMap);
@@ -570,12 +689,28 @@ export function ChatsTab() {
     }
   }, [user.id, user.companySlug, user.role]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Cargar asesores para el formulario de cliente
+  useEffect(() => {
+    if (user && user.companySlug) {
+      fetchCompanyUsers(user.companySlug).then(setAsesores).catch(console.error);
+    }
+  }, [user.companySlug]);
+
   useEffect(() => {
     let updatedConversations = conversations
-      .filter(convo =>
-        convo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        convo.phone.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      .filter(convo => {
+        // Filtro por término de búsqueda
+        const matchesSearch = convo.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          convo.phone.toLowerCase().includes(searchTerm.toLowerCase());
+        
+        // Filtro por estado de IA
+        const matchesIAFilter = 
+          iaFilter === 'all' ? true :
+          iaFilter === 'withIA' ? convo.botActive === true :
+          convo.botActive !== true;
+        
+        return matchesSearch && matchesIAFilter;
+      });
 
     // Ya no necesitamos filtrar por permisos aquí ya que el backend lo hace
     // updatedConversations = filterConversationsByUserPermissions(updatedConversations);
@@ -589,7 +724,7 @@ export function ChatsTab() {
     });
 
     setFilteredConversations(updatedConversations);
-  }, [conversations, searchTerm]);
+  }, [conversations, searchTerm, iaFilter]);
 
   // Load messages when active conversation changes
   useEffect(() => {
@@ -920,7 +1055,39 @@ export function ChatsTab() {
                   </InputAdornment>
                 ),
               }}
+              sx={{ mb: 2 }}
             />
+            
+            {/* Filtros de IA */}
+            <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+              <ButtonGroup
+                variant="outlined"
+                sx={{ bgcolor: 'background.paper', borderRadius: 3, boxShadow: 1 }}
+              >
+                <Button
+                  onClick={() => setIaFilter('all')}
+                  variant={iaFilter === 'all' ? 'contained' : 'outlined'}
+                  sx={{ fontWeight: 700, borderRadius: 3, textTransform: 'none', px: 3 }}
+                >
+                  Todos
+                </Button>
+                <Button
+                  onClick={() => setIaFilter('withIA')}
+                  variant={iaFilter === 'withIA' ? 'contained' : 'outlined'}
+                  sx={{ fontWeight: 700, borderRadius: 3, textTransform: 'none', px: 3 }}
+                  startIcon={<SmartToyIcon sx={{ color: iaFilter === 'withIA' ? '#FFFFFF' : '#8B5CF6' }} />}
+                >
+                  Con IA
+                </Button>
+                <Button
+                  onClick={() => setIaFilter('withoutIA')}
+                  variant={iaFilter === 'withoutIA' ? 'contained' : 'outlined'}
+                  sx={{ fontWeight: 700, borderRadius: 3, textTransform: 'none', px: 3 }}
+                >
+                  Sin IA
+                </Button>
+              </ButtonGroup>
+            </Box>
           </Box>
           <Divider />
           <List sx={{ flex: 1, overflowY: 'auto', p: 1 }}>
@@ -955,21 +1122,68 @@ export function ChatsTab() {
                     overlap="circular"
                     anchorOrigin={{ vertical: 'top', horizontal: 'left' }}
                   >
-                    <Avatar sx={{ 
-                      backgroundColor: assignment?.advisor ? '#4CAF50' : '#8B5CF6',
-                      border: assignment?.isVisibleToAll ? '2px solid #FF9800' : 'none'
-                    }}>
-                      {convo.name.substring(0, 2).toUpperCase()}
-                    </Avatar>
+                    <Box sx={{ position: 'relative' }}>
+                      <Avatar sx={{ 
+                        backgroundColor: assignment?.advisor ? '#4CAF50' : '#8B5CF6',
+                        border: assignment?.isVisibleToAll ? '2px solid #FF9800' : 'none'
+                      }}>
+                        {convo.name.substring(0, 2).toUpperCase()}
+                      </Avatar>
+                      {/* Indicador de IA activa */}
+                      {convo.botActive && (
+                        <Box
+                          sx={{
+                            position: 'absolute',
+                            bottom: -2,
+                            right: -2,
+                            width: 16,
+                            height: 16,
+                            backgroundColor: '#00E676',
+                            borderRadius: '50%',
+                            border: '2px solid white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '7px',
+                            fontWeight: 'bold',
+                            color: 'white',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                          }}
+                        >
+                          IA
+                        </Box>
+                      )}
+                    </Box>
                   </Badge>
                 </ListItemAvatar>
                 <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <ListItemText
-                    primary={convo.name}
-                    secondary={convo.lastMessage?.body || 'Sin mensajes'}
-                    primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
-                    secondaryTypographyProps={{ noWrap: true, fontStyle: 'italic' }}
-                  />
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                    <Typography variant="body1" fontWeight={600} noWrap sx={{ flex: 1 }}>
+                      {convo.name}
+                    </Typography>
+                    {convo.botActive && (
+                      <Chip 
+                        label="IA" 
+                        size="small" 
+                        sx={{ 
+                          fontSize: '0.65rem',
+                          height: '18px',
+                          backgroundColor: '#00E676',
+                          color: 'white',
+                          fontWeight: 'bold',
+                          minWidth: '28px'
+                        }} 
+                      />
+                    )}
+                  </Box>
+                  <Typography 
+                    variant="body2" 
+                    color="text.secondary" 
+                    noWrap 
+                    sx={{ fontStyle: 'italic' }}
+                  >
+                    {convo.lastMessage?.body || 'Sin mensajes'}
+                  </Typography>
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                     {assignment?.advisor && (
                       <Chip
@@ -1029,7 +1243,20 @@ export function ChatsTab() {
               <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: `1px solid ${theme.palette.divider}` }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', flex: 1 }}>
                   <Avatar sx={{ backgroundColor: '#8B5CF6', mr: 2 }}>{activeConversation.name.substring(0, 2).toUpperCase()}</Avatar>
-                  <Typography variant="h6" fontWeight={600}>{activeConversation.name}</Typography>
+                  <Typography 
+                    variant="h6" 
+                    fontWeight={600}
+                    sx={{ 
+                      cursor: 'pointer',
+                      '&:hover': {
+                        textDecoration: 'underline',
+                        color: theme.palette.primary.main
+                      }
+                    }}
+                    onClick={() => handleOpenClientEdit(activeConversation.phone)}
+                  >
+                    {activeConversation.name}
+                  </Typography>
                   <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
                     {activeConversation.phone}
                   </Typography>
@@ -1338,6 +1565,136 @@ export function ChatsTab() {
             </>
           )}
         </DialogContent>
+      </Dialog>
+
+      {/* Modal para edición de cliente */}
+      <Dialog open={openClientEditModal} onClose={() => setOpenClientEditModal(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>
+          {clientRecord ? 'Editar Cliente' : 'Crear Cliente'}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Teléfono: {selectedClientPhone.replace('@c.us', '')}
+          </Typography>
+        </DialogTitle>
+        <DialogContent dividers>
+          {clientLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : clientTable ? (
+            <Grid container spacing={3} sx={{ pt: 2 }}>
+              {clientTable.fields
+                .filter(field => field.name !== '_id' && field.name !== 'createdAt' && field.name !== 'updatedAt')
+                .map((field) => {
+                  const value = clientFormData[field.name] || '';
+                  
+                  return (
+                    <Grid item xs={12} sm={field.type === 'text' && field.name === 'observaciones' ? 12 : 6} key={field.name}>
+                      {field.type === 'text' ? (
+                        <TextField
+                          fullWidth
+                          label={field.label}
+                          value={value}
+                          onChange={(e) => handleClientInputChange(field.name, e.target.value)}
+                          multiline={field.name === 'observaciones' || field.name === 'comentarios'}
+                          rows={field.name === 'observaciones' || field.name === 'comentarios' ? 4 : 1}
+                          required={field.required}
+                          variant="outlined"
+                        />
+                      ) : field.type === 'number' ? (
+                        <TextField
+                          fullWidth
+                          label={field.label}
+                          type="number"
+                          value={value}
+                          onChange={(e) => handleClientInputChange(field.name, e.target.value)}
+                          required={field.required}
+                          variant="outlined"
+                        />
+                      ) : field.type === 'email' ? (
+                        <TextField
+                          fullWidth
+                          label={field.label}
+                          type="email"
+                          value={value}
+                          onChange={(e) => handleClientInputChange(field.name, e.target.value)}
+                          required={field.required}
+                          variant="outlined"
+                        />
+                      ) : field.type === 'select' ? (
+                        <FormControl fullWidth required={field.required}>
+                          <InputLabel>{field.label}</InputLabel>
+                          <Select
+                            value={value}
+                            label={field.label}
+                            onChange={(e) => handleClientInputChange(field.name, e.target.value)}
+                          >
+                            {field.options?.map((option) => (
+                              <MenuItem key={option} value={option}>
+                                {option}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      ) : field.type === 'boolean' ? (
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={Boolean(value)}
+                              onChange={(e) => handleClientInputChange(field.name, e.target.checked)}
+                            />
+                          }
+                          label={field.label}
+                        />
+                      ) : field.name === 'asesor' && asesores.length > 0 ? (
+                        <FormControl fullWidth required={field.required}>
+                          <InputLabel>Asesor</InputLabel>
+                          <Select
+                            value={value}
+                            label="Asesor"
+                            onChange={(e) => handleClientInputChange(field.name, e.target.value)}
+                          >
+                            <MenuItem value="">Sin asignar</MenuItem>
+                            {asesores.map((asesor) => (
+                              <MenuItem key={asesor._id || asesor.id} value={asesor.name || asesor.nombre || `${asesor.nombre} ${asesor.apellido || ''}`.trim()}>
+                                {asesor.name || asesor.nombre || `${asesor.nombre} ${asesor.apellido || ''}`.trim()} ({asesor.email})
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      ) : (
+                        <TextField
+                          fullWidth
+                          label={field.label}
+                          value={value}
+                          onChange={(e) => handleClientInputChange(field.name, e.target.value)}
+                          required={field.required}
+                          variant="outlined"
+                        />
+                      )}
+                    </Grid>
+                  );
+                })}
+            </Grid>
+          ) : (
+            <Typography>Error cargando la estructura del formulario</Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: '16px 24px' }}>
+          <Button onClick={() => setOpenClientEditModal(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSaveClient}
+            disabled={clientSaving}
+            sx={{
+              backgroundImage: 'linear-gradient(135deg, #E05EFF 0%, #8B5CF6 100%)',
+              boxShadow: '0 4px 24px rgba(139, 92, 246, 0.3)',
+            }}
+          >
+            {clientSaving ? <CircularProgress size={24} color="inherit" /> : (clientRecord ? 'Actualizar' : 'Crear')}
+          </Button>
+        </DialogActions>
       </Dialog>
 
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })}>
