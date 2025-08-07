@@ -175,6 +175,7 @@ export interface GroupedWhatsAppUser extends WhatsAppUser {
     id: string;
     name: string;
   };
+  prospectRecord:DynamicRecord
   isVisibleToAll?: boolean;
 }
 
@@ -201,6 +202,7 @@ export interface FilteredWhatsAppChat extends BaseEntity {
     id: string;
     name: string;
   } | null;
+  prospectRecord: DynamicRecord;
 }
 
 export interface WhatsAppMessage extends BaseEntity {
