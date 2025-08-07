@@ -29,9 +29,9 @@ export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent'
 
 export interface TaskComment {
   _id: string
-  text: string
-  author: string
-  authorName: string
+  comment: string
+  userName: string
+  userId: string
   createdAt: string
 }
 

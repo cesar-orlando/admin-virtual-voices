@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import Switch from '@mui/material/Switch';
 import {
   Box, Button, TextField, Stack, Card, Typography, IconButton, Dialog, DialogContent, Snackbar, Alert, CircularProgress, useTheme, MenuItem, Select, FormControl, InputLabel, Chip, Avatar, Divider, Grid, Paper, LinearProgress
 } from '@mui/material';
@@ -587,12 +588,29 @@ export default function Whatsapp() {
                                   </Typography>
                                 </Box>
                               </Box>
-                              <Chip 
-                                label={getStatusText(session.status || 'disconnected')}
-                                color={getStatusColor(session.status || 'disconnected') as any}
-                                size="small"
-                                sx={{ fontWeight: 600, height: 24, fontSize: '0.7rem' }}
-                              />
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Chip 
+                                  label={getStatusText(session.status || 'disconnected')}
+                                  color={getStatusColor(session.status || 'disconnected') as any}
+                                  size="small"
+                                  sx={{ fontWeight: 600, height: 24, fontSize: '0.7rem' }}
+                                />
+                                <Switch
+                                  checked={session.status === 'connected'}
+                                  color="success"
+                                  inputProps={{ 'aria-label': 'toggle session' }}
+                                  onChange={e => {
+                                    const newStatus = e.target.checked ? 'connected' : 'disconnected';
+                                    setSessions(prev => prev.map((s, i) =>
+                                      i === idx ? { ...s, status: newStatus } : s
+                                    ));
+                                    // Optionally, auto-save on toggle:
+                                    updateSession({ ...session, status: newStatus }, user).then(() => {
+                                      setSnackbar({ open: true, message: `Sesión ${newStatus === 'connected' ? 'activada' : 'desactivada'}`, severity: 'success' });
+                                    });
+                                  }}
+                                />
+                              </Box>
                             </Box>
                             
                             <FormControl fullWidth size="small">

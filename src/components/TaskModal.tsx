@@ -537,21 +537,21 @@ const TaskModal: React.FC<TaskModalProps> = ({
                         <ListItem key={comment._id} alignItems="flex-start">
                           <ListItemAvatar>
                             <Avatar sx={{ width: 32, height: 32, fontSize: '0.7rem' }}>
-                              {getInitials(comment.authorName)}
+                              {getInitials(comment.userName)}
                             </Avatar>
                           </ListItemAvatar>
                           <ListItemText
                             primary={
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                 <Typography variant="subtitle2">
-                                  {comment.authorName}
+                                  {comment.userName}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary">
                                   {format(new Date(comment.createdAt), 'dd/MM/yyyy HH:mm')}
                                 </Typography>
                               </Box>
                             }
-                            secondary={comment.text}
+                            secondary={comment.comment}
                           />
                         </ListItem>
                       ))
