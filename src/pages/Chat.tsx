@@ -1132,7 +1132,7 @@ export function ChatsTab() {
                             right: -2,
                             width: 16,
                             height: 16,
-                            backgroundColor: '#00E676',
+                            backgroundColor: iaFilter === 'withIA' ? '#00E676' : '#ffa500',
                             borderRadius: '50%',
                             border: '2px solid white',
                             display: 'flex',
@@ -1144,7 +1144,7 @@ export function ChatsTab() {
                             boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                           }}
                         >
-                          IA
+                          {iaFilter === 'withIA' ? "IA" : " "}
                         </Box>
                       )}
                     </Box>
@@ -1157,12 +1157,12 @@ export function ChatsTab() {
                     </Typography>
                     {convo.botActive && (
                       <Chip 
-                        label="IA" 
+                        label={iaFilter === 'withIA' ? "IA" : "Asesor"}
                         size="small" 
                         sx={{ 
                           fontSize: '0.65rem',
                           height: '18px',
-                          backgroundColor: '#00E676',
+                          backgroundColor: iaFilter === 'withIA' ? '#00E676' : '#ffa500',
                           color: 'white',
                           fontWeight: 'bold',
                           minWidth: '28px'

@@ -48,6 +48,7 @@ import {
   InsertDriveFile as InsertDriveFileIcon,
   PictureAsPdf as PictureAsPdfIcon,
   Movie as MovieIcon,
+  Close as CloseIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
 import { useDebounce } from '../hooks/useDebounce';
@@ -142,24 +143,65 @@ export default function DynamicDataTable({
     if (!searchQuery) { // Solo cargar stats si no es una búsqueda para evitar llamadas extra
         loadStats();
     }
-  }, [table.slug, page, rowsPerPage, refreshTrigger, activeFilters]); // Recargar si los filtros cambian
+  }, [table.slug, page, rowsPerPage, refreshTrigger, activeFilters, searchQuery]); // Add searchQuery to trigger reload when needed
 
-  // Use server-side search instead of local search for better pagination
+  // Enhanced search with local filtering approach
   useEffect(() => {
-    if (debouncedSearchQuery) {
-      setActiveFilters(prev => ({
-        ...prev,
-        textQuery: debouncedSearchQuery
-      }));
-      setPage(0); // reset to first page on search
-    } else if (debouncedSearchQuery === '') {
-      setActiveFilters(prev => {
-        const { textQuery, ...rest } = prev;
-        return rest;
-      });
-      setPage(0); // reset to first page when search is cleared
-    }
-  }, [debouncedSearchQuery]);
+    // Reset to first page whenever search changes
+    setPage(0);
+  }, [debouncedSearchQuery, table.name]);
+
+  // Filtrar campos visibles si visibleFields está definido
+  const displayedFields = useMemo(() => {
+    if (!visibleFields) return table.fields;
+    return table.fields.filter(f => visibleFields.includes(f.name));
+  }, [table.fields, visibleFields]);
+
+  // Local search helper for client-side filtering (as backup)
+  const matchesLocalSearch = useMemo(() => {
+    return (record: DynamicRecord, query: string): boolean => {
+      if (!query) return true;
+      
+      const normalizedQuery = query.toLowerCase().trim();
+      
+      // Search in all visible fields of the current table
+      for (const field of displayedFields) {
+        const value = record.data[field.name];
+        if (value == null) continue;
+        
+        let searchableText = '';
+        
+        // Handle different field types
+        if (typeof value === 'string') {
+          searchableText = value;
+        } else if (typeof value === 'number') {
+          searchableText = value.toString();
+        } else if (typeof value === 'boolean') {
+          searchableText = value ? 'si' : 'no';
+        } else if (typeof value === 'object') {
+          // Handle objects (like asesor field)
+          try {
+            if ('name' in value) {
+              searchableText = String(value.name);
+            } else {
+              searchableText = JSON.stringify(value);
+            }
+          } catch {
+            searchableText = String(value);
+          }
+        } else {
+          searchableText = String(value);
+        }
+        
+        // Simple case-insensitive search
+        if (searchableText.toLowerCase().includes(normalizedQuery)) {
+          return true;
+        }
+      }
+      
+      return false;
+    };
+  }, [displayedFields]);
 
   const handleImportExcel = async (data: any[], options: any) => {
   if (!user) {
@@ -167,8 +209,6 @@ export default function DynamicDataTable({
   }
 
   try {
-    console.log('Sending import request with data:', data, 'options:', options, 'user:', user);
-    
     const result = await importRecords(
       table.slug, 
       data.map(record => ({ data: record })), 
@@ -199,21 +239,35 @@ export default function DynamicDataTable({
       setLoading(true);
       setError(null);
       
+      // Load records without search filters - let frontend handle search
+      const filtersWithoutSearch = { ...activeFilters };
+      delete filtersWithoutSearch.search;
+      delete filtersWithoutSearch.q;
+      delete filtersWithoutSearch.query;
+      delete filtersWithoutSearch.originalQuery;
+      
+      // When searching, load more records to improve search results
+      const effectiveLimit = searchQuery ? Math.max(rowsPerPage * 4, 100) : rowsPerPage;
+      const effectivePage = searchQuery ? 1 : page + 1; // Always load first page when searching
+      
       const response = await getRecords(
         table.slug, 
         user, 
-        page + 1, 
-        rowsPerPage,
+        effectivePage, 
+        effectiveLimit,
         'updatedAt',
         'desc',
-        activeFilters
+        Object.keys(filtersWithoutSearch).length > 0 ? filtersWithoutSearch : undefined
       );
       
       setRecords(response.records);
-      setTotalRecords(response.pagination.total);
+      
+      // Only update totalRecords when not searching (since we're loading more data for search)
+      if (!searchQuery) {
+        setTotalRecords(response.pagination.total);
+      }
     } catch (err) {
       setError('Error al cargar los registros');
-      console.error('Error loading records:', err);
     } finally {
       setLoading(false);
     }
@@ -761,35 +815,45 @@ export default function DynamicDataTable({
   // Antes del renderizado de las filas, ordena los records si sortBy está definido y es de tipo sortable
   const sortableTypes = ['number', 'currency', 'date'];
   const sortableField = table.fields.find(f => f.name === sortBy && sortableTypes.includes(f.type));
-  const sortedRecords = [...records];
+  
+  const sortedRecords = useMemo(() => {
+    const sorted = [...records];
+    
+    if (sortableField && sortBy) {
+      sorted.sort((a, b) => {
+        let aValue = a.data[sortBy];
+        let bValue = b.data[sortBy];
+        if (sortableField.type === 'currency' || sortableField.type === 'number') {
+          aValue = Number(String(aValue).replace(/[^\d.-]+/g, ''));
+          bValue = Number(String(bValue).replace(/[^\d.-]+/g, ''));
+          if (isNaN(aValue)) aValue = 0;
+          if (isNaN(bValue)) bValue = 0;
+        } else if (sortableField.type === 'date') {
+          aValue = new Date(aValue).getTime();
+          bValue = new Date(bValue).getTime();
+        }
+        if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    
+    return sorted;
+  }, [records, sortBy, sortDirection, sortableField]);
 
-  if (sortableField && sortBy) {
-    sortedRecords.sort((a, b) => {
-      let aValue = a.data[sortBy];
-      let bValue = b.data[sortBy];
-      if (sortableField.type === 'currency' || sortableField.type === 'number') {
-        aValue = Number(String(aValue).replace(/[^\d.-]+/g, ''));
-        bValue = Number(String(bValue).replace(/[^\d.-]+/g, ''));
-        if (isNaN(aValue)) aValue = 0;
-        if (isNaN(bValue)) bValue = 0;
-      } else if (sortableField.type === 'date') {
-        aValue = new Date(aValue).getTime();
-        bValue = new Date(bValue).getTime();
-      }
-      if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
-      if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }
-
-  // Filtrar campos visibles si visibleFields está definido
-  const displayedFields = useMemo(() => {
-    if (!visibleFields) return table.fields;
-    return table.fields.filter(f => visibleFields.includes(f.name));
-  }, [table.fields, visibleFields]);
-
-  // Use records directly since search is now server-side
-  const displayRecords = sortedRecords;
+  // Apply local search filtering to all records
+  const displayRecords = useMemo(() => {
+    let filteredRecords = sortedRecords;
+    
+    // Apply local search if there's a search query
+    if (searchQuery) {
+      filteredRecords = sortedRecords.filter(record => 
+        matchesLocalSearch(record, searchQuery)
+      );
+    }
+    
+    return filteredRecords;
+  }, [sortedRecords, searchQuery, matchesLocalSearch]);
 
   if (loading && records.length === 0) {
     return (
@@ -829,48 +893,86 @@ export default function DynamicDataTable({
           ) : <Skeleton variant="text" width={200} height={20} />}
         </Box>
         <Box sx={{ display: 'flex', gap: 1.5 }}>
-          <TextField
-            size="small"
-            placeholder="Buscar..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            sx={{
-              minWidth: 200,
-              
-              '& .MuiOutlinedInput-root': {
-                borderRadius: 2,
-                backgroundColor:
-                  theme.palette.mode === 'dark'
-                    ? 'rgba(139, 92, 246, 0.1)'
-                    : 'rgba(59, 130, 246, 0.05)',
-                '&:hover': {
+          {/* Enhanced Search Field */}
+          <Box sx={{ position: 'relative', minWidth: 320 }}>
+            <TextField
+              size="small"
+              placeholder="Buscar por nombre, teléfono, email, etc..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              sx={{
+                width: '100%',
+                '& .MuiOutlinedInput-root': {
+                  borderRadius: 3,
                   backgroundColor:
                     theme.palette.mode === 'dark'
-                      ? 'rgba(139, 92, 246, 0.15)'
-                      : 'rgba(59, 130, 246, 0.1)',
+                      ? 'rgba(139, 92, 246, 0.08)'
+                      : 'rgba(59, 130, 246, 0.04)',
+                  border: '1px solid transparent',
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  '&:hover': {
+                    backgroundColor:
+                      theme.palette.mode === 'dark'
+                        ? 'rgba(139, 92, 246, 0.12)'
+                        : 'rgba(59, 130, 246, 0.08)',
+                    border: '1px solid rgba(139, 92, 246, 0.3)',
+                    transform: 'translateY(-1px)',
+                    boxShadow: '0 4px 12px rgba(139, 92, 246, 0.15)',
+                  },
+                  '&.Mui-focused': {
+                    backgroundColor:
+                      theme.palette.mode === 'dark'
+                        ? 'rgba(139, 92, 246, 0.15)'
+                        : 'rgba(59, 130, 246, 0.1)',
+                    border: '1px solid #8B5CF6',
+                    transform: 'translateY(-1px)',
+                    boxShadow: '0 6px 20px rgba(139, 92, 246, 0.25)',
+                  },
+                  '& fieldset': {
+                    border: 'none',
+                  },
+                  '& input': {
+                    fontSize: '0.95rem',
+                    fontWeight: 500,
+                    '&::placeholder': {
+                      color: theme.palette.text.secondary,
+                      opacity: 0.7,
+                    }
+                  }
                 },
-                '& fieldset': {
-                  borderColor: 'transparent',
-                },
-                '&:hover fieldset': {
-                  borderColor: '#8B5CF6',
-                },
-                '&.Mui-focused fieldset': {
-                  borderColor: '#8B5CF6',
-                },
-              },
-            }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon 
-                    fontSize="small" 
-                    sx={{ color:'#8B5CF6', }}
-                  />
-                </InputAdornment>
-              ),
-            }}
-          />
+              }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon 
+                      fontSize="small" 
+                      sx={{ 
+                        color: searchQuery ? '#8B5CF6' : theme.palette.text.secondary,
+                        transition: 'color 0.3s ease'
+                      }}
+                    />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery && (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setSearchQuery('')}
+                      sx={{
+                        color: theme.palette.text.secondary,
+                        '&:hover': {
+                          color: '#8B5CF6',
+                          backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        }
+                      }}
+                    >
+                      <Typography sx={{ fontSize: '18px', fontWeight: 'bold' }}>×</Typography>
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
           <Button
             variant="outlined"
             startIcon={<FilterIcon />}
@@ -1101,16 +1203,27 @@ export default function DynamicDataTable({
         <TablePagination
           rowsPerPageOptions={[ 25, 50, 100]}
           component="div"
-          count={totalRecords} // SIEMPRE el total del backend
+          count={searchQuery ? displayRecords.length : totalRecords} // Use filtered count when searching
           rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={(e, newPage) => setPage(newPage)}
+          page={searchQuery ? 0 : page} // Always show page 0 when searching locally
+          onPageChange={(e, newPage) => {
+            if (!searchQuery) {
+              setPage(newPage)
+            }
+          }}
           onRowsPerPageChange={(e) => {
             setRowsPerPage(parseInt(e.target.value, 25));
-            setPage(0);
+            if (!searchQuery) {
+              setPage(0);
+            }
           }}
           labelRowsPerPage="Filas por página:"
-          labelDisplayedRows={({ from, to, count }) => `${from}–${to} de ${count !== -1 ? count : `más de ${to}`}`}
+          labelDisplayedRows={({ from, to, count }) => {
+            if (searchQuery) {
+              return `${displayRecords.length} resultado${displayRecords.length !== 1 ? 's' : ''} de búsqueda`;
+            }
+            return `${from}–${to} de ${count !== -1 ? count : `más de ${to}`}`;
+          }}
         />
       </Paper>
 
