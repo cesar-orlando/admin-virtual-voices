@@ -264,8 +264,9 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
   // ===== PROSPECTS FUNCTIONS =====
 
   const loadProspects = useCallback(async (cursor?: string | null) => {
+    const isInitialLoad = !cursor;
     try {
-      setIsLoadingProspects(true);
+      if (isInitialLoad) setIsLoadingProspects(true);
       setErrorProspects(null);
       
       const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -273,24 +274,35 @@ export function useQuickLearningTwilio(): UseQuickLearningTwilioReturn {
       if (user.role === 'Asesor') {
         asesorId = user._id || user.id;
       }
-      const response = await getQuickLearningProspects(cursor, 20, user.role, asesorId);
-      
+      // Cargar 100 registros por petición (requerimiento del usuario)
+      const limit = 100;
+      const response = await getQuickLearningProspects(cursor || null, limit, user.role, asesorId);
+
+      // Soportar múltiples formatos de respuesta del backend
+      // Puede venir como { usuarios, pagination } o como { data: { usuarios, pagination } }
+      const container: any =
+        (response && typeof response === 'object' && 'data' in response && response.data)
+          ? response.data
+          : response;
+
+      const usuarios: any[] = Array.isArray(container?.usuarios) ? container.usuarios : [];
+      const pagination: any = container?.pagination || response?.pagination || null;
+
       if (cursor) {
         // Cargar más prospectos
-        setProspects(prev => [...prev, ...response.usuarios]);
-        setHasMoreProspects(response.pagination?.hasMore || false);
-        setNextCursor(response.pagination?.nextCursor || null);
+        setProspects(prev => [...prev, ...usuarios]);
       } else {
         // Cargar prospectos iniciales
-        setProspects(response.usuarios || []);
-        setHasMoreProspects(response.pagination?.hasMore || false);
-        setNextCursor(response.pagination?.nextCursor || null);
+        setProspects(usuarios);
       }
+
+      setHasMoreProspects(Boolean(pagination?.hasMore));
+      setNextCursor(pagination?.nextCursor ?? null);
     } catch (err: any) {
       console.error('Error loading prospects:', err);
       setErrorProspects(err.message || 'Error al cargar prospectos');
     } finally {
-      setIsLoadingProspects(false);
+      if (isInitialLoad) setIsLoadingProspects(false);
     }
   }, []);
 

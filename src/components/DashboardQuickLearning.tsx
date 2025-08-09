@@ -28,6 +28,7 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  Popover,
 } from '@mui/material';
 import {
   TrendingUp,
@@ -307,6 +308,13 @@ const DashboardQuickLearning = () => {
   const [dailyData, setDailyData] = useState<any[]>([]);
   const [cycleSummary, setCycleSummary] = useState<any>(null);
   const [dataSource, setDataSource] = useState<'real' | 'simulated' | 'loading'>('loading');
+  // Campañas (prospectos) agrupadas por día
+  const [dailyCampaigns, setDailyCampaigns] = useState<Record<string, {
+    totalRecords: number;
+    withCampaign: number;
+    missingCampaign: number;
+    topCampaigns: Array<{ name: string; count: number; byTable?: Record<string, number> }>;
+  }>>({});
 
   // Estados para comparación de ciclos
   const [cycleA, setCycleA] = useState(getCurrentCycle());
@@ -315,6 +323,23 @@ const DashboardQuickLearning = () => {
   const [showThirdCycle, setShowThirdCycle] = useState(false);
   const [comparisonData, setComparisonData] = useState<any>(null);
   const [comparisonLoading, setComparisonLoading] = useState(false);
+  // Popover para listar todas las campañas de un día
+  const [campaignsAnchorEl, setCampaignsAnchorEl] = useState<HTMLElement | null>(null);
+  const [campaignsPopover, setCampaignsPopover] = useState<{
+    date: string;
+    items: Array<{ name: string; count: number }>;
+  } | null>(null);
+
+  const openCampaignsPopover = (event: React.MouseEvent<HTMLElement>, date: string) => {
+    const items = dailyCampaigns[date]?.topCampaigns || [];
+    setCampaignsAnchorEl(event.currentTarget);
+    setCampaignsPopover({ date, items });
+  };
+
+  const closeCampaignsPopover = () => {
+    setCampaignsAnchorEl(null);
+    setCampaignsPopover(null);
+  };
 
   // Función para cargar datos tradicionales
   const loadTraditionalData = async () => {
@@ -392,6 +417,7 @@ const DashboardQuickLearning = () => {
         
         // Si hay breakdown diario, usarlo
         if (metricsData.dailyBreakdown && metricsData.dailyBreakdown.length > 0) {
+          // Mapear los nuevos campos: totalChats = prospectos creados
           const realDailyData = metricsData.dailyBreakdown.map(day => ({
             date: day.date,
             dateFormatted: new Date(day.date).toLocaleDateString('es-ES', { 
@@ -399,12 +425,12 @@ const DashboardQuickLearning = () => {
               month: '2-digit' 
             }),
             dayName: new Date(day.date).toLocaleDateString('es-ES', { weekday: 'short' }),
-            totalChats: day.totalChats,
+            totalChats: day.totalChats, // ahora representa prospectos creados (campañas)
             activeChats: Math.max(1, day.totalChats - Math.floor(day.totalChats * 0.1)), // 90% activos aprox
-            newChats: day.newChats,
-            totalMessages: day.totalMessages,
-            inboundMessages: day.inbound || Math.floor(day.totalMessages * 0.6),
-            outboundMessages: day.outbound || Math.floor(day.totalMessages * 0.4),
+            newChats: day.newChats || 0,
+            totalMessages: day.totalMessages || 0,
+            inboundMessages: (day as any).inbound || Math.floor((day.totalMessages || 0) * 0.6),
+            outboundMessages: (day as any).outbound || Math.floor((day.totalMessages || 0) * 0.4),
             avgResponseTime: Math.round(Math.random() * 3 + 2), // 2-5 minutos si no viene del backend
             isWeekend: [0, 6].includes(new Date(day.date).getDay())
           }));
@@ -422,6 +448,22 @@ const DashboardQuickLearning = () => {
           };
           
           setCycleSummary(realCycleSummary);
+
+          // Cargar campañas diarias y totales desde las nuevas métricas (sin consultas extra)
+          const normalized: Record<string, { totalRecords: number; withCampaign: number; missingCampaign: number; topCampaigns: Array<{ name: string; count: number; byTable?: Record<string, number> }> }> = {};
+          metricsData.dailyBreakdown.forEach(day => {
+            const dateKey = day.date;
+            const withCampaign = day.campaignsProspectosSummary?.withCampaign || 0;
+            const withoutCampaign = day.campaignsProspectosSummary?.withoutCampaign || 0;
+            const topCampaigns = (day.campaignsProspectos || []).map(c => ({ name: c.name, count: c.count, byTable: undefined }));
+            normalized[dateKey] = {
+              totalRecords: day.recordsCreated || 0,
+              withCampaign,
+              missingCampaign: withoutCampaign,
+              topCampaigns
+            };
+          });
+          setDailyCampaigns(normalized);
           
           console.log('✅ Datos diarios reales procesados:', {
             days: realDailyData.length,
@@ -655,8 +697,86 @@ const DashboardQuickLearning = () => {
     // Intentar cargar datos reales, con fallback a simulados
     const realTimeDataPromise = loadRealTimeData();
     
+    // Cargar campañas por día desde prospectos en paralelo
+    const dailyCampaignsPromise = (async () => {
+      try {
+        const start = new Date(selectedCycle.start);
+        const end = new Date(selectedCycle.end);
+        end.setHours(23, 59, 59, 999);
+
+        // Tablas a considerar para campañas
+        const tablesForCampaigns = ['alumnos', 'prospectos', 'clientes', 'sin_contestar', 'nuevo_ingreso'];
+        const requests = tablesForCampaigns.map(async (slug) => {
+          try {
+            const res = await getRecords(slug, user, 1, 10000, 'createdAt', 'desc');
+            return (res?.records || []).map(r => ({ ...r, __tableSlug: slug }));
+          } catch (e) {
+            console.warn(`⚠️ No se pudieron obtener registros para ${slug}:`, e);
+            return [] as any[];
+          }
+        });
+        const recordsArrays = await Promise.all(requests);
+        const records = recordsArrays.flat();
+
+        const toYmdLocal = (d: Date) => {
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const da = String(d.getDate()).padStart(2, '0');
+          return `${y}-${m}-${da}`;
+        };
+
+        const campaignsByDay: Record<string, Record<string, number>> = {};
+        const campaignsByDayByTable: Record<string, Record<string, Record<string, number>>> = {};
+        const totalsByDay: Record<string, { total: number; withCampaign: number; missing: number }> = {};
+
+        for (const rec of records) {
+          if (!rec?.createdAt) continue;
+          const created = new Date(rec.createdAt);
+          if (created < start || created > end) continue;
+
+          const dayKey = toYmdLocal(created);
+          const campRaw = (rec?.data?.['campana'] || '').toString().trim();
+          const camp = campRaw || 'SIN CAMPAÑA';
+          const table = (rec as any)?.__tableSlug || 'desconocida';
+
+          if (!totalsByDay[dayKey]) totalsByDay[dayKey] = { total: 0, withCampaign: 0, missing: 0 };
+          totalsByDay[dayKey].total += 1;
+
+          if (!campRaw) {
+            totalsByDay[dayKey].missing += 1;
+          } else {
+            totalsByDay[dayKey].withCampaign += 1;
+          }
+
+          if (!campaignsByDay[dayKey]) campaignsByDay[dayKey] = {};
+          campaignsByDay[dayKey][camp] = (campaignsByDay[dayKey][camp] || 0) + 1;
+
+          if (!campaignsByDayByTable[dayKey]) campaignsByDayByTable[dayKey] = {};
+          if (!campaignsByDayByTable[dayKey][camp]) campaignsByDayByTable[dayKey][camp] = {};
+          campaignsByDayByTable[dayKey][camp][table] = (campaignsByDayByTable[dayKey][camp][table] || 0) + 1;
+        }
+
+        const normalized: Record<string, { totalRecords: number; withCampaign: number; missingCampaign: number; topCampaigns: Array<{ name: string; count: number; byTable?: Record<string, number> }> }> = {};
+        Object.entries(campaignsByDay).forEach(([day, counts]) => {
+          const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+          const sums = totalsByDay[day] || { total: 0, withCampaign: 0, missing: 0 };
+          normalized[day] = {
+            totalRecords: sums.total,
+            withCampaign: sums.withCampaign,
+            missingCampaign: sums.missing,
+            topCampaigns: entries.map(([name, count]) => ({ name, count, byTable: campaignsByDayByTable[day]?.[name] || {} }))
+          };
+        });
+
+        setDailyCampaigns(normalized);
+      } catch (err) {
+        console.warn('⚠️ No se pudieron cargar campañas diarias desde prospectos:', err);
+        setDailyCampaigns({});
+      }
+    })();
+    
     // Esperar a que ambos terminen
-    await Promise.all([traditionalDataPromise, realTimeDataPromise]);
+    await Promise.all([traditionalDataPromise, realTimeDataPromise, dailyCampaignsPromise]);
     
     console.log(`✅ Carga completa para ciclo ${selectedCycle.label}`);
   };
@@ -1016,6 +1136,86 @@ const DashboardQuickLearning = () => {
               </LineChart>
             </ResponsiveContainer>
           </Card>
+          {/* Popover para ver TODAS las campañas del día (estilo tabla con resumen) */}
+          <Popover
+            open={Boolean(campaignsAnchorEl)}
+            anchorEl={campaignsAnchorEl}
+            onClose={closeCampaignsPopover}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+            PaperProps={{ sx: { p: 2, maxWidth: 560 } }}
+          >
+            {(() => {
+              const dateStr = campaignsPopover?.date || '';
+              const dayInfo = dailyData.find((d) => d.date === dateStr);
+              const totalProspects = dailyCampaigns[dateStr]?.totalRecords || 0;
+              const withCampaign = dailyCampaigns[dateStr]?.withCampaign || 0;
+              const missingCampaign = dailyCampaigns[dateStr]?.missingCampaign || 0;
+              const ratio = dayInfo ? Math.round(dayInfo.totalMessages / Math.max(dayInfo.totalChats, 1)) : 0;
+              const title = dateStr ? new Date(dateStr).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) : '';
+              return (
+                <>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 1 }}>Detalle del día {title}</Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+                    <Chip label={`Chats: ${dayInfo?.totalChats ?? '-'}`} size="small" sx={{ bgcolor: '#EEF2FF', color: '#3730A3', fontWeight: 700 }} />
+                    <Chip label={`Activos: ${dayInfo?.activeChats ?? '-'}`} size="small" sx={{ bgcolor: '#ECFDF5', color: '#065F46', fontWeight: 700 }} />
+                    <Chip label={`Mensajes: ${dayInfo?.totalMessages ?? '-'}`} size="small" sx={{ bgcolor: '#DBEAFE', color: '#1E3A8A', fontWeight: 700 }} />
+                    <Chip label={`Ratio: ${ratio}:1`} size="small" sx={{ bgcolor: '#F3F4F6', color: '#111827', fontWeight: 700 }} />
+                    <Chip label={`Registros: ${totalProspects}`} size="small" sx={{ bgcolor: '#FFF7ED', color: '#9A3412', fontWeight: 700 }} />
+                    <Chip label={`Con campaña: ${withCampaign}`} size="small" sx={{ bgcolor: '#ECFEFF', color: '#075985', fontWeight: 700 }} />
+                    <Chip label={`Sin campaña: ${missingCampaign}`} size="small" sx={{ bgcolor: '#FEE2E2', color: '#7F1D1D', fontWeight: 700 }} />
+                  </Box>
+                </>
+              );
+            })()}
+            <Table size="small" stickyHeader sx={{ minWidth: 460 }}>
+              <TableHead>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 700, minWidth: 240 }}>Campaña</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 90 }}>Conteo</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 700, width: 120 }}>% del día</TableCell>
+                  <TableCell align="left" sx={{ fontWeight: 700, minWidth: 180 }}>Origen (tablas)</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(campaignsPopover?.items || []).map((c: any) => {
+                  const dateStr = campaignsPopover?.date || '';
+                  const total = dailyCampaigns[dateStr]?.totalRecords || 0;
+                  const pct = total > 0 ? Math.round((c.count / total) * 100) : 0;
+                  return (
+                    <TableRow key={`${campaignsPopover?.date}-${c.name}`}>
+                      <TableCell>{c.name}</TableCell>
+                      <TableCell align="right">
+                        <Chip label={c.count} size="small" sx={{ bgcolor: '#EEF2FF', color: '#3730A3', fontWeight: 700 }} />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'flex-end' }}>
+                          <Typography variant="caption" sx={{ minWidth: 28, textAlign: 'right', color: '#374151', fontWeight: 700 }}>{pct}%</Typography>
+                          <Box sx={{ width: 80 }}>
+                            <LinearProgress variant="determinate" value={pct} sx={{ height: 8, borderRadius: 4 }} />
+                          </Box>
+                        </Box>
+                      </TableCell>
+                      <TableCell align="left">
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {Object.entries(c.byTable || {}).map(([tbl, cnt]) => (
+                            <Chip key={`${c.name}-${tbl}`} label={`${tbl}: ${cnt}`} size="small" sx={{ bgcolor: '#F3F4F6', color: '#111827', fontWeight: 600 }} />
+                          ))}
+                        </Box>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+                {!(campaignsPopover?.items?.length) && (
+                  <TableRow>
+                    <TableCell colSpan={3} align="center">
+                      <Typography variant="caption" sx={{ color: '#9CA3AF' }}>Sin campañas</Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Popover>
 
           {/* Tabla detallada por día - SÚPER PROFESIONAL */}
           <Card sx={{ mb: 4 }}>
@@ -1075,9 +1275,7 @@ const DashboardQuickLearning = () => {
                       <TableCell sx={{ fontWeight: 700, bgcolor: '#667eea', color: 'white', borderBottom: 'none', minWidth: 80 }}>
                         📅 Fecha
                       </TableCell>
-                      <TableCell align="center" sx={{ fontWeight: 700, bgcolor: '#667eea', color: 'white', borderBottom: 'none', minWidth: 70, display: { xs: 'none', sm: 'table-cell' } }}>
-                        📆 Día
-                      </TableCell>
+                      {/* Columna de Día removida por solicitud */}
                       <TableCell align="center" sx={{ fontWeight: 700, bgcolor: '#667eea', color: 'white', borderBottom: 'none', minWidth: 90 }}>
                         📞 Total Chats
                       </TableCell>
@@ -1086,6 +1284,9 @@ const DashboardQuickLearning = () => {
                       </TableCell>
                       <TableCell align="center" sx={{ fontWeight: 700, bgcolor: '#667eea', color: 'white', borderBottom: 'none', minWidth: 100 }}>
                         💬 Mensajes
+                      </TableCell>
+                      <TableCell align="center" sx={{ fontWeight: 700, bgcolor: '#667eea', color: 'white', borderBottom: 'none', minWidth: 160, display: { xs: 'none', lg: 'table-cell' } }}>
+                        🧩 Campañas (Prospectos)
                       </TableCell>
                       <TableCell align="center" sx={{ fontWeight: 700, bgcolor: '#667eea', color: 'white', borderBottom: 'none', minWidth: 80, display: { xs: 'none', lg: 'table-cell' } }}>
                         📊 Ratio
@@ -1149,9 +1350,7 @@ const DashboardQuickLearning = () => {
                               )}
                             </Box>
                           </TableCell>
-                          <TableCell align="center" sx={{ fontWeight: 500, color: day.isWeekend ? '#F59E0B' : '#6B7280', display: { xs: 'none', sm: 'table-cell' } }}>
-                            {day.dayName}
-                          </TableCell>
+                          {/* Celda de Día removida por solicitud */}
                           <TableCell align="center">
                             <Typography variant="body2" sx={{ fontWeight: 700, color: '#8B5CF6', fontSize: '1rem' }}>
                               {day.totalChats.toLocaleString()}
@@ -1166,6 +1365,39 @@ const DashboardQuickLearning = () => {
                             <Typography variant="body2" sx={{ fontWeight: 600, color: '#3B82F6' }}>
                               {day.totalMessages.toLocaleString()}
                             </Typography>
+                          </TableCell>
+                          <TableCell align="center" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, justifyContent: 'center' }}>
+                              {(() => {
+                                const items = dailyCampaigns[day.date]?.topCampaigns || [];
+                                const totalProspects = dailyCampaigns[day.date]?.totalRecords || 0;
+                                // Si hay diferencia con chats del día, mostrar badge de alerta
+                                const chatsDay = dailyData.find(d => d.date === day.date)?.totalChats || 0;
+                                const mismatch = chatsDay > 0 && totalProspects !== chatsDay;
+                                if (items.length === 0) {
+                                  return <Typography variant="caption" sx={{ color: '#9CA3AF' }}>—</Typography>;
+                                }
+                                return (
+                                  <>
+                                    <Chip
+                                      label={`Campañas: ${items.length}`}
+                                      size="small"
+                                      onClick={(e) => openCampaignsPopover(e, day.date)}
+                                      clickable
+                                      sx={{ bgcolor: '#E0E7FF', color: '#3730A3', fontWeight: 700 }}
+                                    />
+                                    <Chip
+                                      label={`Registros: ${totalProspects}`}
+                                      size="small"
+                                      sx={{ bgcolor: '#FEF3C7', color: '#92400E', fontWeight: 700 }}
+                                    />
+                                    {mismatch && (
+                                      <Chip label={`⚠️ Chats: ${chatsDay}`} size="small" sx={{ bgcolor: '#FEE2E2', color: '#7F1D1D', fontWeight: 700 }} />
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </Box>
                           </TableCell>
                           <TableCell align="center" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
                             <Chip
@@ -1191,9 +1423,7 @@ const DashboardQuickLearning = () => {
                         '& td': { fontWeight: 700, color: '#667eea' }
                       }}>
                         <TableCell sx={{ fontWeight: 800, fontSize: '0.9rem' }}>📊 TOTALES</TableCell>
-                        <TableCell align="center" sx={{ fontWeight: 600, fontSize: '0.8rem', display: { xs: 'none', sm: 'table-cell' } }}>
-                          {dailyData.length} días
-                        </TableCell>
+                        {/* Celda de Día (totales) removida */}
                         <TableCell align="center" sx={{ fontWeight: 800, fontSize: '1rem' }}>
                           {cycleSummary.totalChats.toLocaleString()}
                         </TableCell>
@@ -1202,6 +1432,9 @@ const DashboardQuickLearning = () => {
                         </TableCell>
                         <TableCell align="center" sx={{ fontWeight: 800, fontSize: '1rem' }}>
                           {cycleSummary.totalMessages.toLocaleString()}
+                        </TableCell>
+                        <TableCell align="center" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
+                          {/* Totales de campañas no se suman aquí; se deja vacío por claridad */}
                         </TableCell>
                         <TableCell align="center" sx={{ display: { xs: 'none', lg: 'table-cell' } }}>
                           <Chip label={`${cycleSummary.avgMessagesPerChat}:1`} size="small" sx={{ bgcolor: '#667eea', color: 'white', fontWeight: 700 }} />

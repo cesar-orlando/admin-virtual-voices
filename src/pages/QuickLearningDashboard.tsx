@@ -14,6 +14,7 @@ import {
   Snackbar,
   Alert,
   useTheme,
+  useMediaQuery,
   Tooltip,
   Badge,
   Divider,
@@ -24,6 +25,10 @@ import {
   CircularProgress,
   Chip,
   ButtonGroup,
+  SpeedDial,
+  SpeedDialAction,
+  SpeedDialIcon,
+  InputAdornment,
 } from '@mui/material'
 import {
   WhatsApp as WhatsAppIcon,
@@ -36,12 +41,16 @@ import {
   AccessTime as AccessTimeIcon,
   KeyboardArrowDown as KeyboardArrowDownIcon,
   Payment as PaymentIcon,
+  AttachFile as AttachFileIcon,
+  Mic as MicIcon,
 } from '@mui/icons-material'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import { useQuickLearningTwilio } from '../hooks/useQuickLearningTwilio'
 import api from '../api/axios'
 import { fetchCompanyUsers } from '../api/servicios'
 import { updateRecord } from '../api/servicios'
 import { useDebounce } from '../hooks/useDebounce'
+import { getRecordByPhone } from '../api/servicios/dynamicTableServices'
 import ClientEditModal from '../components/ClientEditModal'
 import { FixedSizeList as VirtualizedList } from 'react-window'
 import type { ListChildComponentProps } from 'react-window'
@@ -137,6 +146,8 @@ const QuickLearningDashboard: React.FC = () => {
   console.log('QuickLearningDashboard - Component rendering')
 
   const theme = useTheme()
+  const isMobile = useMediaQuery('(max-width: 900px)')
+  const isCompact = useMediaQuery('(max-width: 600px)')
   const {
     isLoading,
     error,
@@ -195,6 +206,11 @@ const QuickLearningDashboard: React.FC = () => {
 
   const [messageInputValue, setMessageInputValue] = useState('')
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
+  // Ref para tener siempre la lista más reciente de prospectos dentro de búsquedas async
+  const prospectsRef = useRef<any[]>(prospects)
+  useEffect(() => {
+    prospectsRef.current = prospects
+  }, [prospects])
 
   // Estado local para loading del input de mensaje
   const [isSendingMessage, setIsSendingMessage] = useState(false)
@@ -206,6 +222,9 @@ const QuickLearningDashboard: React.FC = () => {
 
   // 1. Agrega un estado para controlar el Dialog de info del cliente
   const [openClientInfo, setOpenClientInfo] = useState(false)
+  // Estado de layout móvil: mostrar lista o chat
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list')
+
 
   // 1. Estados para el modal de imagen
   const [openImageModal, setOpenImageModal] = useState(false)
@@ -340,9 +359,7 @@ const QuickLearningDashboard: React.FC = () => {
     setMessageInputValue('')
   }, [selectedProspect])
 
-  useEffect(() => {
-    loadProspects()
-  }, [loadProspects])
+  // Carga inicial ya se realiza dentro del hook useQuickLearningTwilio
 
   // Limpiar mensajes no leídos al desmontar el componente
   // ELIMINADO: Este useEffect estaba causando que se marcaran como leídos TODOS los números
@@ -404,23 +421,95 @@ const QuickLearningDashboard: React.FC = () => {
     return () => chatContainer.removeEventListener('scroll', handleScroll)
   }, [selectedProspect])
 
-  // Infinite scroll para la lista de prospectos
+  // Swipe back (móvil) para volver del chat a la lista
   useEffect(() => {
-    const prospectsContainer = document.querySelector('[data-prospects-container]')
-    if (!prospectsContainer || isGlobalSearch) return
+    if (!isMobile) return
+    const chatNode = document.querySelector('[data-chat-container]') as HTMLElement | null
+    if (!chatNode) return
+
+    let startX = 0
+    let deltaX = 0
+    let tracking = false
+    const threshold = 70
+
+    const onTouchStart = (e: TouchEvent) => {
+      startX = e.touches[0].clientX
+      deltaX = 0
+      tracking = true
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (!tracking) return
+      deltaX = e.touches[0].clientX - startX
+    }
+    const onTouchEnd = () => {
+      if (!tracking) return
+      if (deltaX > threshold && mobileView === 'chat') {
+        setMobileView('list')
+      }
+      tracking = false
+      startX = 0
+      deltaX = 0
+    }
+
+    chatNode.addEventListener('touchstart', onTouchStart, { passive: true })
+    chatNode.addEventListener('touchmove', onTouchMove, { passive: true })
+    chatNode.addEventListener('touchend', onTouchEnd)
+    return () => {
+      chatNode.removeEventListener('touchstart', onTouchStart)
+      chatNode.removeEventListener('touchmove', onTouchMove)
+      chatNode.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [isMobile, mobileView])
+
+  // Infinite scroll + Pull-to-refresh para la lista de prospectos
+  useEffect(() => {
+    const node = document.querySelector('[data-prospects-container]') as HTMLElement | null
+    if (!node || isGlobalSearch) return
 
     const handleProspectsScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = prospectsContainer as HTMLElement
+      const { scrollTop, scrollHeight, clientHeight } = node
       const isNearBottom = scrollHeight - scrollTop - clientHeight < 50
-
       if (isNearBottom && hasMoreProspects && !isLoadingMoreProspects) {
         loadMoreProspects()
       }
     }
 
-    prospectsContainer.addEventListener('scroll', handleProspectsScroll)
-    return () => prospectsContainer.removeEventListener('scroll', handleProspectsScroll)
-  }, [hasMoreProspects, isLoadingMoreProspects, loadMoreProspects, isGlobalSearch])
+    let startY = 0
+    let isPulling = false
+    let pullingDistance = 0
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (node.scrollTop <= 0) {
+        startY = e.touches[0].clientY
+        isPulling = true
+        pullingDistance = 0
+      }
+    }
+    const onTouchMove = (e: TouchEvent) => {
+      if (!isPulling) return
+      const currentY = e.touches[0].clientY
+      pullingDistance = currentY - startY
+    }
+    const onTouchEnd = () => {
+      if (isPulling && pullingDistance > 80) {
+        loadProspects()
+      }
+      isPulling = false
+      pullingDistance = 0
+    }
+
+    node.addEventListener('scroll', handleProspectsScroll)
+    node.addEventListener('touchstart', onTouchStart, { passive: true })
+    node.addEventListener('touchmove', onTouchMove, { passive: true })
+    node.addEventListener('touchend', onTouchEnd)
+
+    return () => {
+      node.removeEventListener('scroll', handleProspectsScroll)
+      node.removeEventListener('touchstart', onTouchStart)
+      node.removeEventListener('touchmove', onTouchMove)
+      node.removeEventListener('touchend', onTouchEnd)
+    }
+  }, [hasMoreProspects, isLoadingMoreProspects, loadMoreProspects, isGlobalSearch, loadProspects])
 
   // Handler optimizado para el input
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -489,7 +578,11 @@ const QuickLearningDashboard: React.FC = () => {
     async (query: string) => {
       console.log('DEBUG: performGlobalSearch called with query:', query)
 
-      if (!query.trim()) {
+      const raw = query || ''
+      const text = raw.toLowerCase().trim()
+      const digits = raw.replace(/\D/g, '')
+
+      if (!text && !digits) {
         console.log('DEBUG: Empty query, clearing search')
         setIsGlobalSearch(false)
         setSearchResults([])
@@ -499,60 +592,100 @@ const QuickLearningDashboard: React.FC = () => {
       setIsSearching(true)
       setIsGlobalSearch(true)
 
-      try {
-        // Búsqueda local inteligente en todos los prospectos
-        const searchTerm = query.toLowerCase().trim()
+      const matchProspects = (list: any[]) => {
+        return list.filter(prospect => {
+          const data = prospect.data || {}
+          const nombre = (data.nombre || '').toLowerCase()
+          const email = (data.email || '').toLowerCase()
+          const ciudad = (data.ciudad || '').toLowerCase()
+          const ultimo_mensaje = (data.ultimo_mensaje || '').toLowerCase()
+          const curso = (data.curso || '').toLowerCase()
+          const campana = (data.campana || '').toLowerCase()
+          const medio = (data.medio || '').toLowerCase()
+          const comentario = (data.comentario || '').toLowerCase()
+          const tableSlug = (prospect.tableSlug || '').toLowerCase()
 
-        // Buscar en múltiples campos de cada prospecto
-        const localResults = prospects.filter(prospect => {
-          const nombre = prospect.data?.nombre?.toLowerCase() || ''
-          const telefono = prospect.data?.telefono?.toLowerCase() || ''
-          const email = prospect.data?.email?.toLowerCase() || ''
-          const ciudad = prospect.data?.ciudad?.toLowerCase() || ''
-          const ultimo_mensaje = prospect.data?.ultimo_mensaje?.toLowerCase() || ''
+          // Teléfonos en distintos campos/formato
+          const telefonoRaw = String(data.telefono || '')
+          const telefonoAltRaw = String(prospect.phone || '')
+          const telefono = telefonoRaw.toLowerCase()
+          const telefonoAlt = telefonoAltRaw.toLowerCase()
+          const telDigits = telefonoRaw.replace(/\D/g, '')
+          const telAltDigits = telefonoAltRaw.replace(/\D/g, '')
 
-          // Manejar asesor que puede ser objeto o string
+          // Asesor puede ser string u objeto
           let asesor = ''
-          if (typeof prospect.data?.asesor === 'string') {
-            asesor = prospect.data.asesor.toLowerCase()
-          } else if (prospect.data?.asesor && typeof prospect.data.asesor === 'object') {
-            asesor = (
-              prospect.data.asesor.nombre ||
-              prospect.data.asesor.name ||
-              prospect.data.asesor.email ||
-              ''
+          if (typeof data.asesor === 'string') {
+            asesor = data.asesor.toLowerCase()
+          } else if (data.asesor && typeof data.asesor === 'object') {
+            asesor = String(
+              data.asesor.nombre || data.asesor.name || data.asesor.email || ''
             ).toLowerCase()
           }
 
-          const curso = prospect.data?.curso?.toLowerCase() || ''
-          const campana = prospect.data?.campana?.toLowerCase() || ''
-          const medio = prospect.data?.medio?.toLowerCase() || ''
-          const comentario = prospect.data?.comentario?.toLowerCase() || ''
-
-          // Buscar en todos los campos
-          return (
-            nombre.includes(searchTerm) ||
-            telefono.includes(searchTerm) ||
-            email.includes(searchTerm) ||
-            ciudad.includes(searchTerm) ||
-            ultimo_mensaje.includes(searchTerm) ||
-            asesor.includes(searchTerm) ||
-            curso.includes(searchTerm) ||
-            campana.includes(searchTerm) ||
-            medio.includes(searchTerm) ||
-            comentario.includes(searchTerm) ||
-            prospect.tableSlug?.toLowerCase().includes(searchTerm)
+          // Coincidencias por texto
+          const byText = Boolean(text) && (
+            nombre.includes(text) ||
+            telefono.includes(text) ||
+            telefonoAlt.includes(text) ||
+            email.includes(text) ||
+            ciudad.includes(text) ||
+            ultimo_mensaje.includes(text) ||
+            asesor.includes(text) ||
+            curso.includes(text) ||
+            campana.includes(text) ||
+            medio.includes(text) ||
+            comentario.includes(text) ||
+            tableSlug.includes(text)
           )
+
+          // Coincidencias por dígitos del teléfono
+          const byDigits = Boolean(digits) && (
+            telDigits.includes(digits) || telAltDigits.includes(digits)
+          )
+
+          return byText || byDigits
         })
+      }
 
-        console.log('DEBUG: Local search results:', localResults)
-        setSearchResults(localResults)
+      try {
+        // 1) Buscar en los prospectos cargados actualmente
+        let results = matchProspects(prospectsRef.current)
+        setSearchResults(results)
 
-        // Si no hay resultados y hay más prospectos disponibles, cargar más
-        if (localResults.length === 0 && hasMoreProspects && !isLoadingMoreProspects) {
-          console.log('DEBUG: No results found, loading more prospects for search')
-          // Cargar más prospectos para la búsqueda
+        // 2) Si se buscan dígitos de teléfono y no hay resultados, intenta consulta directa al backend
+        if (results.length === 0 && digits) {
+          try {
+            const user = JSON.parse(localStorage.getItem('user') || '{}')
+            const phoneLookup = await getRecordByPhone(digits, user, 'prospectos')
+            if (phoneLookup) {
+              // Normalizar a formato de prospecto de la lista
+              const normalized = {
+                _id: phoneLookup._id,
+                tableSlug: phoneLookup.tableSlug,
+                data: {
+                  ...phoneLookup.data,
+                  telefono: phoneLookup.data?.telefono || phoneLookup.data?.phone || ''
+                }
+              }
+              results = [normalized]
+              setSearchResults(results)
+            }
+          } catch (e) {
+            console.warn('Phone lookup fallback failed:', e)
+          }
+        }
+
+        // 3) Si todavía no hay resultados, intenta cargar más páginas (máx 5 intentos) y volver a buscar
+        let attempts = 0
+        while (results.length === 0 && attempts < 5) {
+          attempts += 1
+          console.log('DEBUG: No results found, loading more prospects for search, attempt', attempts)
           await loadMoreProspects()
+          await new Promise(resolve => setTimeout(resolve, 150))
+          results = matchProspects(prospectsRef.current)
+          setSearchResults(results)
+          if (results.length > 0) break
         }
       } catch (error) {
         console.error('DEBUG: Error en búsqueda:', error)
@@ -561,7 +694,7 @@ const QuickLearningDashboard: React.FC = () => {
         setIsSearching(false)
       }
     },
-    [prospects, hasMoreProspects, isLoadingMoreProspects, loadMoreProspects]
+    [loadMoreProspects]
   )
 
   // useEffect para búsqueda global cuando cambia el término debounced
@@ -578,6 +711,14 @@ const QuickLearningDashboard: React.FC = () => {
       setSearchResults([])
     }
   }, [debouncedSearchTerm, performGlobalSearch])
+
+  // Si resultados cambian y estamos en modo búsqueda, llevar la lista al inicio para UX
+  useEffect(() => {
+    if (!isGlobalSearch) return
+    if (listRef.current) {
+      listRef.current.scrollToItem(0, 'start')
+    }
+  }, [isGlobalSearch, searchResults])
 
   // Handlers para modales
   const handleSendMessage = useCallback(async () => {
@@ -1021,9 +1162,9 @@ const QuickLearningDashboard: React.FC = () => {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            mb: 2,
-            pt: 3,
-            px: 4,
+            mb: isMobile ? 1 : 2,
+            pt: isMobile ? 2 : 3,
+            px: isMobile ? 2 : 4,
           }}
         >
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -1031,16 +1172,16 @@ const QuickLearningDashboard: React.FC = () => {
               sx={{
                 mr: 2,
                 background: 'linear-gradient(135deg, #25D366 0%, #128C7E 100%)',
-                width: 56,
-                height: 56,
+                width: isMobile ? 44 : 56,
+                height: isMobile ? 44 : 56,
               }}
             >
               <WhatsAppIcon fontSize="large" />
             </Avatar>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="h6" fontWeight={700} color="primary" sx={{ letterSpacing: 1 }}>
-                  Quick Learning WhatsApp
+                <Typography variant={isMobile ? 'subtitle1' : 'h6'} fontWeight={700} color="primary" sx={{ letterSpacing: 1 }}>
+                  Quick Learning
                 </Typography>
 
                 {/* Indicador de estado de conexión del socket */}
@@ -1072,43 +1213,72 @@ const QuickLearningDashboard: React.FC = () => {
                   {socketConnected ? 'Conectado' : 'Desconectado'}
                 </Box>
               </Box>
-              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 500 }}>
+          {/*     <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 500 }}>
                 Dashboard de NatalIA - IA Conversacional
-              </Typography>
+              </Typography> */}
             </Box>
           </Box>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button
-              variant="outlined"
-              startIcon={<RefreshIcon />}
-              onClick={() => loadProspects()}
-              disabled={isLoadingProspects}
-              sx={{ fontWeight: 700, fontSize: 16, px: 3, borderRadius: 3 }}
-            >
-              ACTUALIZAR
-            </Button>
-          </Box>
+         {/*  <Box sx={{ display: 'flex', gap: isMobile ? 1 : 2 }}>
+            {isMobile ? (
+              <IconButton
+                onClick={() => loadProspects()}
+                disabled={isLoadingProspects}
+                aria-label="Actualizar"
+                size="small"
+                sx={{
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  width: 36,
+                  height: 36,
+                }}
+              >
+                <RefreshIcon fontSize="small" />
+              </IconButton>
+            ) : (
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={() => loadProspects()}
+                disabled={isLoadingProspects}
+                sx={{ fontWeight: 700, fontSize: isMobile ? 14 : 16, px: isMobile ? 2 : 3, borderRadius: 3 }}
+              >
+                ACTUALIZAR
+              </Button>
+            )}
+          </Box> */}
         </Box>
       </Box>
 
       {/* Main content: Lista de prospectos y chat */}
-      <Box sx={{ flex: 1, minHeight: 0, display: 'flex', gap: 2, px: 1, pb: 1 }}>
+      <Box sx={{
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        gap: isMobile ? 0 : 2,
+        px: isMobile ? 0 : 1,
+        pb: isMobile ? 0 : 1,
+        position: 'relative'
+      }}>
         {/* Lista de prospectos */}
         <Card
           sx={{
-            width: 340,
-            minWidth: 340,
-            maxWidth: 340,
+            width: isMobile ? '100%' : 340,
+            minWidth: isMobile ? '100%' : 340,
+            maxWidth: isMobile ? '100%' : 340,
             height: '100%',
-            display: 'flex',
+            display: isMobile ? (mobileView === 'list' ? 'flex' : 'none') : 'flex',
             flexDirection: 'column',
             minHeight: 0,
             boxShadow: 2,
-            borderRadius: 2,
+            borderRadius: isMobile ? 0 : 2,
             bgcolor: theme.palette.background.paper,
             ml: 0,
             mr: 0,
-            flex: 1,
+            flex: isMobile ? 'unset' : 1,
+            position: isMobile ? 'absolute' : 'relative',
+            inset: isMobile ? 0 : 'auto',
+            zIndex: isMobile ? 2 : 'auto'
           }}
         >
           <Box
@@ -1168,6 +1338,11 @@ const QuickLearningDashboard: React.FC = () => {
               >
                 <RefreshIcon fontSize="small" sx={{ color: theme.palette.text.secondary }} />
               </IconButton>
+              {isMobile && mobileView === 'chat' && (
+                <IconButton onClick={() => setMobileView('list')} sx={{ ml: 'auto' }}>
+                  <ArrowBackIcon />
+                </IconButton>
+              )}
             </Box>
             <Box sx={{ width: '100%', mt: 1, display: 'flex', justifyContent: 'center' }}>
               <ButtonGroup
@@ -1252,12 +1427,16 @@ const QuickLearningDashboard: React.FC = () => {
               <VirtualizedList
                 ref={listRef}
                 height={typeof window !== 'undefined' ? window.innerHeight - 180 : 520}
-                itemCount={filteredProspects.length}
+                itemCount={(isGlobalSearch ? searchResults : filteredProspects).length}
                 itemSize={76}
                 width={340}
                 overscanCount={6}
+                itemKey={(index: number, data: ProspectListItemData) => {
+                  const item = data.items[index]
+                  return item?._id || item?.data?.telefono || index
+                }}
                 itemData={{
-                  items: filteredProspects,
+                  items: isGlobalSearch ? searchResults : filteredProspects,
                   selectedProspect,
                   selectProspect,
                   unreadMessages,
@@ -1265,7 +1444,9 @@ const QuickLearningDashboard: React.FC = () => {
                   theme,
                 }}
                 onScroll={(params: { scrollOffset: number; scrollDirection: 'forward' | 'backward' }) => {
-                  const totalItems = filteredProspects.length
+                  // Desactivar carga adicional durante búsqueda global
+                  if (isGlobalSearch) return
+                  const totalItems = (isGlobalSearch ? searchResults : filteredProspects).length
                   if (hasMoreProspects && !isLoadingMoreProspects && params.scrollDirection === 'forward') {
                     const visibleRows = Math.ceil((typeof window !== 'undefined' ? window.innerHeight - 180 : 520) / 76)
                     if (params.scrollOffset / 76 + visibleRows >= totalItems - 2) {
@@ -1289,7 +1470,10 @@ const QuickLearningDashboard: React.FC = () => {
                         key={prospect._id}
                         button
                         selected={selectedProspect?._id === prospect._id}
-                        onClick={() => selectProspect(prospect)}
+                        onClick={() => {
+                          selectProspect(prospect)
+                          if (isMobile) setMobileView('chat')
+                        }}
                         sx={{
                           borderRadius: 2,
                           mb: 0.5,
@@ -1490,15 +1674,18 @@ const QuickLearningDashboard: React.FC = () => {
           sx={{
             flex: 1,
             height: '100%',
-            display: 'flex',
+            display: isMobile ? (mobileView === 'chat' ? 'flex' : 'none') : 'flex',
             flexDirection: 'column',
             minWidth: 0,
             minHeight: 0,
             boxShadow: 2,
-            borderRadius: 2,
+            borderRadius: isMobile ? 0 : 2,
             bgcolor: theme.palette.background.paper,
             ml: 0,
             mr: 0,
+            position: isMobile ? 'absolute' : 'relative',
+            inset: isMobile ? 0 : 'auto',
+            zIndex: isMobile ? 3 : 'auto'
           }}
         >
           <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, p: 0 }}>
@@ -1516,7 +1703,7 @@ const QuickLearningDashboard: React.FC = () => {
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      mb: 2,
+                      mb: isMobile ? 1 : 2,
                       justifyContent: 'space-between',
                     }}
                   >
@@ -1524,10 +1711,15 @@ const QuickLearningDashboard: React.FC = () => {
                       sx={{ display: 'flex', alignItems: 'center', marginLeft: 2, marginTop: 1 }}
                       onClick={handleOpenClientInfo}
                     >
+                      {isMobile && (
+                        <IconButton onClick={(e) => { e.stopPropagation(); setMobileView('list') }} sx={{ mr: 1 }}>
+                          <ArrowBackIcon />
+                        </IconButton>
+                      )}
                       <Avatar
                         sx={{
-                          width: 48,
-                          height: 48,
+                          width: isMobile ? 40 : 48,
+                          height: isMobile ? 40 : 48,
                           bgcolor: theme.palette.success.main,
                           color: theme.palette.getContrastText(theme.palette.success.main),
                           fontWeight: 700,
@@ -1546,7 +1738,8 @@ const QuickLearningDashboard: React.FC = () => {
                         </Typography>
                       </Box>
                     </Box>
-                    <Button
+                    {!isMobile && (
+                      <Button
                       variant="contained"
                       startIcon={<PaymentIcon sx={{ fontSize: 28 }} />}
                       onClick={() => setPaymentModalOpen(true)}
@@ -1555,18 +1748,18 @@ const QuickLearningDashboard: React.FC = () => {
                         color: '#fff',
                         textTransform: 'none',
                         fontWeight: 700,
-                        borderRadius: '18px',
-                        px: 2,
-                        py: 0.5,
+                        borderRadius: '14px',
+                        px: isMobile ? 1.5 : 2,
+                        py: isMobile ? 0.4 : 0.5,
                         marginRight: 2,
                         boxShadow: '0 4px 16px 0 rgba(123,97,255,0.10)',
-                        fontSize: 18,
+                        fontSize: isMobile ? 16 : 18,
                         letterSpacing: 0.5,
                         transition: 'all 0.18s cubic-bezier(.4,0,.2,1)',
                         '&:hover': {
                           background: 'linear-gradient(90deg, #A084FF 60%, #7B61FF 100%)',
                           boxShadow: '0 6px 24px 0 rgba(123,97,255,0.18)',
-                          transform: 'scale(1.04)',
+                          transform: isMobile ? 'scale(1.02)' : 'scale(1.04)',
                         },
                         minWidth: 160,
                         display: 'flex',
@@ -1576,6 +1769,7 @@ const QuickLearningDashboard: React.FC = () => {
                     >
                       Enviar pago
                     </Button>
+                    )}
                   </Box>
                 )}
                 {isLoadingChatHistory ? (
@@ -1591,14 +1785,14 @@ const QuickLearningDashboard: React.FC = () => {
                   </Box>
                 ) : errorChatHistory ? (
                   <Alert severity="error">{errorChatHistory}</Alert>
-                ) : (
-                  <Box
+                  ) : (
+                    <Box
                     data-chat-container
                     sx={{
-                      flex: 1,
-                      overflowY: 'auto',
-                      px: 2,
-                      py: 2,
+                        flex: 1,
+                        overflowY: 'auto',
+                        px: isMobile ? 1 : 2,
+                        py: isMobile ? 1.5 : 2,
                       minHeight: 0,
                       bgcolor: theme.palette.background.default,
                       borderRadius: 2,
@@ -1739,8 +1933,8 @@ const QuickLearningDashboard: React.FC = () => {
                                       ? theme.palette.grey[800]
                                       : theme.palette.grey[200]
                                     : theme.palette.success.main,
-                                width: 44,
-                                height: 44,
+                                width: isMobile ? 38 : 44,
+                                height: isMobile ? 38 : 44,
                                 color: theme.palette.getContrastText(
                                   msg.direction === 'inbound'
                                     ? theme.palette.mode === 'dark'
@@ -1758,7 +1952,7 @@ const QuickLearningDashboard: React.FC = () => {
                             </Avatar>
                             <Box
                               sx={{
-                                maxWidth: '70%',
+                                maxWidth: isMobile ? '82%' : '70%',
                                 bgcolor:
                                   msg.direction === 'inbound'
                                     ? theme.palette.mode === 'dark'
@@ -1772,8 +1966,8 @@ const QuickLearningDashboard: React.FC = () => {
                                   msg.direction === 'inbound'
                                     ? '18px 18px 18px 6px'
                                     : '18px 18px 6px 18px',
-                                p: 2,
-                                mx: 2,
+                                p: isMobile ? 1.5 : 2,
+                                mx: isMobile ? 1 : 2,
                                 boxShadow: 2,
                                 position: 'relative',
                                 ...(msg.isNewMessage && {
@@ -1805,7 +1999,7 @@ const QuickLearningDashboard: React.FC = () => {
                                   />
                                 )}
                                 <AccessTimeIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
-                                <Typography variant="caption" color="text.secondary" fontSize={14}>
+                                <Typography variant="caption" color="text.secondary" fontSize={isMobile ? 12 : 14}>
                                   {formatMessageDate(msg.dateCreated)}
                                 </Typography>
                               </Box>
@@ -1940,7 +2134,7 @@ const QuickLearningDashboard: React.FC = () => {
                 {/* Input de mensaje o botón plantilla según antigüedad del último mensaje */}
                 {selectedProspect &&
                   (isLastMessageOlderThan24h ? (
-                    <Box sx={{ mt: 2 }}>
+                    <Box sx={{ mt: 2, position: 'sticky', bottom: 0, zIndex: 5, pb: 'env(safe-area-inset-bottom, 0px)' }}>
                       <Button
                         variant="contained"
                         color="primary"
@@ -1956,11 +2150,15 @@ const QuickLearningDashboard: React.FC = () => {
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
-                        p: 1.5,
+                        p: 1.25,
                         borderTop: '1px solid',
                         borderColor: 'divider',
                         bgcolor: 'background.paper',
                         gap: 1,
+                        position: 'sticky',
+                        bottom: 0,
+                        zIndex: 5,
+                        pb: 'env(safe-area-inset-bottom, 0px)'
                       }}
                     >
                       <TextField
@@ -1973,27 +2171,60 @@ const QuickLearningDashboard: React.FC = () => {
                         disabled={isSendingMessage || isLoadingChatHistory}
                         sx={{ borderRadius: 2, fontSize: 16, bgcolor: 'background.default' }}
                         inputProps={{ maxLength: 1500, style: { fontSize: '16px' } }}
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <IconButton size="small" aria-label="Adjuntar archivo">
+                                <AttachFileIcon fontSize="small" />
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        }}
                       />
-                      <Button
-                        variant="contained"
+                      <IconButton
                         color="success"
                         onClick={handleSendMessageInput}
                         disabled={
                           isSendingMessage || isLoadingChatHistory || !messageInputValue.trim()
                         }
                         sx={{
-                          minWidth: 48,
-                          minHeight: 48,
+                          width: 48,
+                          height: 48,
                           borderRadius: 2,
-                          fontWeight: 700,
-                          fontSize: 18,
-                          boxShadow: 1,
+                          bgcolor: 'success.main',
+                          color: 'common.white',
+                          '&:hover': { bgcolor: 'success.dark' }
                         }}
                       >
                         <SendIcon />
-                      </Button>
+                      </IconButton>
                     </Box>
                   ))}
+
+                {/* Quick actions flotantes en móvil */}
+                {isMobile && selectedProspect && (
+                  <SpeedDial
+                    ariaLabel="Acciones rápidas"
+                    sx={{ position: 'fixed', bottom: 88, right: 16, zIndex: 9 }}
+                    icon={<SpeedDialIcon />}
+                  >
+                    <SpeedDialAction
+                      icon={<AIIcon />}
+                      tooltipTitle="Plantillas"
+                      onClick={() => setTemplateModalOpen(true)}
+                    />
+                    <SpeedDialAction
+                      icon={<PaymentIcon />}
+                      tooltipTitle="Enviar pago"
+                      onClick={() => setPaymentModalOpen(true)}
+                    />
+                    <SpeedDialAction
+                      icon={<PersonIcon />}
+                      tooltipTitle="Info cliente"
+                      onClick={handleOpenClientInfo}
+                    />
+                  </SpeedDial>
+                )}
               </>
             )}
           </Box>

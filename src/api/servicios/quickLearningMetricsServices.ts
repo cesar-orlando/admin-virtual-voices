@@ -20,6 +20,10 @@ export interface QuickLearningMetricsData {
   startDate: string;
   endDate: string;
   totalChats: number;
+  /** Total de registros creados (todas las tablas) en el período */
+  totalRecordsCreated?: number;
+  /** Totales por tabla en el período */
+  recordsBySlug?: Record<string, number>;
   activeChats: number;
   inactiveChats: number;
   totalMessages: number;
@@ -28,11 +32,21 @@ export interface QuickLearningMetricsData {
   averageMessagesPerChat: number;
   dailyBreakdown: Array<{
     date: string;
+    /** Prospectos creados ese día (equivale a totalChats) */
     totalChats: number;
-    newChats: number;
-    totalMessages: number;
-    inbound: number;
-    outbound: number;
+    /** Alias de totalChats para compatibilidad con nuevas métricas */
+    prospectosCreated?: number;
+    /** Total de registros creados ese día (todas las tablas) */
+    recordsCreated?: number;
+    /** Desglose por tabla ese día */
+    recordsBySlug?: Record<string, number>;
+    /** Desglose de campañas en prospectos */
+    campaignsProspectos?: Array<{ name: string; count: number }>;
+    campaignsProspectosSummary?: { withCampaign: number; withoutCampaign: number; numCampaigns: number };
+    newChats?: number;
+    totalMessages?: number;
+    inbound?: number;
+    outbound?: number;
   }>;
   hourlyDistribution: Array<{
     hour: number;

@@ -25,7 +25,8 @@ import {
   Fade,
   Zoom,
   Collapse,
-  Paper
+  Paper,
+  useMediaQuery
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -122,6 +123,7 @@ export default function ClientEditModal({
   missingFields: externalMissingFields = []
 }: ClientEditModalProps) {
   const theme = useTheme();
+  const isMobile = useMediaQuery('(max-width: 900px)');
   const [formData, setFormData] = useState<any>({});
   const [missingFields, setMissingFields] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -646,16 +648,17 @@ export default function ClientEditModal({
     <Dialog 
       open={open} 
       onClose={handleClose}
-      maxWidth="lg"
+      maxWidth={isMobile ? 'md' : 'lg'}
       fullWidth
+      fullScreen={isMobile}
       PaperProps={{
         sx: {
-          borderRadius: 4,
+          borderRadius: isMobile ? 0 : 4,
           background: theme.palette.mode === 'dark' 
             ? 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)'
             : 'linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%)',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
-          maxHeight: '90vh'
+          boxShadow: isMobile ? 'none' : '0 20px 60px rgba(0,0,0,0.15)',
+          maxHeight: isMobile ? '100vh' : '90vh'
         }
       }}
     >
@@ -666,11 +669,12 @@ export default function ClientEditModal({
         alignItems: 'center',
         background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
         color: '#fff',
-        p: 3
+        p: isMobile ? 2 : 3,
+        pt: isMobile ? 2 : 3
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <PersonIcon sx={{ fontSize: 28 }} />
-          <Typography variant="h5" fontWeight={700}>
+          <PersonIcon sx={{ fontSize: isMobile ? 24 : 28 }} />
+          <Typography variant={isMobile ? 'h6' : 'h5'} fontWeight={700}>
             Información del Cliente
           </Typography>
         </Box>
@@ -812,7 +816,7 @@ export default function ClientEditModal({
               lg: '1fr 1fr 1fr'
             },
             gap: 3,
-            maxHeight: '60vh',
+            maxHeight: isMobile ? 'calc(100vh - 220px)' : '60vh',
             overflowY: 'auto',
             p: 2,
             borderRadius: 2,
